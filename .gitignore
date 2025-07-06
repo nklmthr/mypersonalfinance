@@ -1,6 +1,9 @@
 # Compiled class file
 *.class
 node_modules/
+.settings
+.classpath
+.project
 # Log file
 *.log
 **/.DS_Store
@@ -22,3 +25,4 @@ node_modules/
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+/target/
