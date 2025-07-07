@@ -81,4 +81,9 @@ public class AccountService {
         }
     }
 
+	public Account getAccountByName(String string) {
+		return accountRepository.findByName(string)
+				.orElseThrow(() -> new RuntimeException("Account not found with name: " + string));
+	}
+
 }

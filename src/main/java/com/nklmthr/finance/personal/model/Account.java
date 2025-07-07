@@ -12,7 +12,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class Account {
 
-    @Id
+    public Account(String string) {
+		this.name = string;
+	}
+
+	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 

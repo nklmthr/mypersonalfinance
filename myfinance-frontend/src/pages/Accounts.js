@@ -120,7 +120,12 @@ export default function Accounts() {
       await axios.delete(`/api/accounts/${id}`);
       fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
     } catch (err) {
-      console.error("Delete error:", err);
+		if (err.response && err.response.status === 409) {
+	      alert(err.response.data || "Cannot delete: Transactions exist for this account.");
+	    } else {
+	      alert("An unexpected error occurred.");
+	    }
+		console.error("Delete error:", err);
     }
   };
 

@@ -1,6 +1,7 @@
 package com.nklmthr.finance.personal.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -14,5 +15,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     List<Account> findByAccountTypeId(Long accountTypeId);
     List<Account> findByInstitutionId(Long institutionId);
     List<Account> findByAccountTypeIdAndInstitutionId(Long accountTypeId, Long institutionId);
+
+	Optional<Account> findByName(String string);
 
 }

@@ -42,4 +42,9 @@ public class CategoryService {
         return categoryRepository.findByParentId(parentId);
     }
 
+	public Category getNonClassifiedCategory() {
+		return categoryRepository.findByName("Non Classified")
+				.orElseGet(() -> categoryRepository.save(new Category("Non Classified")));
+	}
+
 }
