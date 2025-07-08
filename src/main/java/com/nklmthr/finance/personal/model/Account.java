@@ -1,6 +1,13 @@
 package com.nklmthr.finance.personal.model;
 
-import jakarta.persistence.*;
+import org.hibernate.annotations.UuidGenerator;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,13 +19,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class Account {
 
-    public Account(String string) {
-		this.name = string;
-	}
-
 	@Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+	@UuidGenerator
+	@Column
+    private String id;
 
     @Column(nullable = false)
     private String name;

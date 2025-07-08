@@ -1,9 +1,18 @@
 package com.nklmthr.finance.personal.model;
 
-import jakarta.persistence.*;
-import lombok.*;
-
 import java.math.BigDecimal;
+
+import org.hibernate.annotations.UuidGenerator;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "account_types")
@@ -14,8 +23,9 @@ import java.math.BigDecimal;
 public class AccountType {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Long id;
+	@UuidGenerator
+	@Column
+	private String id;
 
 	@Column(nullable = false, unique = true)
 	private String name;
@@ -24,6 +34,6 @@ public class AccountType {
 
 	private String classification;
 
-	@Column(name = "account_type_balance", precision = 19, scale = 2)
+	@Transient
 	private BigDecimal accountTypeBalance;
 }

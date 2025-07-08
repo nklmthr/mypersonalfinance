@@ -22,7 +22,7 @@ public class InstitutionService {
         return institutionRepository.findAll();
     }
 
-    public Optional<Institution> getInstitutionById(Long id) {
+    public Optional<Institution> getInstitutionById(String id) {
         return institutionRepository.findById(id);
     }
 
@@ -33,7 +33,7 @@ public class InstitutionService {
         return institutionRepository.save(institution);
     }
 
-    public Institution updateInstitution(Long id, Institution updatedInstitution) {
+    public Institution updateInstitution(String id, Institution updatedInstitution) {
         return institutionRepository.findById(id).map(institution -> {
             institution.setName(updatedInstitution.getName());
             institution.setDescription(updatedInstitution.getDescription());
@@ -41,7 +41,7 @@ public class InstitutionService {
         }).orElseThrow(() -> new IllegalArgumentException("Institution not found with id " + id));
     }
 
-    public void deleteInstitution(Long id) {
+    public void deleteInstitution(String id) {
         if (!institutionRepository.existsById(id)) {
             throw new IllegalArgumentException("Institution not found with id " + id);
         }

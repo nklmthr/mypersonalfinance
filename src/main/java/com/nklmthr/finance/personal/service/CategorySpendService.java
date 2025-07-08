@@ -25,15 +25,15 @@ public class CategorySpendService {
 	@Autowired
 	private AccountTransactionRepository accountTransactionRepository;
 
-	public Map<Long, CategorySpendDTO> getMonthlyCategorySpendHierarchy(int month, int year) {
+	public Map<String, CategorySpendDTO> getMonthlyCategorySpendHierarchy(int month, int year) {
 	    List<AccountTransaction> transactions = accountTransactionRepository.findByMonthAndYear(month, year);
-	    Map<Long, BigDecimal> categorySums = new HashMap<>();
+	    Map<String, BigDecimal> categorySums = new HashMap<>();
 
 	    // Aggregate transaction amounts by category
 	    for (AccountTransaction tx : transactions) {
 	        if (tx.getCategory() == null) continue;
 
-	        Long categoryId = tx.getCategory().getId();
+	        String categoryId = tx.getCategory().getId();
 	        BigDecimal current = categorySums.getOrDefault(categoryId, BigDecimal.ZERO);
 	        categorySums.put(categoryId, current.add(tx.getAmount()));
 	    }
@@ -41,7 +41,7 @@ public class CategorySpendService {
 	    List<Category> allCategories = categoryRepository.findAll();
 
 	    // Create DTOs with base amounts
-	    Map<Long, CategorySpendDTO> dtoMap = new HashMap<>();
+	    Map<String, CategorySpendDTO> dtoMap = new HashMap<>();
 	    for (Category category : allCategories) {
 	        CategorySpendDTO dto = new CategorySpendDTO();
 	        dto.setCategoryId(category.getId());
@@ -52,7 +52,7 @@ public class CategorySpendService {
 	    }
 
 	    // Build parent-child tree structure
-	    Map<Long, CategorySpendDTO> rootMap = new LinkedHashMap<>();
+	    Map<String, CategorySpendDTO> rootMap = new LinkedHashMap<>();
 	    for (Category category : allCategories) {
 	        CategorySpendDTO current = dtoMap.get(category.getId());
 	        if (category.getParent() != null) {

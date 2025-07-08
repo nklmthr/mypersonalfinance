@@ -20,11 +20,11 @@ public class CategorySpendController {
     private CategorySpendService categorySpendService;
 
     @GetMapping
-    public ResponseEntity<Map<Long, CategorySpendDTO>> getCategorySpendForMonth(
+    public ResponseEntity<Map<String, CategorySpendDTO>> getCategorySpendForMonth(
             @RequestParam("month") Integer month,
             @RequestParam("year") Integer year
     ) {
-        Map<Long, CategorySpendDTO> spends = categorySpendService.getMonthlyCategorySpendHierarchy(month, year);
+        Map<String, CategorySpendDTO> spends = categorySpendService.getMonthlyCategorySpendHierarchy(month, year);
         return ResponseEntity.ok(spends);
     }
 }

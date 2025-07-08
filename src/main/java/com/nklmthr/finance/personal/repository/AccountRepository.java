@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 import com.nklmthr.finance.personal.model.Account;
 
 @Repository
-public interface AccountRepository extends JpaRepository<Account, Long> {
+public interface AccountRepository extends JpaRepository<Account, String> {
     boolean existsByName(String name);
     
     List<Account> findByAccountTypeId(Long accountTypeId);

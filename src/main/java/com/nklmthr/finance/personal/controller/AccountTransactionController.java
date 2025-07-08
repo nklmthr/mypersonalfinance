@@ -35,14 +35,14 @@ public class AccountTransactionController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<AccountTransaction> getById(@PathVariable Long id) {
+    public ResponseEntity<AccountTransaction> getById(@PathVariable String id) {
         return service.getById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/{id}/children")
-    public List<AccountTransaction> getChildren(@PathVariable Long id) {
+    public List<AccountTransaction> getChildren(@PathVariable String id) {
         return service.getChildren(id);
     }
 
@@ -52,7 +52,7 @@ public class AccountTransactionController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<AccountTransaction> update(@PathVariable Long id, @RequestBody AccountTransaction tx) {
+    public ResponseEntity<AccountTransaction> update(@PathVariable String id, @RequestBody AccountTransaction tx) {
         return service.getById(id)
                 .map(existing -> {
                     tx.setId(id);
@@ -62,7 +62,7 @@ public class AccountTransactionController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable String id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
     }

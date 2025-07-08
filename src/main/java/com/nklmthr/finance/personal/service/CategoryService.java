@@ -26,7 +26,7 @@ public class CategoryService {
         return categoryRepository.findByParentIsNull();
     }
 
-    public Optional<Category> getCategoryById(Long id) {
+    public Optional<Category> getCategoryById(String id) {
         return categoryRepository.findById(id);
     }
 
@@ -34,11 +34,11 @@ public class CategoryService {
         return categoryRepository.save(category);
     }
 
-    public void deleteCategory(Long id) {
+    public void deleteCategory(String id) {
         categoryRepository.deleteById(id);
     }
 
-    public List<Category> getChildren(Long parentId) {
+    public List<Category> getChildren(String parentId) {
         return categoryRepository.findByParentId(parentId);
     }
 

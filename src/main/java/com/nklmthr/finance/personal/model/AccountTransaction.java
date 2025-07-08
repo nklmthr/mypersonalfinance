@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.annotations.UuidGenerator;
+
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
@@ -16,8 +18,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -40,15 +40,20 @@ import lombok.NoArgsConstructor;
 	)
 public class AccountTransaction {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+	@Id
+	@UuidGenerator
+	@Column
+    private String id;
 
     private LocalDateTime date;
 
     private BigDecimal amount;
 
+    @Column(nullable = false, length =1000)
     private String description;
+    
+    @Column(length = 2000)
+	private String explanation;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -70,5 +75,6 @@ public class AccountTransaction {
 
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Builder.Default
     private List<AccountTransaction> children = new ArrayList<>();
 }

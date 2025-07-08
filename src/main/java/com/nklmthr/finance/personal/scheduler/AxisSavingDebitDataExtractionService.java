@@ -61,7 +61,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		// Extract Account (hardcoded, could be enhanced later)
 		Matcher accMatcher = Pattern.compile("A/c no\\. ([XxXx\\d]+)").matcher(emailContent);
 		if (accMatcher.find()) {
-			accountTransaction.setAccount(new Account("Axis Salary Acc"));
+			//accountTransaction.setAccount(new Account("Axis Salary Acc"));
 		}
 
 		// Extract DateTime

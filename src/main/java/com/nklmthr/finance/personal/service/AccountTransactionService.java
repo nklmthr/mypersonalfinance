@@ -20,7 +20,7 @@ public class AccountTransactionService {
         return repository.findAll();
     }
 
-    public Optional<AccountTransaction> getById(Long id) {
+    public Optional<AccountTransaction> getById(String id) {
         return repository.findById(id);
     }
 
@@ -28,7 +28,7 @@ public class AccountTransactionService {
         return repository.findByParentIsNull();
     }
 
-    public List<AccountTransaction> getChildren(Long parentId) {
+    public List<AccountTransaction> getChildren(String parentId) {
         return repository.findByParentId(parentId);
     }
 
@@ -36,7 +36,7 @@ public class AccountTransactionService {
         return repository.save(transaction);
     }
 
-    public void delete(Long id) {
+    public void delete(String id) {
         repository.deleteById(id);
     }
 }

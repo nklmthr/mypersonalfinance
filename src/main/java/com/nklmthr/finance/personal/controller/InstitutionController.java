@@ -25,7 +25,7 @@ public class InstitutionController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Institution> getInstitutionById(@PathVariable Long id) {
+    public ResponseEntity<Institution> getInstitutionById(@PathVariable String id) {
         return institutionService.getInstitutionById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -37,12 +37,12 @@ public class InstitutionController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Institution> updateInstitution(@PathVariable Long id, @RequestBody Institution institution) {
+    public ResponseEntity<Institution> updateInstitution(@PathVariable String id, @RequestBody Institution institution) {
         return ResponseEntity.ok(institutionService.updateInstitution(id, institution));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteInstitution(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteInstitution(@PathVariable String id) {
         institutionService.deleteInstitution(id);
         return ResponseEntity.noContent().build();
     }

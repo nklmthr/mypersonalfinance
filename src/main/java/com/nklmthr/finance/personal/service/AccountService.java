@@ -30,7 +30,7 @@ public class AccountService {
         return accountRepository.findAll();
     }
 
-    public Account getAccount(Long id) {
+    public Account getAccount(String id) {
         return accountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Account not found with id: " + id));
     }
@@ -45,7 +45,7 @@ public class AccountService {
         return accountRepository.save(account);
     }
 
-    public Account updateAccount(Long id, Account updatedAccount) {
+    public Account updateAccount(String id, Account updatedAccount) {
         Account account = getAccount(id);
 
         account.setName(updatedAccount.getName());
@@ -62,7 +62,7 @@ public class AccountService {
         return accountRepository.save(account);
     }
 
-    public void deleteAccount(Long id) {
+    public void deleteAccount(String id) {
     	if (!acountTransactionRepository.findByAccountId(id).isEmpty()) {
             throw new IllegalStateException("Cannot delete account with existing transactions.");
         }

@@ -26,14 +26,14 @@ public class CategoryController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Category> getById(@PathVariable Long id) {
+    public ResponseEntity<Category> getById(@PathVariable String id) {
         return categoryService.getCategoryById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/{id}/children")
-    public List<Category> getChildren(@PathVariable Long id) {
+    public List<Category> getChildren(@PathVariable String id) {
         return categoryService.getChildren(id);
     }
 
@@ -43,7 +43,7 @@ public class CategoryController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Category> update(@PathVariable Long id, @RequestBody Category updated) {
+    public ResponseEntity<Category> update(@PathVariable String id, @RequestBody Category updated) {
         return categoryService.getCategoryById(id)
                 .map(existing -> {
                     existing.setName(updated.getName());
@@ -55,7 +55,7 @@ public class CategoryController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable String id) {
         categoryService.deleteCategory(id);
         return ResponseEntity.noContent().build();
     }

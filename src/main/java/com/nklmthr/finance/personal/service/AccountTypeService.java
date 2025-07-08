@@ -1,13 +1,15 @@
 package com.nklmthr.finance.personal.service;
 
-import com.nklmthr.finance.personal.model.AccountType;
-import com.nklmthr.finance.personal.repository.AccountTypeRepository;
-import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+
+import com.nklmthr.finance.personal.model.AccountType;
+import com.nklmthr.finance.personal.repository.AccountTypeRepository;
+
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @Transactional
@@ -27,7 +29,7 @@ public class AccountTypeService {
         return accountTypeRepository.findAll();
     }
 
-    public Optional<AccountType> getById(Long id) {
+    public Optional<AccountType> getById(String id) {
         return accountTypeRepository.findById(id);
     }
 
@@ -35,7 +37,7 @@ public class AccountTypeService {
         return accountTypeRepository.findByName(name);
     }
 
-    public AccountType update(Long id, AccountType updated) {
+    public AccountType update(String id, AccountType updated) {
         AccountType existing = accountTypeRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("AccountType not found: " + id));
         existing.setName(updated.getName());
@@ -45,7 +47,7 @@ public class AccountTypeService {
         return accountTypeRepository.save(existing);
     }
 
-    public void delete(Long id) {
+    public void delete(String id) {
         if (!accountTypeRepository.existsById(id)) {
             throw new IllegalArgumentException("AccountType not found: " + id);
         }

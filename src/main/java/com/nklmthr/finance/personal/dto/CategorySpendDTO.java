@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class CategorySpendDTO {
-    private Long categoryId;
-    private String categoryName;
-    private BigDecimal amount;
-    private List<CategorySpendDTO> children;
+	private String categoryId;
+	private String categoryName;
+	private BigDecimal amount;
+	private List<CategorySpendDTO> children;
 }

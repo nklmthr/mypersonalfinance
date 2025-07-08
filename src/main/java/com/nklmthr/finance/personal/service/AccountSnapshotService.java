@@ -1,7 +1,7 @@
 package com.nklmthr.finance.personal.service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,8 +20,8 @@ public class AccountSnapshotService {
 	private final AccountRepository accountRepository;
     private final AccountBalanceSnapshotRepository snapshotRepository;
 
-    public void createSnapshotsForDate(LocalDate snapshotDate) {
-        LocalDate twoWeeksAgo = snapshotDate.minusDays(14);
+    public void createSnapshotsForDate(LocalDateTime snapshotDate) {
+        LocalDateTime twoWeeksAgo = snapshotDate.minusDays(14);
         List<Account> accounts = accountRepository.findAll();
 
         boolean anyExists = accounts.stream().anyMatch(account ->

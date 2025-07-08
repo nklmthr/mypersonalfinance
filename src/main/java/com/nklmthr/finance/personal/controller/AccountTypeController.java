@@ -28,7 +28,7 @@ public class AccountTypeController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<AccountType> getById(@PathVariable Long id) {
+    public ResponseEntity<AccountType> getById(@PathVariable String id) {
         return accountTypeService.getById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -42,12 +42,12 @@ public class AccountTypeController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<AccountType> update(@PathVariable Long id, @RequestBody AccountType updated) {
+    public ResponseEntity<AccountType> update(@PathVariable String id, @RequestBody AccountType updated) {
         return ResponseEntity.ok(accountTypeService.update(id, updated));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable String id) {
         accountTypeService.delete(id);
         return ResponseEntity.noContent().build();
     }
