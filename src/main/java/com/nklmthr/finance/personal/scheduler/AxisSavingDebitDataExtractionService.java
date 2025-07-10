@@ -27,7 +27,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		service.run();
 	}
 	
-    @Scheduled(cron = "0 0/3 * * * ?")  // Every 30 minutes
+    @Scheduled(cron = "0 0/60 * * * ?")  // Every 30 minutes
     public void runTask() {
         super.run();  // AbstractDataExtractionService logic
     }

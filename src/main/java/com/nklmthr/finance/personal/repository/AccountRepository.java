@@ -12,9 +12,9 @@ import com.nklmthr.finance.personal.model.Account;
 public interface AccountRepository extends JpaRepository<Account, String> {
     boolean existsByName(String name);
     
-    List<Account> findByAccountTypeId(Long accountTypeId);
-    List<Account> findByInstitutionId(Long institutionId);
-    List<Account> findByAccountTypeIdAndInstitutionId(Long accountTypeId, Long institutionId);
+    List<Account> findByAccountTypeId(String accountTypeId);
+    List<Account> findByInstitutionId(String institutionId);
+    List<Account> findByAccountTypeIdAndInstitutionId(String accountTypeId, String institutionId);
 
 	Optional<Account> findByName(String string);
 

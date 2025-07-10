@@ -68,7 +68,7 @@ public class AccountService {
         accountRepository.deleteById(id);
     }
     
-    public List<Account> getFilteredAccounts(Long accountTypeId, Long institutionId) {
+    public List<Account> getFilteredAccounts(String accountTypeId, String institutionId) {
         if (accountTypeId != null && institutionId != null) {
             return accountRepository.findByAccountTypeIdAndInstitutionId(accountTypeId, institutionId);
         } else if (accountTypeId != null) {

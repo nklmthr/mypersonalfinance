@@ -62,8 +62,8 @@ public class AccountController {
 	}
 
 	@GetMapping("/filter")
-	public ResponseEntity<List<Account>> getAccounts(@RequestParam(required = false) Long accountTypeId,
-			@RequestParam(required = false) Long institutionId) {
+	public ResponseEntity<List<Account>> getAccounts(@RequestParam(required = false) String accountTypeId,
+			@RequestParam(required = false) String institutionId) {
 		List<Account> accounts = accountService.getFilteredAccounts(accountTypeId, institutionId);
 		return ResponseEntity.ok(accounts);
 	}
