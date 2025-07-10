@@ -49,7 +49,6 @@ public class AccountService {
         Account account = getAccount(id);
 
         account.setName(updatedAccount.getName());
-        account.setDescription(updatedAccount.getDescription());
         account.setBalance(updatedAccount.getBalance());
 
         if (updatedAccount.getInstitution() != null) {

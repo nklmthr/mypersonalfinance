@@ -27,8 +27,6 @@ public class Account {
     @Column(nullable = false)
     private String name;
 
-    private String description;
-
     @Column(nullable = false)
     private Double balance;
 

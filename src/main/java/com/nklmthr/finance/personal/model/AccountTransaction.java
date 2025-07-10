@@ -58,6 +58,18 @@ public class AccountTransaction {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TransactionType type;
+    
+    @Column
+	private String href;
+
+	@Column
+	private String hrefText;
+	
+	@Column
+	private String source;
+
+	@Column
+	private Long sourceTime;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
