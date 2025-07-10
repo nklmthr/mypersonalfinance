@@ -28,8 +28,13 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	@Autowired
 	private AccountService accountService;
 	// ---- Patterns ----
-	private static final Pattern AMOUNT_PATTERN = Pattern
-			.compile("Amount Debited: INR ([\\d,]+(?:\\.\\d+)?)|INR ([\\d,]+(?:\\.\\d+)?) has been debited");
+	private static final Pattern AMOUNT_PATTERN = Pattern.compile(
+		    // old variants…
+		    "Amount Debited: INR ([\\d,]+(?:\\.\\d+)?)"
+		  + "|INR ([\\d,]+(?:\\.\\d+)?) has been debited"
+		    // new variant for “debited with INR …”
+		  + "|debited with INR ([\\d,]+(?:\\.\\d+)?)",
+		  Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern DATE_PATTERN = Pattern.compile("on (\\d{2}-\\d{2}-\\d{4})[, ]*(\\d{2}:\\d{2}:\\d{2})|"
 			+ "Date & Time: (\\d{2}-\\d{2}-\\d{2}), (\\d{2}:\\d{2}:\\d{2})");
