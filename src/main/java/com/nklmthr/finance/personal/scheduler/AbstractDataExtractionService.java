@@ -64,7 +64,7 @@ public abstract class AbstractDataExtractionService {
 						if (accountTransaction != null) {
 							accountTransaction.setCategory(categoryService.getNonClassifiedCategory());
 							accountTransactionService.save(accountTransaction);
-							logger.info("Saved transaction: {}", accountTransaction);
+							logger.info("Saved transaction: {}", accountTransaction.getDescription());
 						} else {
 							logger.warn("No transaction data extracted from message ID: {}", message.getId());
 						}
