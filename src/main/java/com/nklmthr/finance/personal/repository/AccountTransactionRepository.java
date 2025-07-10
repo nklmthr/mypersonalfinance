@@ -2,6 +2,7 @@ package com.nklmthr.finance.personal.repository;
 
 import java.util.List;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,4 +18,7 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
     
     @Query("SELECT t FROM AccountTransaction t WHERE FUNCTION('MONTH', t.date) = :month AND FUNCTION('YEAR', t.date) = :year")
     List<AccountTransaction> findByMonthAndYear(@Param("month") int month, @Param("year") int year);
+    
+    @EntityGraph(attributePaths = {"account", "category"})
+	List<AccountTransaction> findAll();
 }
