@@ -2,10 +2,12 @@ package com.nklmthr.finance.personal.model;
 
 import java.util.List;
 
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.UuidGenerator;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -19,7 +21,9 @@ import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Entity
 @Table(name = "categories")
@@ -29,10 +33,6 @@ import lombok.NoArgsConstructor;
 @Builder
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Category {
-
-    public Category(String name) {
-		this.name = name;
-	}
 
     @Id
 	@UuidGenerator
@@ -45,11 +45,17 @@ public class Category {
     
     private boolean isSystemCategory;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "parent_id")
     @JsonBackReference 
     private Category parent;
 
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @JsonManagedReference
+    @BatchSize(size = 50)
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL)
     private List<Category> children;
 }

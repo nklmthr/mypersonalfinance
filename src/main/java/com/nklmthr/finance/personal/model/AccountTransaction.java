@@ -66,26 +66,29 @@ public class AccountTransaction {
 	private String hrefText;
 	
 	@Column
-	private String source;
+	private String sourceId;
 
+	@Column
+	private String sourceThreadId;
+	
 	@Column
 	private Long sourceTime;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Account account;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "category_id")
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Category category;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "parent_id")
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private AccountTransaction parent;
 
-    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @Builder.Default
     private List<AccountTransaction> children = new ArrayList<>();

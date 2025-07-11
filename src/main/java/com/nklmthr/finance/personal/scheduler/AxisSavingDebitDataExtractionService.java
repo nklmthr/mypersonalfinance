@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,13 +28,11 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 
 	@Autowired
 	private AccountService accountService;
-	// ---- Patterns ----
 	private static final Pattern AMOUNT_PATTERN = Pattern.compile(
-		    // old variants…
-		    "Amount Debited: INR ([\\d,]+(?:\\.\\d+)?)"
-		  + "|INR ([\\d,]+(?:\\.\\d+)?) has been debited"
-		    // new variant for “debited with INR …”
-		  + "|debited with INR ([\\d,]+(?:\\.\\d+)?)",
+		    "Amount Debited: INR\\s+([\\d,]+(?:\\.\\d+)?)"
+		  + "|INR\\s+([\\d,]+(?:\\.\\d+)?)\\s+has been debited"
+		  + "|has been debited with INR\\s+([\\d,]+(?:\\.\\d+)?)"
+		  + "|debited with INR\\s+([\\d,]+(?:\\.\\d+)?)",
 		  Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern DATE_PATTERN = Pattern.compile("on (\\d{2}-\\d{2}-\\d{4})[, ]*(\\d{2}:\\d{2}:\\d{2})|"
@@ -51,7 +50,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		service.run();
 	}
 
-	@Scheduled(cron = "0 0/6 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/60 * * * ?") // Every 30 minutes
 	public void runTask() {
 		super.run(); // AbstractDataExtractionService logic
 	}
@@ -85,11 +84,18 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	private static Optional<BigDecimal> extractAmount(String content) {
 		Matcher m = AMOUNT_PATTERN.matcher(content);
 		if (m.find()) {
-			String raw = m.group(1) != null ? m.group(1) : m.group(2);
+			String raw = StringUtils.EMPTY;
+			for (int i = 1; i <= m.groupCount(); i++) {
+			    if (m.group(i) != null) {
+			    	raw = m.group(i);
+			        break;
+			    }
+			}
 			try {
 				return Optional.of(new BigDecimal(raw.replace(",", "")));
 			} catch (NumberFormatException e) {
-				logger.error("Failed to parse amount '{}'", raw, e);
+				
+				logger.error("Failed to parse {} amount '{}'",content, raw, e);
 			}
 		}
 		return Optional.empty();

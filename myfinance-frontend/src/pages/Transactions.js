@@ -190,7 +190,7 @@ export default function Transactions() {
               )}
             </div>
             <div className="ml-auto space-x-2 text-xs">
-              <span className="text-gray-400">#{tx.id}</span>
+              <span className="text-gray-400">#{tx.date}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();

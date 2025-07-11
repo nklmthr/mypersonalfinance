@@ -19,7 +19,6 @@ public interface AccountRepository extends JpaRepository<Account, String> {
 
 	Optional<Account> findByName(String string);
 	
-	@EntityGraph(attributePaths = {"accountType", "institution"})
 	List<Account> findAll();
 
 }

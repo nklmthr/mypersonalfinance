@@ -14,29 +14,44 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountTransactionService {
 
-    private final AccountTransactionRepository repository;
+    private final AccountTransactionRepository accountTransactionRepository;
 
     public List<AccountTransaction> getAll() {
-        return repository.findAll();
+        return accountTransactionRepository.findAll();
     }
 
     public Optional<AccountTransaction> getById(String id) {
-        return repository.findById(id);
+        return accountTransactionRepository.findById(id);
     }
 
     public List<AccountTransaction> getRootTransactions() {
-        return repository.findByParentIsNull();
+        return accountTransactionRepository.findByParentIsNull();
     }
 
     public List<AccountTransaction> getChildren(String parentId) {
-        return repository.findByParentId(parentId);
+        return accountTransactionRepository.findByParentId(parentId);
     }
 
     public AccountTransaction save(AccountTransaction transaction) {
-        return repository.save(transaction);
+        return accountTransactionRepository.save(transaction);
     }
 
     public void delete(String id) {
-        repository.deleteById(id);
+        accountTransactionRepository.deleteById(id);
+    }
+    
+    public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
+        Optional<AccountTransaction> existingOpt = accountTransactionRepository.findBySourceThreadId(newTransaction.getSourceThreadId());
+
+        if (existingOpt.isEmpty()) {
+            // No transaction with this sourceThreadId found
+            return false;
+        }
+
+        AccountTransaction existing = existingOpt.get();
+
+        return existing.getDescription().trim().equalsIgnoreCase(newTransaction.getDescription().trim())
+            && existing.getAmount().compareTo(newTransaction.getAmount()) == 0
+            && existing.getType() == newTransaction.getType();
     }
 }

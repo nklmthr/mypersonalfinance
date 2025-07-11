@@ -1,7 +1,9 @@
 package com.nklmthr.finance.personal.scheduler;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Base64;
 import java.util.List;
 
@@ -59,11 +61,22 @@ public abstract class AbstractDataExtractionService {
 							continue;
 						}
 						logger.debug("Processing message with ID: {}", message.getId());
-						AccountTransaction accountTransaction =  extractTransactionData(emailContent);
+						logger.info(emailContent);
+						AccountTransaction accountTransaction = extractTransactionData(emailContent);
 						logger.info("Transaction: {}", accountTransaction);
 						if (accountTransaction != null) {
 							accountTransaction.setCategory(categoryService.getNonClassifiedCategory());
-							accountTransactionService.save(accountTransaction);
+							accountTransaction.setSourceId(mess.getId());
+							accountTransaction.setSourceThreadId(mess.getThreadId());
+							accountTransaction.setDate(Instant.ofEpochMilli(mess.getInternalDate())
+									.atZone(ZoneId.systemDefault()).toLocalDateTime());
+							if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction)) {
+								logger.info("Ignoring already present Desc:{} Amount:{} Type:{}",
+										accountTransaction.getDescription(), accountTransaction.getAmount(),
+										accountTransaction.getType());
+							} else {
+								accountTransactionService.save(accountTransaction);
+							}
 							logger.info("Saved transaction: {}", accountTransaction.getDescription());
 						} else {
 							logger.warn("No transaction data extracted from message ID: {}", message.getId());
@@ -149,9 +162,9 @@ public abstract class AbstractDataExtractionService {
 		List<String> queries = new java.util.ArrayList<>();
 		LocalDate today = LocalDate.now();
 		LocalDate weekAgo = today.minusDays(7);
-		for(String query: getEmailSubject()) {
+		for (String query : getEmailSubject()) {
 			queries.add(String.format("subject:(%s) from:(%s) after:%s before:%s", query, getSender(),
-				formatDate(weekAgo), formatDate(today.plusDays(1))));
+					formatDate(weekAgo), formatDate(today.plusDays(1))));
 		}
 		return queries;
 	}
@@ -163,7 +176,7 @@ public abstract class AbstractDataExtractionService {
 	protected abstract List<String> getEmailSubject();
 
 	protected abstract String getSender();
-	
+
 	protected abstract AccountTransaction extractTransactionData(String emailContent);
 
 }
