@@ -68,16 +68,17 @@ public abstract class AbstractDataExtractionService {
 							accountTransaction.setCategory(categoryService.getNonClassifiedCategory());
 							accountTransaction.setSourceId(mess.getId());
 							accountTransaction.setSourceThreadId(mess.getThreadId());
-							accountTransaction.setDate(Instant.ofEpochMilli(mess.getInternalDate())
+							accountTransaction.setSourceTime(Instant.ofEpochMilli(mess.getInternalDate())
 									.atZone(ZoneId.systemDefault()).toLocalDateTime());
+							logger.info("Transaction Date: {} = {}", mess.getInternalDate(), accountTransaction.getSourceTime());
 							if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction)) {
 								logger.info("Ignoring already present Desc:{} Amount:{} Type:{}",
 										accountTransaction.getDescription(), accountTransaction.getAmount(),
 										accountTransaction.getType());
 							} else {
 								accountTransactionService.save(accountTransaction);
+								logger.info("Saved transaction: {}", accountTransaction.getDescription());
 							}
-							logger.info("Saved transaction: {}", accountTransaction.getDescription());
 						} else {
 							logger.warn("No transaction data extracted from message ID: {}", message.getId());
 						}

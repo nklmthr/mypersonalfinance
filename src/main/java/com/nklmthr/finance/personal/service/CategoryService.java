@@ -1,12 +1,13 @@
 package com.nklmthr.finance.personal.service;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.model.Category;
+import com.nklmthr.finance.personal.model.FlatCategory;
 import com.nklmthr.finance.personal.repository.CategoryRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -26,8 +27,8 @@ public class CategoryService {
         return categoryRepository.findByParentIsNull();
     }
 
-    public Optional<Category> getCategoryById(String id) {
-        return categoryRepository.findById(id);
+    public Category getCategoryById(String id) {
+        return categoryRepository.findById(id).orElse(null);
     }
 
     public Category saveCategory(Category category) {
@@ -44,6 +45,10 @@ public class CategoryService {
 
 	public Category getNonClassifiedCategory() {
 		return categoryRepository.findByName("Not Classified").get();
+	}
+
+	public List<FlatCategory> getFlatCategories() {
+		return categoryRepository.findAllProjectedBy(Sort.by("name").ascending());
 	}
 
 }

@@ -41,8 +41,6 @@ public class Category {
 
     private String name;
 
-    private String description;
-    
     private boolean isSystemCategory;
 
     @ToString.Exclude

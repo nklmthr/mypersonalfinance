@@ -25,7 +25,6 @@ export default function DashboardLayout({ children }) {
 			<div className="flex-1 flex flex-col">
 				{/* Header */}
 				<header className="flex justify-between items-center px-6 py-3 bg-white border-b shadow-sm">
-					<h1 className="text-lg font-semibold">Dashboard</h1>
 					<div className="ml-auto flex items-center space-x-4">
 						<button className="text-sm hover:text-blue-600">👤 Profile</button>
 						<button className="text-sm hover:text-blue-600">🔐 Login</button>

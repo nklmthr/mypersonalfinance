@@ -1,5 +1,7 @@
 package com.nklmthr.finance.personal.model;
 
+import java.math.BigDecimal;
+
 import org.hibernate.annotations.UuidGenerator;
 
 import jakarta.persistence.Column;
@@ -29,7 +31,7 @@ public class Account {
     private String name;
 
     @Column(nullable = false)
-    private Double balance;
+    private BigDecimal balance;
 
     @ManyToOne(optional = false, fetch = FetchType.EAGER)
     @JoinColumn(name = "institution_id", nullable = false)

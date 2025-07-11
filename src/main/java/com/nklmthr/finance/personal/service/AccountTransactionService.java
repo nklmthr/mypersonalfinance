@@ -25,7 +25,7 @@ public class AccountTransactionService {
     }
 
     public List<AccountTransaction> getRootTransactions() {
-        return accountTransactionRepository.findByParentIsNull();
+        return accountTransactionRepository.findAllWithGraph();
     }
 
     public List<AccountTransaction> getChildren(String parentId) {

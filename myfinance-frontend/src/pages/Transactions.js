@@ -1,304 +1,257 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import TransactionForm from "./TransactionForm";
+
+function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, accounts, categories, mode }) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+      <form
+        onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
+        className="bg-white p-6 rounded shadow-lg w-full max-w-md space-y-4"
+      >
+        <h3 className="text-lg font-semibold">{mode === "add" ? "Add" : mode === "split" ? "Split" : "Edit"} Transaction</h3>
+
+        <label className="block text-sm">
+          Date
+          <input type="date" value={transaction.date.slice(0, 10)} required
+            onChange={e => setTransaction(tx => ({ ...tx, date: e.target.value }))}
+            className="mt-1 block w-full border rounded px-2 py-1"
+          />
+        </label>
+
+        <label className="block text-sm">
+          Description
+          <input type="text" value={transaction.description} required
+            onChange={e => setTransaction(tx => ({ ...tx, description: e.target.value }))}
+            className="mt-1 block w-full border rounded px-2 py-1"
+          />
+        </label>
+
+        <label className="block text-sm">
+          Explanation
+          <input type="text" value={transaction.explanation || ""}
+            onChange={e => setTransaction(tx => ({ ...tx, explanation: e.target.value }))}
+            className="mt-1 block w-full border rounded px-2 py-1"
+          />
+        </label>
+
+        <label className="block text-sm">
+          Amount
+          <input type="number" step="0.01" value={transaction.amount} required
+            onChange={e => setTransaction(tx => ({ ...tx, amount: e.target.value }))}
+            className="mt-1 block w-full border rounded px-2 py-1"
+          />
+        </label>
+
+        <label className="block text-sm">
+          Type
+          <select value={transaction.type}
+            onChange={e => setTransaction(tx => ({ ...tx, type: e.target.value }))}
+            className="mt-1 block w-full border rounded px-2 py-1"
+          >
+            <option>DEBIT</option>
+            <option>CREDIT</option>
+          </select>
+        </label>
+
+        <label className="block text-sm">
+          Account
+          <select value={transaction.accountId} required
+            onChange={e => setTransaction(tx => ({ ...tx, accountId: e.target.value }))}
+            className="mt-1 block w-full border rounded px-2 py-1"
+          >
+            <option value="">— Select —</option>
+            {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </label>
+
+        <label className="block text-sm">
+          Category
+          <select value={transaction.categoryId}
+            onChange={e => setTransaction(tx => ({ ...tx, categoryId: e.target.value }))}
+            className="mt-1 block w-full border rounded px-2 py-1"
+          >
+            <option value="">— None —</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+
+        <div className="flex justify-end space-x-2">
+          <button type="button" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
+            {mode === "add" ? "Add" : mode === "split" ? "Split" : "Save"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [expandedIds, setExpandedIds] = useState(new Set());
+
   const [editTx, setEditTx] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showSplitModal, setShowSplitModal] = useState(false);
-  const [newTx, setNewTx] = useState({
-    description: "",
-    amount: "",
-    date: new Date().toISOString().slice(0, 10),
-    type: "DEBIT",
-    accountId: "",
-    categoryId: "",
-    parentId: null,
-    parentName: ""
-  });
-  const [splitTransaction, setSplitTransaction] = useState({
-    parentId: null,
-    date: new Date().toISOString().slice(0, 10),
-    description: "",
-    amount: "",
-    type: "DEBIT",
-    accountId: "",
-    categoryId: "",
-    parentName: ""
-  });
+  const [addTx, setAddTx] = useState(false);
+  const [splitTx, setSplitTx] = useState(null);
 
-  const fetchTransactions = async () => {
-    try {
-      const res = await axios.get("/api/transactions/root");
-      setTransactions(res.data);
-    } catch (err) {
-      console.error("Fetch transactions error:", err);
-    }
+  const emptyTx = {
+    id: null, date: new Date().toISOString(),
+    description: "", explanation: "", amount: "",
+    type: "DEBIT", accountId: "", categoryId: "", parentId: null,
   };
 
-  const fetchMeta = async () => {
-    try {
-      const [accRes, catRes] = await Promise.all([
-        axios.get("/api/accounts"),
-        axios.get("/api/categories"),
-      ]);
-      setAccounts(accRes.data);
-      setCategories(catRes.data);
-    } catch (err) {
-      console.error("Fetch meta error:", err);
-    }
+  const fetchData = async () => {
+    const [tRes, aRes, cRes] = await Promise.all([
+      axios.get("/api/transactions/root"),
+      axios.get("/api/accounts"),
+      axios.get("/api/categories/flat"),
+    ]);
+    setTransactions(tRes.data);
+    setAccounts(aRes.data);
+    setCategories(cRes.data);
   };
 
-  useEffect(() => {
-    fetchMeta();
-    fetchTransactions();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const handleAdd = async () => {
-    try {
-      const payload = {
-        description: newTx.description,
-        amount: newTx.amount,
-        date: newTx.date,
-        type: newTx.type,
-        account: { id: newTx.accountId },
-        category: newTx.categoryId ? { id: newTx.categoryId } : null,
-        parent: newTx.parentId ? { id: newTx.parentId } : null
-      };
-      await axios.post("/api/transactions", payload);
-      setShowAddModal(false);
-      setNewTx({ description: "", amount: "", date: new Date().toISOString().slice(0, 10), type: "DEBIT", accountId: "", categoryId: "", parentId: null, parentName: "" });
-      fetchTransactions();
-    } catch (err) {
-      console.error("Add error:", err);
-    }
+  const saveTx = async (tx, method, url) => {
+    const payload = {
+      description: tx.description,
+      explanation: tx.explanation || "",
+      amount: tx.amount,
+      date: tx.date,
+      type: tx.type,
+      account: { id: tx.accountId },
+      category: tx.categoryId ? { id: tx.categoryId } : null,
+      parent: tx.parentId ? { id: tx.parentId } : null
+    };
+    await axios[method](url, payload);
+    fetchData();
   };
 
-  const handleEdit = async () => {
-    try {
-      const payload = {
-        description: editTx.description,
-        amount: editTx.amount,
-        date: editTx.date,
-        type: editTx.type,
-        account: { id: editTx.accountId },
-        category: editTx.categoryId ? { id: editTx.categoryId } : null,
-        parent: editTx.parentId ? { id: editTx.parentId } : null
-      };
-      await axios.put(`/api/transactions/${editTx.id}`, payload);
-      setEditTx(null);
-      fetchTransactions();
-    } catch (err) {
-      console.error("Edit error:", err);
-    }
-  };
-
-  const handleSplit = async () => {
-    try {
-      const payload = {
-        description: splitTransaction.description,
-        amount: splitTransaction.amount,
-        date: splitTransaction.date,
-        type: splitTransaction.type,
-        parent: splitTransaction.parentId ? { id: splitTransaction.parentId } : null,
-        account: { id: splitTransaction.accountId },
-        category: splitTransaction.categoryId ? { id: splitTransaction.categoryId } : null
-      };
-      await axios.post("/api/transactions", payload);
-      setShowSplitModal(false);
-      fetchTransactions();
-    } catch (err) {
-      console.error("Split add error:", err);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this transaction?")) {
-      try {
-        await axios.delete(`/api/transactions/${id}`);
-        fetchTransactions();
-      } catch (err) {
-        console.error("Delete error:", err);
-      }
-    }
-  };
-
-  const handleCategoryChange = async (txId, newCategoryId) => {
-    try {
-      const tx = transactions.find(t => t.id === txId);
-      await axios.put(`/api/transactions/${txId}`, {
-        description: tx.description,
-        amount: tx.amount,
-        date: tx.date,
-        type: tx.type,
-        account: { id: tx.account?.id },
-        parent: tx.parent ? { id: tx.parent.id } : null,
-        category: newCategoryId ? { id: newCategoryId } : null,
-      });
-      fetchTransactions();
-    } catch (err) {
-      console.error("Failed to update category:", err);
-    }
+  const deleteTx = async id => {
+    if (!window.confirm("Delete this transaction?")) return;
+    await axios.delete(`/api/transactions/${id}`);
+    fetchData();
   };
 
   const toggleExpand = (id) => {
     setExpandedIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
+      newSet.has(id) ? newSet.delete(id) : newSet.add(id);
       return newSet;
     });
   };
 
-  const renderTransactions = (items, level = 0) =>
-    items.map((tx) => {
-      const isExpanded = expandedIds.has(tx.id);
-      const bgColors = ["bg-yellow-100", "bg-gray-50", "bg-blue-50", "bg-green-50"];
-      const rowColor = !isExpanded ? "bg-orange-100" : bgColors[level % bgColors.length];
-      const indicator = isExpanded ? "▼" : "▶";
+  const renderTree = (txs, level = 0) => txs.map(tx => {
+    const isExpanded = expandedIds.has(tx.id);
+    const children = tx.children || [];
 
-      return (
-        <div key={tx.id} className={`ml-${level * 2} border-l-2 pl-2 ${rowColor}`}>
-          <div className={`text-sm flex justify-between items-center px-1 py-1 cursor-pointer hover:bg-gray-100`} onClick={() => toggleExpand(tx.id)}>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-gray-400">{indicator}</span>
-              <strong>{tx.description}</strong>
-              <span className="text-gray-600">| ₹{tx.amount}</span>
-              <span className="text-gray-600">| {tx.type}</span>
-              <span className="text-gray-600">| {tx.account?.name}</span>
-              {tx.account && (
-                <select
-                  className="text-xs border px-1 py-0.5 rounded"
-                  value={tx.category?.id || ""}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => handleCategoryChange(tx.id, e.target.value)}
-                >
-                  <option value="">-- Category --</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+    return (
+      <div key={tx.id} className={`ml-${level * 4} border-l pl-2`}>
+        <div className="grid grid-cols-[2fr_1fr_1.5fr_1fr_max-content] items-center gap-2 bg-white border rounded px-3 py-2 my-1">
+          <div>
+            <div className="flex items-center">
+              {children.length > 0 && (
+                <button onClick={() => toggleExpand(tx.id)} className="mr-2 text-xs text-gray-400">
+                  {isExpanded ? "▼" : "▶"}
+                </button>
               )}
+              <span className="truncate font-medium">{tx.description}</span>
             </div>
-            <div className="ml-auto space-x-2 text-xs">
-              <span className="text-gray-400">#{tx.date}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSplitTransaction({
-                    parentId: tx.id,
-                    parentName: tx.description,
-                    date: new Date().toISOString().slice(0, 10),
-                    description: "",
-                    amount: "",
-                    type: "DEBIT",
-                    accountId: tx.account?.id || "",
-                    categoryId: ""
-                  });
-                  setShowSplitModal(true);
-                }}
-                className="text-purple-600 hover:underline"
-              >
-                Split
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(tx.id);
-                }}
-                className="text-red-600 hover:underline"
-              >
-                Delete
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditTx({
-                    id: tx.id,
-                    description: tx.description,
-                    amount: tx.amount,
-                    date: tx.date,
-                    type: tx.type,
-                    accountId: tx.account?.id || "",
-                    categoryId: tx.category?.id || "",
-                    parentId: tx.parent?.id || null,
-                    parentName: tx.parent?.description || ""
-                  });
-                }}
-                className="text-blue-600 hover:underline"
-              >
-                Update
-              </button>
-            </div>
+            <div className="text-xs text-gray-500">{tx.explanation}</div>
           </div>
-          {isExpanded && tx.children && tx.children.length > 0 && renderTransactions(tx.children, level + 1)}
+          <div>
+            ₹{tx.amount} <span className="ml-2 text-xs uppercase">{tx.type}</span><br />
+            <span className="text-sm text-gray-600">{tx.account?.name}</span>
+          </div>
+          <select
+            className="w-full border rounded px-2 py-1 text-sm"
+            value={tx.category?.id || ""}
+            onChange={(e) =>
+              saveTx({ ...tx, categoryId: e.target.value }, "put", `/api/transactions/${tx.id}`)
+            }
+          >
+            <option value="">— Category —</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <div className="text-sm text-gray-500">{tx.date.replace("T", " ").slice(0, 19)}</div>
+          <div className="flex items-center space-x-2 text-sm">
+            <button onClick={() => setSplitTx({ ...emptyTx, parentId: tx.id, accountId: tx.account?.id })} className="text-purple-600 hover:underline">Split</button>
+            <button onClick={() => deleteTx(tx.id)} className="text-red-600 hover:underline">Delete</button>
+            <button onClick={() => setEditTx({
+              ...tx,
+              accountId: tx.account?.id || "",
+              categoryId: tx.category?.id || "",
+              parentId: tx.parent?.id || null
+            })} className="text-blue-600 hover:underline">Update</button>
+          </div>
         </div>
-      );
-    });
+        {isExpanded && children.length > 0 && renderTree(children, level + 1)}
+      </div>
+    );
+  });
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">💸 Transactions</h2>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          ➕ Add Transaction
-        </button>
+        <h2 className="text-2xl font-semibold">💸 Transactions</h2>
+        <button onClick={() => { setAddTx(true); setEditTx(null); setSplitTx(null); }}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ Add Transaction</button>
       </div>
 
-      <div className="bg-white shadow rounded p-4 text-sm leading-tight">
+      <div className="space-y-2">
         {transactions.length === 0 ? (
-          <div className="text-gray-500">No transactions yet.</div>
+          <div className="text-gray-500">No transactions found.</div>
         ) : (
-          renderTransactions(transactions)
+          renderTree(transactions)
         )}
       </div>
+
+      {addTx && (
+        <TransactionForm
+          transaction={{ ...emptyTx }}
+          setTransaction={() => {}}
+          onCancel={() => setAddTx(false)}
+          onSubmit={async () => {
+            await saveTx(emptyTx, "post", "/api/transactions");
+            setAddTx(false);
+          }}
+          accounts={accounts}
+          categories={categories}
+          mode="add"
+        />
+      )}
 
       {editTx && (
         <TransactionForm
           transaction={editTx}
           setTransaction={setEditTx}
           onCancel={() => setEditTx(null)}
-          onSubmit={handleEdit}
+          onSubmit={async () => {
+            await saveTx(editTx, "put", `/api/transactions/${editTx.id}`);
+            setEditTx(null);
+          }}
           accounts={accounts}
           categories={categories}
-          transactions={transactions}
+          mode="edit"
         />
       )}
 
-      {showAddModal && (
+      {splitTx && (
         <TransactionForm
-          transaction={newTx}
-          setTransaction={setNewTx}
-          onCancel={() => setShowAddModal(false)}
-          onSubmit={handleAdd}
+          transaction={splitTx}
+          setTransaction={setSplitTx}
+          onCancel={() => setSplitTx(null)}
+          onSubmit={async () => {
+            await saveTx(splitTx, "post", "/api/transactions");
+            setSplitTx(null);
+          }}
           accounts={accounts}
           categories={categories}
-          transactions={transactions}
-          mode="add"
-        />
-      )}
-
-      {showSplitModal && (
-        <TransactionForm
-          transaction={splitTransaction}
-          setTransaction={setSplitTransaction}
-          onCancel={() => setShowSplitModal(false)}
-          onSubmit={handleSplit}
-          accounts={accounts}
-          categories={categories}
-          transactions={transactions}
           mode="split"
         />
       )}

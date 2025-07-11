@@ -1,12 +1,22 @@
 package com.nklmthr.finance.personal.controller;
 
-import com.nklmthr.finance.personal.model.Category;
-import com.nklmthr.finance.personal.service.CategoryService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.nklmthr.finance.personal.model.Category;
+import com.nklmthr.finance.personal.model.FlatCategory;
+import com.nklmthr.finance.personal.service.CategoryService;
+
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/categories")
@@ -19,6 +29,12 @@ public class CategoryController {
     public List<Category> getAll() {
         return categoryService.getAllCategories();
     }
+    
+    @GetMapping("/flat")
+    public List<FlatCategory> getFlatCategories() {
+		return categoryService.getFlatCategories();
+		
+	}
 
     @GetMapping("/root")
     public List<Category> getRootCategories() {
@@ -27,9 +43,12 @@ public class CategoryController {
 
     @GetMapping("/{id}")
     public ResponseEntity<Category> getById(@PathVariable String id) {
-        return categoryService.getCategoryById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        Category category =  categoryService.getCategoryById(id);
+        if (category != null) {
+			return ResponseEntity.ok(category);
+		} else {
+			return ResponseEntity.notFound().build();
+		}
     }
 
     @GetMapping("/{id}/children")
@@ -44,14 +63,9 @@ public class CategoryController {
 
     @PutMapping("/{id}")
     public ResponseEntity<Category> update(@PathVariable String id, @RequestBody Category updated) {
-        return categoryService.getCategoryById(id)
-                .map(existing -> {
-                    existing.setName(updated.getName());
-                    existing.setDescription(updated.getDescription());
-                    existing.setParent(updated.getParent());
-                    return ResponseEntity.ok(categoryService.saveCategory(existing));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return categoryService.getCategoryById(id) != null
+				? ResponseEntity.ok(categoryService.saveCategory(updated))
+				: ResponseEntity.notFound().build();
     }
 
     @DeleteMapping("/{id}")

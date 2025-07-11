@@ -28,20 +28,22 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 
 	@Autowired
 	private AccountService accountService;
-	private static final Pattern AMOUNT_PATTERN = Pattern.compile(
-		    "Amount Debited: INR\\s+([\\d,]+(?:\\.\\d+)?)"
-		  + "|INR\\s+([\\d,]+(?:\\.\\d+)?)\\s+has been debited"
-		  + "|has been debited with INR\\s+([\\d,]+(?:\\.\\d+)?)"
-		  + "|debited with INR\\s+([\\d,]+(?:\\.\\d+)?)",
-		  Pattern.CASE_INSENSITIVE);
+	private static final Pattern AMOUNT_PATTERN = Pattern.compile("Amount Debited: INR\\s+([\\d,]+(?:\\.\\d+)?)"
+			+ "|INR\\s+([\\d,]+(?:\\.\\d+)?)\\s+has been debited"
+			+ "|has been debited with INR\\s+([\\d,]+(?:\\.\\d+)?)" + "|debited with INR\\s+([\\d,]+(?:\\.\\d+)?)",
+			Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern DATE_PATTERN = Pattern.compile("on (\\d{2}-\\d{2}-\\d{4})[, ]*(\\d{2}:\\d{2}:\\d{2})|"
 			+ "Date & Time: (\\d{2}-\\d{2}-\\d{2}), (\\d{2}:\\d{2}:\\d{2})");
 
-	private static final String[] DESCRIPTION_REGEXES = { "Transaction Info:\\s*([A-Z0-9/\\- ]+)",
-			"INR [\\d,]+(?:\\.\\d+)? has been debited from your A/c no\\. .*? on .*? at ([A-Z0-9/\\-]+)",
-			"by ([A-Z0-9 \\-]+)", "at ([A-Z0-9/\\-]+)" };
-
+	
+	private static final String[] DESCRIPTION_REGEXES = {
+		    "Transaction Info:\\s*([\\p{L}0-9/\\- ]+?)(?=(?: If | by | at |\\.|$))",
+		    "INR [\\d,]+(?:\\.\\d+)? on .*? by ([\\p{L}0-9 \\-]+?)(?=(?:\\.| If | at |$))",
+		    "by ([\\p{L}0-9 \\-]+?)(?=(?:\\.| If | at |$))",
+		    "at ([\\p{L}0-9 \\-/]+?)(?=(?:\\.| If |$))"
+		};
+	
 	private static final DateTimeFormatter FORMATTER_FULL = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
 	private static final DateTimeFormatter FORMATTER_SHORT = DateTimeFormatter.ofPattern("dd-MM-yy HH:mm:ss");
 
@@ -50,9 +52,9 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		service.run();
 	}
 
-	@Scheduled(cron = "0 0/60 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/6 * * * ?") // Every 30 minutes
 	public void runTask() {
-		super.run(); // AbstractDataExtractionService logic
+		super.run();
 	}
 
 	@Override
@@ -74,8 +76,9 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		tx.setAccount(accountService.getAccountByName("Axis Salary Acc"));
 		extractDateTime(emailContent).ifPresent(tx::setDate);
 		extractDescription(emailContent).ifPresent(tx::setDescription);
-
 		tx.setType(TransactionType.DEBIT);
+		logger.debug(emailContent);
+		logger.debug("Extracted transaction: {}", tx);
 		return tx;
 	}
 
@@ -86,16 +89,16 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		if (m.find()) {
 			String raw = StringUtils.EMPTY;
 			for (int i = 1; i <= m.groupCount(); i++) {
-			    if (m.group(i) != null) {
-			    	raw = m.group(i);
-			        break;
-			    }
+				if (m.group(i) != null) {
+					raw = m.group(i);
+					break;
+				}
 			}
 			try {
 				return Optional.of(new BigDecimal(raw.replace(",", "")));
 			} catch (NumberFormatException e) {
-				
-				logger.error("Failed to parse {} amount '{}'",content, raw, e);
+
+				logger.error("Failed to parse {} amount '{}'", content, raw, e);
 			}
 		}
 		return Optional.empty();
@@ -123,6 +126,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		for (String regex : DESCRIPTION_REGEXES) {
 			Optional<String> match = extractGroup(Pattern.compile(regex), content, 1);
 			if (match.isPresent() && !match.get().isBlank()) {
+				logger.debug("Extracted description: {}", match.get());
 				return match;
 			}
 		}

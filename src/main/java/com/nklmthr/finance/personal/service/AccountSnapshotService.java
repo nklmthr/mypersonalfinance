@@ -1,6 +1,5 @@
 package com.nklmthr.finance.personal.service;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,13 +33,9 @@ public class AccountSnapshotService {
 
         List<AccountBalanceSnapshot> snapshots = new ArrayList<>();
         for (Account account : accounts) {
-            BigDecimal balance = account.getBalance() != null
-                ? BigDecimal.valueOf(account.getBalance())
-                : BigDecimal.ZERO;
-
             AccountBalanceSnapshot snapshot = AccountBalanceSnapshot.builder()
                 .account(account)
-                .balance(balance)
+                .balance(account.getBalance())
                 .snapshotDate(snapshotDate)
                 .build();
 
