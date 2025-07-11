@@ -52,7 +52,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		service.run();
 	}
 
-	@Scheduled(cron = "0 0/6 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/3 * * * ?") // Every 30 minutes
 	public void runTask() {
 		super.run();
 	}
@@ -69,9 +69,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	}
 
 	@Override
-	protected AccountTransaction extractTransactionData(String emailContent) {
-		AccountTransaction tx = new AccountTransaction();
-
+	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent) {
 		extractAmount(emailContent).ifPresent(tx::setAmount);
 		tx.setAccount(accountService.getAccountByName("Axis Salary Acc"));
 		extractDateTime(emailContent).ifPresent(tx::setDate);

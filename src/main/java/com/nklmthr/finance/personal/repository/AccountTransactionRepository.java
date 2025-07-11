@@ -1,7 +1,6 @@
 package com.nklmthr.finance.personal.repository;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,5 +25,5 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 	@Query("SELECT t FROM AccountTransaction t WHERE t.parent IS NULL ORDER BY t.date DESC")
 	List<AccountTransaction> findAllWithGraph();
 
-	Optional<AccountTransaction> findBySourceThreadId(String sourceThreadId);
+	List<AccountTransaction> findBySourceThreadId(String sourceThreadId);
 }

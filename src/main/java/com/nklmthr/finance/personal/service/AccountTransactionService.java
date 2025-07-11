@@ -41,17 +41,27 @@ public class AccountTransactionService {
     }
     
     public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
-        Optional<AccountTransaction> existingOpt = accountTransactionRepository.findBySourceThreadId(newTransaction.getSourceThreadId());
+        List<AccountTransaction> existingAccTxnList = accountTransactionRepository.findBySourceThreadId(newTransaction.getSourceThreadId());
 
-        if (existingOpt.isEmpty()) {
-            // No transaction with this sourceThreadId found
+        if (existingAccTxnList.isEmpty()) {
             return false;
         }
-
-        AccountTransaction existing = existingOpt.get();
-
-        return existing.getDescription().trim().equalsIgnoreCase(newTransaction.getDescription().trim())
-            && existing.getAmount().compareTo(newTransaction.getAmount()) == 0
-            && existing.getType() == newTransaction.getType();
+        // Check if the new transaction matches any existing transaction
+        for (AccountTransaction existingTxn : existingAccTxnList) {
+			if (existingTxn.getDate().equals(newTransaction.getDate())
+					&& existingTxn.getAmount().compareTo(newTransaction.getAmount()) == 0
+					&& existingTxn.getDescription().equalsIgnoreCase(newTransaction.getDescription())
+					&& existingTxn.getType().equals(newTransaction.getType())) {
+				return true; // Transaction already exists
+			}
+			
+		}
+        // Check if the new transaction matches any existing transaction by sourceMessageId
+        for (AccountTransaction existingTxn : existingAccTxnList) {
+			if (existingTxn.getSourceId().equals(newTransaction.getSourceId())) {
+				return true; // Transaction already exists by sourceMessageId
+			}
+		}
+		return false; // No match found, transaction is new
     }
 }

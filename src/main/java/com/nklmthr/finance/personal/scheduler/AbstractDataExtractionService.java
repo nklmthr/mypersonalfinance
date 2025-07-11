@@ -62,26 +62,26 @@ public abstract class AbstractDataExtractionService {
 						}
 						logger.debug("Processing message with ID: {}", message.getId());
 						logger.info(emailContent);
-						AccountTransaction accountTransaction = extractTransactionData(emailContent);
-						logger.info("Transaction: {}", accountTransaction);
-						if (accountTransaction != null) {
-							accountTransaction.setCategory(categoryService.getNonClassifiedCategory());
-							accountTransaction.setSourceId(mess.getId());
-							accountTransaction.setSourceThreadId(mess.getThreadId());
-							accountTransaction.setSourceTime(Instant.ofEpochMilli(mess.getInternalDate())
-									.atZone(ZoneId.systemDefault()).toLocalDateTime());
-							logger.info("Transaction Date: {} = {}", mess.getInternalDate(), accountTransaction.getSourceTime());
-							if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction)) {
-								logger.info("Ignoring already present Desc:{} Amount:{} Type:{}",
-										accountTransaction.getDescription(), accountTransaction.getAmount(),
-										accountTransaction.getType());
-							} else {
-								accountTransactionService.save(accountTransaction);
-								logger.info("Saved transaction: {}", accountTransaction.getDescription());
-							}
+						AccountTransaction accountTransaction = new AccountTransaction();
+						
+						accountTransaction.setCategory(categoryService.getNonClassifiedCategory());
+						accountTransaction.setSourceId(mess.getId());
+						accountTransaction.setSourceThreadId(mess.getThreadId());
+						accountTransaction.setSourceTime(Instant.ofEpochMilli(mess.getInternalDate())
+								.atZone(ZoneId.systemDefault()).toLocalDateTime());
+						logger.debug("Transaction Date: {} = {}", mess.getInternalDate(),
+								accountTransaction.getSourceTime());
+						extractTransactionData(accountTransaction, emailContent);
+						logger.debug("Transaction: {}", accountTransaction);
+						if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction)) {
+							logger.info("Ignoring already present Desc:{} Amount:{} Type:{}",
+									accountTransaction.getDescription(), accountTransaction.getAmount(),
+									accountTransaction.getType());
 						} else {
-							logger.warn("No transaction data extracted from message ID: {}", message.getId());
+							accountTransactionService.save(accountTransaction);
+							logger.debug("Saved transaction: {}", accountTransaction.getDescription());
 						}
+
 					}
 				}
 			}
@@ -178,6 +178,6 @@ public abstract class AbstractDataExtractionService {
 
 	protected abstract String getSender();
 
-	protected abstract AccountTransaction extractTransactionData(String emailContent);
+	protected abstract AccountTransaction extractTransactionData(AccountTransaction accountTransaction, String emailContent);
 
 }
