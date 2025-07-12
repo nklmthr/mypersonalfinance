@@ -1,8 +1,6 @@
 package com.nklmthr.finance.personal.scheduler;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -18,17 +16,17 @@ import com.nklmthr.finance.personal.model.AccountTransaction;
 
 @Service
 public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionService {
+
 	private static final Logger logger = LoggerFactory.getLogger(SBICCDataExtractionServiceImpl.class);
 
-	private static final Pattern SBI_CREDIT_REGEX = Pattern.compile(
-			"Rs\\.([\\d\\.]+) spent on your SBI Credit Card ending with \\d+ at (.+?) on (\\d{2}-\\d{2}-\\d{2}) via (UPI) \\(Ref No\\. ([\\d]+)\\)");
+	// Slash-based fallback pattern
+	private static final Pattern GENERIC_PATTERN = Pattern.compile(
+			"Rs\\.([\\d\\.]+) spent on your SBI Credit Card ending .*? at (.*?) on (\\d{2}[/-]\\d{2}[/-]\\d{2})",
+			Pattern.CASE_INSENSITIVE);
 
-	public static void main(String[] args) {
-		SBICCDataExtractionServiceImpl impl = new SBICCDataExtractionServiceImpl();
-		impl.run();
-	}
+	private static final Pattern REF_PATTERN = Pattern.compile("Ref No\\.\\s*(\\d+)");
 
-	@Scheduled(cron = "0 0/3 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/20 * * * ?")
 	public void runTask() {
 		super.run();
 	}
@@ -46,35 +44,36 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 	@Override
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent) {
 		try {
-			// Extract amount
-			Pattern amountPattern = Pattern.compile("Rs\\.(\\d+(?:\\.\\d{1,2})?)");
-			Matcher amountMatcher = amountPattern.matcher(emailContent);
-			if (amountMatcher.find()) {
-				tx.setAmount(new BigDecimal(amountMatcher.group(1)));
+			Matcher m = GENERIC_PATTERN.matcher(emailContent);
+			if (m.find()) {
+				// Amount
+				tx.setAmount(new BigDecimal(m.group(1)));
+
+				// Merchant
+				tx.setDescription(m.group(2).trim());
+
+			} else {
+				logger.warn("No SBI Credit Card match found in: {}", emailContent);
 			}
 
-			// Extract merchant name
-			Pattern merchantPattern = Pattern.compile("at (.*?) on \\d{2}-\\d{2}-\\d{2}");
-			Matcher merchantMatcher = merchantPattern.matcher(emailContent);
-			if (merchantMatcher.find()) {
-				tx.setDescription(merchantMatcher.group(1).trim());
+			// UPI Ref
+			Matcher ref = REF_PATTERN.matcher(emailContent);
+			if (ref.find()) {
+				tx.setDescription(tx.getDescription()+" UPI Ref " + ref.group(1));
 			}
 
-			// Extract reference number (optional explanation)
-			Pattern refPattern = Pattern.compile("Ref No\\.\\s*(\\d+)");
-			Matcher refMatcher = refPattern.matcher(emailContent);
-			if (refMatcher.find()) {
-				tx.setExplanation("UPI Ref " + refMatcher.group(1));
+			// Account selection
+			if (emailContent.contains("2606")) {
+				tx.setAccount(accountService.getAccountByName("SBI Rupay Credit Card"));
+			} else {
+				tx.setAccount(accountService.getAccountByName("SBIB-CCA-Signature"));
 			}
-
-			tx.setDate(tx.getSourceTime());
 
 			tx.setType(TransactionType.DEBIT);
-			tx.setAccount(emailContent.contains("2606") ? accountService.getAccountByName("SBI Rupay Credit Card")
-					: accountService.getAccountByName("SBIB-CCA-Signature"));
 		} catch (Exception e) {
 			logger.error("Error parsing SBI Credit Card transaction", e);
 		}
 		return tx;
 	}
+
 }

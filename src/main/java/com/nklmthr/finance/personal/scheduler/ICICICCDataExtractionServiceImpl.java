@@ -1,8 +1,6 @@
 package com.nklmthr.finance.personal.scheduler;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -25,7 +23,7 @@ public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionServ
 		impl.run();
 	}
 
-	@Scheduled(cron = "0 0/3 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/25 * * * ?") // Every 30 minutes
 	public void runTask() {
 		super.run();
 	}
@@ -48,15 +46,10 @@ public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionServ
 		if (matcher.find()) {
 			try {
 				String amountStr = matcher.group(1).replace(",", "");
-				String dateStr = matcher.group(2); // e.g., Jul 05, 2025
-				String timeStr = matcher.group(3); // e.g., 12:12:58
 				String merchant = matcher.group(4).trim();
 
 				BigDecimal amount = new BigDecimal(amountStr);
-				DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm:ss");
-				LocalDateTime dateTime = LocalDateTime.parse(dateStr + " " + timeStr, formatter);
 
-				tx.setDate(dateTime);
 				tx.setAmount(amount);
 				tx.setDescription(merchant);
 				tx.setType(TransactionType.DEBIT);

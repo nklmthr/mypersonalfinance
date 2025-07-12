@@ -1,0 +1,46 @@
+package com.nklmthr.finance.personal.repository;
+
+import java.time.LocalDateTime;
+
+import org.springframework.data.jpa.domain.Specification;
+
+import com.nklmthr.finance.personal.enums.TransactionType;
+import com.nklmthr.finance.personal.model.AccountTransaction;
+
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+
+public class AccountTransactionSpecifications {
+
+	public static Specification<AccountTransaction> hasAccount(String accountId) {
+		return (root, query, cb) -> cb.equal(root.get("account").get("id"), accountId);
+	}
+
+	public static Specification<AccountTransaction> hasTransactionType(TransactionType type) {
+		return (root, query, cb) -> cb.equal(root.get("type"), type);
+	}
+
+	public static Specification<AccountTransaction> dateBetween(LocalDateTime start, LocalDateTime end) {
+		return (root, query, cb) -> cb.between(root.get("date"), start, end);
+	}
+
+	public static Specification<AccountTransaction> isRootTransaction() {
+		return (root, query, cb) -> cb.isNull(root.get("parent"));
+	}
+
+	public static Specification<AccountTransaction> matchesSearch(String search) {
+		return (Root<AccountTransaction> root, CriteriaQuery<?> query, CriteriaBuilder cb) -> {
+			String likeSearch = "%" + search.toLowerCase() + "%";
+
+			Predicate descriptionMatch = cb.like(cb.lower(root.get("description")), likeSearch);
+			Predicate explanationMatch = cb.like(cb.lower(root.get("explanation")), likeSearch);
+			Predicate typeMatch = cb.like(cb.lower(root.get("type").as(String.class)), likeSearch);
+			Predicate accountMatch = cb.like(cb.lower(root.get("account").get("name")), likeSearch);
+			Predicate categoryMatch = cb.like(cb.lower(root.get("category").get("name")), likeSearch);
+
+			return cb.or(descriptionMatch, explanationMatch, typeMatch, accountMatch, categoryMatch);
+		};
+	}
+}

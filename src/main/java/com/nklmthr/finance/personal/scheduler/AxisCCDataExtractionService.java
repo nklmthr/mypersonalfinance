@@ -1,8 +1,6 @@
 package com.nklmthr.finance.personal.scheduler;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -20,7 +18,7 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 
 	private static final Logger logger = LoggerFactory.getLogger(AxisCCDataExtractionService.class);
 
-	@Scheduled(cron = "0 0/3 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/35 * * * ?") // Every 30 minutes
 	public void runTask() {
 		super.run();
 	}
@@ -49,16 +47,6 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 			if (amountMatcher.find()) {
 				String amountStr = amountMatcher.group(1).replace(",", "");
 				tx.setAmount(new BigDecimal(amountStr));
-			}
-
-			// Date and time (e.g., "on 08-07-2025 19:15:07 IST")
-			Pattern dateTimePattern = Pattern.compile("on (\\d{2}-\\d{2}-\\d{4}) (\\d{2}:\\d{2}:\\d{2})");
-			Matcher dateTimeMatcher = dateTimePattern.matcher(emailContent);
-			if (dateTimeMatcher.find()) {
-				String dateStr = dateTimeMatcher.group(1);
-				String timeStr = dateTimeMatcher.group(2);
-				DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
-				tx.setDate(LocalDateTime.parse(dateStr + " " + timeStr, formatter));
 			}
 
 			// Merchant name (e.g., "at Kharva Ente", "at SUBHA MEDIC")

@@ -69,6 +69,7 @@ public abstract class AbstractDataExtractionService {
 						accountTransaction.setSourceThreadId(mess.getThreadId());
 						accountTransaction.setSourceTime(Instant.ofEpochMilli(mess.getInternalDate())
 								.atZone(ZoneId.systemDefault()).toLocalDateTime());
+						accountTransaction.setDate(accountTransaction.getSourceTime());
 						logger.debug("Transaction Date: {} = {}", mess.getInternalDate(),
 								accountTransaction.getSourceTime());
 						extractTransactionData(accountTransaction, emailContent);
@@ -162,10 +163,10 @@ public abstract class AbstractDataExtractionService {
 	protected List<String> getGMailAPIQuery() {
 		List<String> queries = new java.util.ArrayList<>();
 		LocalDate today = LocalDate.now();
-		LocalDate weekAgo = today.minusDays(7);
+		LocalDate twoMonthAgo = today.minusDays(6);
 		for (String query : getEmailSubject()) {
 			queries.add(String.format("subject:(%s) from:(%s) after:%s before:%s", query, getSender(),
-					formatDate(weekAgo), formatDate(today.plusDays(1))));
+					formatDate(twoMonthAgo), formatDate(today.plusDays(1))));
 		}
 		return queries;
 	}

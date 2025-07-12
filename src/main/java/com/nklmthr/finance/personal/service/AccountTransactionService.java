@@ -1,14 +1,23 @@
 package com.nklmthr.finance.personal.service;
 
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
+import com.nklmthr.finance.personal.repository.AccountTransactionSpecifications;
 
 import lombok.RequiredArgsConstructor;
 
@@ -17,9 +26,30 @@ import lombok.RequiredArgsConstructor;
 public class AccountTransactionService {
 
     private final AccountTransactionRepository accountTransactionRepository;
+    private static final Logger logger = LoggerFactory.getLogger(AccountTransactionService.class);
 
-    public Page<AccountTransaction> getRootTransactions(Pageable pageable) {
-        return accountTransactionRepository.findAllWithGraph(pageable);
+    public Page<AccountTransaction> getFilteredTransactions(Pageable pageable, String month, String accountId, String type, String search) {
+    	Specification<AccountTransaction> spec = Specification.where(AccountTransactionSpecifications.isRootTransaction());
+
+    	if (StringUtils.isNotBlank(accountId)) {
+    	    spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
+    	}
+    	if (StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
+    	    spec = spec.and(AccountTransactionSpecifications.hasTransactionType(TransactionType.valueOf(type)));
+    	}
+    	if (StringUtils.isNotBlank(month)) {
+    	    YearMonth ym = YearMonth.parse(month);  // expected format: "2025-07"
+    	    logger.info("Filtering transactions for month: {}", ym);
+    	    LocalDateTime start = ym.atDay(1).atStartOfDay();  // 1st of the month, 00:00
+    	    LocalDateTime end = ym.atEndOfMonth().atTime(LocalTime.MAX);  // end of month, 23:59:59.999999999
+    	    logger.info("Filtering transactions between start: {} and end: {}", start, end);
+    	    spec = spec.and(AccountTransactionSpecifications.dateBetween(start, end));
+    	}
+    	if (StringUtils.isNotBlank(search)) {
+    	    spec = spec.and(AccountTransactionSpecifications.matchesSearch(search));
+    	}
+
+    	return accountTransactionRepository.findAll(spec, pageable);
     }
 
     public Optional<AccountTransaction> getById(String id) {

@@ -16,8 +16,6 @@ export default function DashboardLayout({ children }) {
 					<Link to="/categories" className="hover:text-blue-500">📂 Categoriess</Link>
 					<Link to="/institutions" className="hover:text-blue-500">🏦 Institutions</Link>
 					<Link to="/account-types" className="hover:text-blue-500">📒 Account Types</Link>
-					<Link to="/budgets" className="hover:text-blue-500">📊 Budgets</Link>
-					<Link to="/transactions" className="hover:text-blue-500">💸 Transactions</Link>
 				</nav>
 			</aside>
 

@@ -1,29 +1,153 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import dayjs from "dayjs"; // ⬅️ Make sure you have this
+
+function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, accounts, categories, mode }) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+      <form
+        onSubmit={e => { e.preventDefault(); onSubmit(); }}
+        className="bg-white p-6 rounded shadow-lg w-full max-w-md space-y-4"
+      >
+        <h3 className="text-lg font-semibold">{mode === "add" ? "Add" : mode === "split" ? "Split" : "Edit"} Transaction</h3>
+
+        <label className="block">
+          <span className="text-sm">Date</span>
+          <input type="date" className="mt-1 block w-full border rounded px-2 py-1"
+            value={transaction.date.slice(0, 10)}
+            onChange={e => setTransaction(tx => ({ ...tx, date: e.target.value }))}
+            required />
+        </label>
+
+        <label className="block">
+          <span className="text-sm">Description</span>
+          <input type="text" className="mt-1 block w-full border rounded px-2 py-1"
+            value={transaction.description}
+            onChange={e => setTransaction(tx => ({ ...tx, description: e.target.value }))}
+            required />
+        </label>
+
+        <label className="block">
+          <span className="text-sm">Explanation</span>
+          <input type="text" className="mt-1 block w-full border rounded px-2 py-1"
+            value={transaction.explanation || ""}
+            onChange={e => setTransaction(tx => ({ ...tx, explanation: e.target.value }))}
+          />
+        </label>
+
+        <label className="block">
+          <span className="text-sm">Amount</span>
+          <input type="number" step="0.01" className="mt-1 block w-full border rounded px-2 py-1"
+            value={transaction.amount}
+            onChange={e => setTransaction(tx => ({ ...tx, amount: e.target.value }))}
+            required />
+        </label>
+
+        <label className="block">
+          <span className="text-sm">Type</span>
+          <select className="mt-1 block w-full border rounded px-2 py-1"
+            value={transaction.type}
+            onChange={e => setTransaction(tx => ({ ...tx, type: e.target.value }))}>
+            <option>DEBIT</option>
+            <option>CREDIT</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="text-sm">Account</span>
+          <select className="mt-1 block w-full border rounded px-2 py-1"
+            value={transaction.accountId}
+            onChange={e => setTransaction(tx => ({ ...tx, accountId: e.target.value }))}
+            required>
+            <option value="">— Select —</option>
+            {accounts.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="text-sm">Category</span>
+          <select className="mt-1 block w-full border rounded px-2 py-1"
+            value={transaction.categoryId}
+            onChange={e => setTransaction(tx => ({ ...tx, categoryId: e.target.value }))}>
+            <option value="">— None —</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="flex justify-end space-x-2">
+          <button type="button" onClick={onCancel} className="px-4 py-1">Cancel</button>
+          <button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
+            {mode === "add" ? "Add" : mode === "split" ? "Split" : "Save"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
 
+  const [editTx, setEditTx] = useState(null);
+  const [addTx, setAddTx] = useState(false);
+  const [splitTx, setSplitTx] = useState(null);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
+  const pageSize = 10;
+
+  const currentMonth = dayjs().format("YYYY-MM");
+  const [filterMonth, setFilterMonth] = useState(currentMonth);
+  const [filterAccount, setFilterAccount] = useState('');
+  const [filterType, setFilterType] = useState('ALL');
+  const [search, setSearch] = useState('');
+
+  const emptyTx = {
+    id: null,
+    date: new Date().toISOString(),
+    description: "",
+    explanation: "",
+    amount: "",
+    type: "DEBIT",
+    accountId: "",
+    categoryId: "",
+    parentId: null,
+  };
 
   const fetchData = async () => {
-    const [txRes, accRes, catRes] = await Promise.all([
-      axios.get(`/api/transactions?page=${page}&size=10`),
-      axios.get("/api/accounts"),
-      axios.get("/api/categories/flat"),
-    ]);
-    setTransactions(txRes.data.content);
-    setTotalPages(txRes.data.totalPages);
-    setAccounts(accRes.data);
-    setCategories(catRes.data);
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page,
+        size: pageSize,
+        month: filterMonth,
+        accountId: filterAccount,
+        type: filterType,
+        search
+      });
+      const [txRes, accRes, catRes] = await Promise.all([
+        axios.get(`/api/transactions?${params}`),
+        axios.get("/api/accounts"),
+        axios.get("/api/categories/flat"),
+      ]);
+      setTransactions(txRes.data.content);
+      setTotalPages(txRes.data.totalPages);
+      setAccounts(accRes.data);
+      setCategories(catRes.data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchData();
-  }, [page]);
+  }, [page, filterMonth, filterAccount, filterType, search]);
 
   const saveTx = async (tx, method, url) => {
     const payload = {
@@ -34,7 +158,7 @@ export default function Transactions() {
       type: tx.type,
       account: { id: tx.accountId },
       category: tx.categoryId ? { id: tx.categoryId } : null,
-      parent: tx.parentId ? { id: tx.parentId } : null,
+      parent: tx.parentId ? { id: tx.parentId } : null
     };
     await axios[method](url, payload);
     fetchData();
@@ -46,105 +170,155 @@ export default function Transactions() {
     fetchData();
   };
 
-  const changePage = (delta) => {
-    setPage((prev) => Math.max(0, Math.min(prev + delta, totalPages - 1)));
-  };
+  const paginationControls = (
+    <div className="flex justify-between items-center mb-2">
+      <button
+        className="px-3 py-1 rounded border disabled:opacity-50"
+        onClick={() => setPage(p => Math.max(p - 1, 0))}
+        disabled={page === 0}
+      >← Prev</button>
+      <span className="text-sm text-gray-600">Page {page + 1} of {totalPages}</span>
+      <button
+        className="px-3 py-1 rounded border disabled:opacity-50"
+        onClick={() => setPage(p => p + 1)}
+        disabled={page >= totalPages - 1}
+      >Next →</button>
+    </div>
+  );
 
   return (
     <div className="p-4 space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-semibold">💸 Transactions</h2>
         <button
+          onClick={() => { setEditTx(null); setSplitTx(null); setAddTx(true); }}
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          onClick={() => alert("Add Transaction modal here")}
-        >
-          + Add Transaction
-        </button>
+        >+ Add Transaction</button>
       </div>
 
-      {/* Pagination Top */}
-      <div className="flex justify-between items-center mb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4">
+        <input
+          type="text"
+          className="border rounded px-2 py-1"
+          placeholder="Search description or explanation"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border rounded px-2 py-1">
+          {[...Array(12)].map((_, i) => {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const value = d.toISOString().slice(0, 7);
+            return <option key={value} value={value}>{value}</option>;
+          })}
+        </select>
+        <select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className="border rounded px-2 py-1">
+          <option value="">All Accounts</option>
+          {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="border rounded px-2 py-1">
+          <option value="ALL">All</option>
+          <option value="DEBIT">DEBIT</option>
+          <option value="CREDIT">CREDIT</option>
+        </select>
         <button
-          onClick={() => changePage(-1)}
-          disabled={page === 0}
-          className="px-4 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
-        >
-          Prev
-        </button>
-        <div>
-          Page {page + 1} of {totalPages}
+          onClick={() => {
+            setFilterMonth(currentMonth);
+            setFilterAccount('');
+            setFilterType('ALL');
+            setSearch('');
+            setPage(0);
+          }}
+          className="ml-4 bg-gray-300 text-black px-4 py-1 rounded hover:bg-gray-400"
+        >Clear Filters</button>
+      </div>
+
+      {paginationControls}
+
+      {loading ? (
+        <div className="w-full h-2 bg-gray-200 rounded">
+          <div className="h-2 bg-blue-600 rounded animate-pulse" style={{ width: "100%" }} />
         </div>
-        <button
-          onClick={() => changePage(1)}
-          disabled={page >= totalPages - 1}
-          className="px-4 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
-
-      {/* Transaction List */}
-      <div className="space-y-2">
-        {transactions.map((tx) => (
-          <div
-            key={tx.id}
-            className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1.5fr_1fr_max-content] gap-2 py-2 px-3 bg-white rounded border border-gray-200 items-center"
-          >
-            <div>
-              <div className="truncate">{tx.description}</div>
-              <div className="text-xs text-gray-500">{tx.explanation}</div>
+      ) : (
+        <div className="space-y-2">
+          {transactions.map(tx => (
+            <div key={tx.id} className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1.5fr_1fr_max-content] gap-2 py-2 px-3 bg-white rounded border border-gray-200 items-center">
+              <div>
+                <div className="truncate">{tx.description}</div>
+                <div className="text-xs text-gray-500">{tx.explanation}</div>
+              </div>
+              <div className="text-gray-700">
+                ₹{tx.amount} <span className="uppercase ml-2">{tx.type}</span><br />
+                <span className="text-sm">{tx.account?.name}</span>
+              </div>
+              <select
+                className="w-full border rounded px-2 py-1 text-sm"
+                value={tx.category?.id || ""}
+                onChange={e => {
+                  saveTx({ ...tx, categoryId: e.target.value, accountId: tx.account?.id, parentId: tx.parent?.id }, "put", `/api/transactions/${tx.id}`);
+                }}
+              >
+                <option value="">— Category —</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <div className="text-sm text-gray-500">{tx.date.replace("T", " ").slice(0, 19)}</div>
+              <div className="flex items-center space-x-2 text-sm">
+                <button className="text-purple-600 hover:underline" onClick={() => setSplitTx({ ...emptyTx, parentId: tx.id, accountId: tx.account?.id })}>Split</button>
+                <button className="text-red-600 hover:underline" onClick={() => deleteTx(tx.id)}>Delete</button>
+                <button className="text-blue-600 hover:underline" onClick={() => setEditTx({ ...tx, accountId: tx.account?.id, categoryId: tx.category?.id })}>Update</button>
+              </div>
             </div>
-            <div className="text-gray-700">
-              ₹{tx.amount} <span className="uppercase ml-2">{tx.type}</span>
-              <br />
-              <span className="text-sm">{tx.account?.name}</span>
-            </div>
-            <select
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={tx.category?.id || ""}
-              onChange={(e) => {
-                saveTx({ ...tx, accountId: tx.account?.id, categoryId: e.target.value }, "put", `/api/transactions/${tx.id}`);
-              }}
-            >
-              <option value="">— Category —</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <div className="text-sm text-gray-500">
-              {tx.date.replace("T", " ").slice(0, 19)}
-            </div>
-            <div className="flex items-center space-x-2 text-sm">
-              <button className="text-purple-600 hover:underline" onClick={() => alert("Split Modal")}>Split</button>
-              <button className="text-red-600 hover:underline" onClick={() => deleteTx(tx.id)}>Delete</button>
-              <button className="text-blue-600 hover:underline" onClick={() => alert("Update Modal")}>Update</button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Pagination Bottom */}
-      <div className="flex justify-between items-center mt-4">
-        <button
-          onClick={() => changePage(-1)}
-          disabled={page === 0}
-          className="px-4 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
-        >
-          Prev
-        </button>
-        <div>
-          Page {page + 1} of {totalPages}
+          ))}
         </div>
-        <button
-          onClick={() => changePage(1)}
-          disabled={page >= totalPages - 1}
-          className="px-4 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
+      )}
+
+      {paginationControls}
+
+      {/* Modals */}
+      {addTx && (
+        <TransactionForm
+          transaction={{ ...emptyTx }}
+          setTransaction={() => {}}
+          onCancel={() => setAddTx(false)}
+          onSubmit={async () => {
+            await saveTx(emptyTx, "post", "/api/transactions");
+            setAddTx(false);
+          }}
+          accounts={accounts}
+          categories={categories}
+          mode="add"
+        />
+      )}
+      {editTx && (
+        <TransactionForm
+          transaction={editTx}
+          setTransaction={setEditTx}
+          onCancel={() => setEditTx(null)}
+          onSubmit={async () => {
+            await saveTx(editTx, "put", `/api/transactions/${editTx.id}`);
+            setEditTx(null);
+          }}
+          accounts={accounts}
+          categories={categories}
+          mode="edit"
+        />
+      )}
+      {splitTx && (
+        <TransactionForm
+          transaction={splitTx}
+          setTransaction={setSplitTx}
+          onCancel={() => setSplitTx(null)}
+          onSubmit={async () => {
+            await saveTx(splitTx, "post", "/api/transactions");
+            setSplitTx(null);
+          }}
+          accounts={accounts}
+          categories={categories}
+          mode="split"
+        />
+      )}
     </div>
   );
 }

@@ -2,8 +2,12 @@ package com.nklmthr.finance.personal.controller;
 
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
@@ -27,69 +32,76 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountTransactionController {
 
-    private final AccountTransactionService accountTransactionService;
-    
-    private final AccountService accountService;
-    
-    private final CategoryService categoryService;
+	private static final Logger logger=LoggerFactory.getLogger(AccountTransactionController.class);
 
-    @GetMapping
-    public Page<AccountTransaction> getRootTransactions(Pageable pageable) {
-        return accountTransactionService.getRootTransactions(pageable);
-    }
+	private final AccountTransactionService accountTransactionService;
 
-    @GetMapping("/{id}")
-    public ResponseEntity<AccountTransaction> getById(@PathVariable String id) {
-        return accountTransactionService.getById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
+	private final AccountService accountService;
 
-    @GetMapping("/{id}/children")
-    public List<AccountTransaction> getChildren(@PathVariable String id) {
-        return accountTransactionService.getChildren(id);
-    }
+	private final CategoryService categoryService;
 
-    @PostMapping
-    public AccountTransaction create(@RequestBody AccountTransaction tx) {
-        return accountTransactionService.save(tx);
+	@GetMapping
+    public Page<AccountTransaction> getFilteredTransactions(
+        @RequestParam int page,
+        @RequestParam int size,
+        @RequestParam(required = false) String month,
+        @RequestParam(required = false) String accountId,
+        @RequestParam(required = false) String type,
+        @RequestParam(required = false) String search
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("date").descending());
+        logger.info("Fetching transactions with filters - Month: {}, Account ID: {}, Type: {}, Search: {}", month, accountId, type, search);
+        return accountTransactionService.getFilteredTransactions(pageable, month, accountId, type, search);
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<AccountTransaction> update(@PathVariable String id, @RequestBody AccountTransaction tx) {
-        return accountTransactionService.getById(id)
-                .map(existing -> {
-                    tx.setId(id);
-                    tx.setAccount(accountService.getAccount(tx.getAccount().getId()));
-                    tx.setCategory(categoryService.getCategoryById(tx.getCategory().getId()));
-                    tx.setParent(existing.getParent());
-                    tx.setChildren(existing.getChildren());
-                    tx.setSourceId(existing.getSourceId());
-                    tx.setSourceThreadId(existing.getSourceThreadId());
-                    tx.setHref(existing.getHref());
-                    tx.setHrefText(existing.getHrefText());
-                    tx.setSourceTime(existing.getSourceTime());
-                    if(tx.getType().equals(TransactionType.DEBIT)) {
-                    	tx.getAccount().setBalance(tx.getAccount().getBalance().subtract(tx.getAmount()));
-                    } else {
-                    	tx.getAccount().setBalance(tx.getAccount().getBalance().add(tx.getAmount()));
-                    }
-                    return ResponseEntity.ok(accountTransactionService.save(tx));
-                })
-                .orElse(ResponseEntity.notFound().build());
-    }
-    
-    @PostMapping("/transactions/split")
-    public ResponseEntity<AccountTransaction> splitTransaction(@RequestBody AccountTransaction transaction) {
-        if (transaction.getParent() == null || transaction.getParent().getId() == null) {
-            return ResponseEntity.badRequest().build();
-        }
-        return ResponseEntity.ok(accountTransactionService.save(transaction));
-    }
+	@GetMapping("/{id}")
+	public ResponseEntity<AccountTransaction> getById(@PathVariable String id) {
+		return accountTransactionService.getById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
+	}
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable String id) {
-        accountTransactionService.delete(id);
-        return ResponseEntity.noContent().build();
-    }
+	@GetMapping("/{id}/children")
+	public List<AccountTransaction> getChildren(@PathVariable String id) {
+		return accountTransactionService.getChildren(id);
+	}
+
+	@PostMapping
+	public AccountTransaction create(@RequestBody AccountTransaction tx) {
+		return accountTransactionService.save(tx);
+	}
+
+	@PutMapping("/{id}")
+	public ResponseEntity<AccountTransaction> update(@PathVariable String id, @RequestBody AccountTransaction tx) {
+		return accountTransactionService.getById(id).map(existing -> {
+			tx.setId(id);
+			tx.setAccount(accountService.getAccount(tx.getAccount().getId()));
+			tx.setCategory(categoryService.getCategoryById(tx.getCategory().getId()));
+			tx.setParent(existing.getParent());
+			tx.setChildren(existing.getChildren());
+			tx.setSourceId(existing.getSourceId());
+			tx.setSourceThreadId(existing.getSourceThreadId());
+			tx.setHref(existing.getHref());
+			tx.setHrefText(existing.getHrefText());
+			tx.setSourceTime(existing.getSourceTime());
+			if (tx.getType().equals(TransactionType.DEBIT)) {
+				tx.getAccount().setBalance(tx.getAccount().getBalance().subtract(tx.getAmount()));
+			} else {
+				tx.getAccount().setBalance(tx.getAccount().getBalance().add(tx.getAmount()));
+			}
+			return ResponseEntity.ok(accountTransactionService.save(tx));
+		}).orElse(ResponseEntity.notFound().build());
+	}
+
+	@PostMapping("/transactions/split")
+	public ResponseEntity<AccountTransaction> splitTransaction(@RequestBody AccountTransaction transaction) {
+		if (transaction.getParent() == null || transaction.getParent().getId() == null) {
+			return ResponseEntity.badRequest().build();
+		}
+		return ResponseEntity.ok(accountTransactionService.save(transaction));
+	}
+
+	@DeleteMapping("/{id}")
+	public ResponseEntity<Void> delete(@PathVariable String id) {
+		accountTransactionService.delete(id);
+		return ResponseEntity.noContent().build();
+	}
 }

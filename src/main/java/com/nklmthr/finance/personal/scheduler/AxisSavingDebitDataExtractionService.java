@@ -1,16 +1,12 @@
 package com.nklmthr.finance.personal.scheduler;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,38 +24,33 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 
 	@Autowired
 	private AccountService accountService;
-	private static final Pattern AMOUNT_PATTERN = Pattern.compile("Amount Debited: INR\\s+([\\d,]+(?:\\.\\d+)?)"
+
+	// Matches typical debit messages, including ATM debits
+	private static final Pattern AMOUNT_PATTERN = Pattern.compile(
+			"Amount Debited: INR\\s+([\\d,]+(?:\\.\\d+)?)"
 			+ "|INR\\s+([\\d,]+(?:\\.\\d+)?)\\s+has been debited"
-			+ "|has been debited with INR\\s+([\\d,]+(?:\\.\\d+)?)" + "|debited with INR\\s+([\\d,]+(?:\\.\\d+)?)",
+			+ "|debited from your A/c no\\. .*? on .*? for INR ([\\d,]+(?:\\.\\d+)?)"
+			+ "|debited with INR\\s+([\\d,]+(?:\\.\\d+)?)",
 			Pattern.CASE_INSENSITIVE);
 
-	private static final Pattern DATE_PATTERN = Pattern.compile("on (\\d{2}-\\d{2}-\\d{4})[, ]*(\\d{2}:\\d{2}:\\d{2})|"
-			+ "Date & Time: (\\d{2}-\\d{2}-\\d{2}), (\\d{2}:\\d{2}:\\d{2})");
-
-	
 	private static final String[] DESCRIPTION_REGEXES = {
-		    "Transaction Info:\\s*([\\p{L}0-9/\\- ]+?)(?=(?: If | by | at |\\.|$))",
-		    "INR [\\d,]+(?:\\.\\d+)? on .*? by ([\\p{L}0-9 \\-]+?)(?=(?:\\.| If | at |$))",
-		    "by ([\\p{L}0-9 \\-]+?)(?=(?:\\.| If | at |$))",
-		    "at ([\\p{L}0-9 \\-/]+?)(?=(?:\\.| If |$))"
-		};
-	
-	private static final DateTimeFormatter FORMATTER_FULL = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
-	private static final DateTimeFormatter FORMATTER_SHORT = DateTimeFormatter.ofPattern("dd-MM-yy HH:mm:ss");
+			"Transaction Info:\\s*([\\p{L}0-9/\\- ]+?)(?=(?: If | by | at |\\.|$))",
+			"by ([\\p{L}0-9 \\-]+?)(?=(?:\\.| If | at |$))",
+			"at ([\\p{L}0-9 \\-/]+?)(?=(?:\\.| If |$))",
+			"at ([\\p{L}0-9 \\-/]+?)(?= on \\d{2}-\\d{2}-\\d{4})" // for ATM formats
+	};
 
-	public static void main(String[] args) {
-		AxisSavingDebitDataExtractionService service = new AxisSavingDebitDataExtractionService();
-		service.run();
-	}
 
-	@Scheduled(cron = "0 0/3 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/30 * * * ?")
 	public void runTask() {
 		super.run();
 	}
 
 	@Override
 	protected List<String> getEmailSubject() {
-		return Arrays.asList("Debit transaction alert for Axis Bank A/c", " was debited from your A/c no. XX2804.",
+		return Arrays.asList(
+				"Debit transaction alert for Axis Bank A/c",
+				"was debited from your A/c no. XX2804.",
 				"Notification from Axis Bank");
 	}
 
@@ -72,50 +63,27 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent) {
 		extractAmount(emailContent).ifPresent(tx::setAmount);
 		tx.setAccount(accountService.getAccountByName("Axis Salary Acc"));
-		extractDateTime(emailContent).ifPresent(tx::setDate);
 		extractDescription(emailContent).ifPresent(tx::setDescription);
 		tx.setType(TransactionType.DEBIT);
-		logger.debug(emailContent);
 		logger.debug("Extracted transaction: {}", tx);
 		return tx;
 	}
 
-	// ---- Extraction helpers ----
+	// ---------------- Helpers ----------------
 
 	private static Optional<BigDecimal> extractAmount(String content) {
 		Matcher m = AMOUNT_PATTERN.matcher(content);
 		if (m.find()) {
-			String raw = StringUtils.EMPTY;
 			for (int i = 1; i <= m.groupCount(); i++) {
-				if (m.group(i) != null) {
-					raw = m.group(i);
-					break;
+				String val = m.group(i);
+				if (val != null) {
+					try {
+						return Optional.of(new BigDecimal(val.replace(",", "")));
+					} catch (NumberFormatException e) {
+						logger.error("Invalid amount '{}'", val, e);
+					}
 				}
 			}
-			try {
-				return Optional.of(new BigDecimal(raw.replace(",", "")));
-			} catch (NumberFormatException e) {
-
-				logger.error("Failed to parse {} amount '{}'", content, raw, e);
-			}
-		}
-		return Optional.empty();
-	}
-
-	private static Optional<LocalDateTime> extractDateTime(String content) {
-		Matcher m = DATE_PATTERN.matcher(content);
-		if (m.find()) {
-			try {
-				if (m.group(1) != null && m.group(2) != null) {
-					return Optional.of(LocalDateTime.parse(m.group(1) + " " + m.group(2), FORMATTER_FULL));
-				} else if (m.group(3) != null && m.group(4) != null) {
-					return Optional.of(LocalDateTime.parse(m.group(3) + " " + m.group(4), FORMATTER_SHORT));
-				}
-			} catch (DateTimeParseException e) {
-				logger.error("Failed to parse date/time from '{}'", m.group(), e);
-			}
-		} else {
-			logger.warn("No date/time found in email");
 		}
 		return Optional.empty();
 	}
@@ -131,10 +99,6 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		return Optional.empty();
 	}
 
-	/**
-	 * Utility: run `pattern` against `input` and return group `groupIndex` if found
-	 * & non‑empty.
-	 */
 	private static Optional<String> extractGroup(Pattern pattern, String input, int groupIndex) {
 		Matcher m = pattern.matcher(input);
 		if (m.find()) {
@@ -145,5 +109,4 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		}
 		return Optional.empty();
 	}
-
 }
