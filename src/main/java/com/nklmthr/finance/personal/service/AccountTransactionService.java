@@ -5,6 +5,7 @@ import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -25,72 +26,85 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountTransactionService {
 
-    private final AccountTransactionRepository accountTransactionRepository;
-    private static final Logger logger = LoggerFactory.getLogger(AccountTransactionService.class);
+	private final AccountTransactionRepository accountTransactionRepository;
+	private final CategoryService categoryService;
+	private static final Logger logger = LoggerFactory.getLogger(AccountTransactionService.class);
 
-    public Page<AccountTransaction> getFilteredTransactions(Pageable pageable, String month, String accountId, String type, String search) {
-    	Specification<AccountTransaction> spec = Specification.where(AccountTransactionSpecifications.isRootTransaction());
+	public Page<AccountTransaction> getFilteredTransactions(Pageable pageable, String month, String accountId,
+			String type, String search, String categoryId) {
+		Specification<AccountTransaction> spec = Specification
+				.where(AccountTransactionSpecifications.isRootTransaction());
 
-    	if (StringUtils.isNotBlank(accountId)) {
-    	    spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
-    	}
-    	if (StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
-    	    spec = spec.and(AccountTransactionSpecifications.hasTransactionType(TransactionType.valueOf(type)));
-    	}
-    	if (StringUtils.isNotBlank(month)) {
-    	    YearMonth ym = YearMonth.parse(month);  // expected format: "2025-07"
-    	    logger.info("Filtering transactions for month: {}", ym);
-    	    LocalDateTime start = ym.atDay(1).atStartOfDay();  // 1st of the month, 00:00
-    	    LocalDateTime end = ym.atEndOfMonth().atTime(LocalTime.MAX);  // end of month, 23:59:59.999999999
-    	    logger.info("Filtering transactions between start: {} and end: {}", start, end);
-    	    spec = spec.and(AccountTransactionSpecifications.dateBetween(start, end));
-    	}
-    	if (StringUtils.isNotBlank(search)) {
-    	    spec = spec.and(AccountTransactionSpecifications.matchesSearch(search));
-    	}
+		if (StringUtils.isNotBlank(accountId)) {
+			spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
+		}
+		if (StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
+			spec = spec.and(AccountTransactionSpecifications.hasTransactionType(TransactionType.valueOf(type)));
+		}
+		if (StringUtils.isNotBlank(month)) {
+			YearMonth ym = YearMonth.parse(month); // expected format: "2025-07"
+			logger.info("Filtering transactions for month: {}", ym);
+			LocalDateTime start = ym.atDay(1).atStartOfDay(); // 1st of the month, 00:00
+			LocalDateTime end = ym.atEndOfMonth().atTime(LocalTime.MAX); // end of month, 23:59:59.999999999
+			logger.info("Filtering transactions between start: {} and end: {}", start, end);
+			spec = spec.and(AccountTransactionSpecifications.dateBetween(start, end));
+		}
+		if (StringUtils.isNotBlank(search)) {
+			spec = spec.and(AccountTransactionSpecifications.matchesSearch(search));
+		}
 
-    	return accountTransactionRepository.findAll(spec, pageable);
-    }
+		if (StringUtils.isNotBlank(categoryId)) {
+			Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(categoryId);
+			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryIds));
+		}
 
-    public Optional<AccountTransaction> getById(String id) {
-        return accountTransactionRepository.findById(id);
-    }
+		logger.info(
+				"Fetching transactions with filters - Month: {}, Account ID: {}, Type: {}, Search: {}, Category ID: {}",
+				month, accountId, type, search, categoryId);
 
-    
-    public List<AccountTransaction> getChildren(String parentId) {
-        return accountTransactionRepository.findByParentId(parentId);
-    }
+		return accountTransactionRepository.findAll(spec, pageable);
+	}
 
-    public AccountTransaction save(AccountTransaction transaction) {
-        return accountTransactionRepository.save(transaction);
-    }
+	public Optional<AccountTransaction> getById(String id) {
+		return accountTransactionRepository.findById(id);
+	}
 
-    public void delete(String id) {
-        accountTransactionRepository.deleteById(id);
-    }
-    
-    public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
-        List<AccountTransaction> existingAccTxnList = accountTransactionRepository.findBySourceThreadId(newTransaction.getSourceThreadId());
+	public List<AccountTransaction> getChildren(String parentId) {
+		return accountTransactionRepository.findByParentId(parentId);
+	}
 
-        if (existingAccTxnList.isEmpty()) {
-            return false;
-        }
-        // Check if the new transaction matches any existing transaction
-        for (AccountTransaction existingTxn : existingAccTxnList) {
+	public AccountTransaction save(AccountTransaction transaction) {
+		return accountTransactionRepository.save(transaction);
+	}
+
+	public void delete(String id) {
+		accountTransactionRepository.deleteById(id);
+	}
+
+	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
+		List<AccountTransaction> existingAccTxnList = accountTransactionRepository
+				.findBySourceThreadId(newTransaction.getSourceThreadId());
+
+		if (existingAccTxnList.isEmpty()) {
+			return false;
+		}
+		// Check if the new transaction matches any existing transaction
+		for (AccountTransaction existingTxn : existingAccTxnList) {
 			if (existingTxn.getDate().equals(newTransaction.getDate())
 					&& existingTxn.getAmount().compareTo(newTransaction.getAmount()) == 0
 					&& existingTxn.getDescription().equalsIgnoreCase(newTransaction.getDescription())
 					&& existingTxn.getType().equals(newTransaction.getType())) {
 				return true; // Transaction already exists
 			}
-			
+
 		}
-        // Check if the new transaction matches any existing transaction by sourceMessageId
-        for (AccountTransaction existingTxn : existingAccTxnList) {
+		// Check if the new transaction matches any existing transaction by
+		// sourceMessageId
+		for (AccountTransaction existingTxn : existingAccTxnList) {
 			if (existingTxn.getSourceId().equals(newTransaction.getSourceId())) {
 				return true; // Transaction already exists by sourceMessageId
 			}
 		}
 		return false; // No match found, transaction is new
-    }
+	}
 }

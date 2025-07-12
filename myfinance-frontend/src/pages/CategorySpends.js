@@ -52,14 +52,21 @@ export default function CategorySpendSummary() {
               {isExpanded ? "▼" : "▶"}
             </span>
           )}
-		  <motion.div
-		    initial={{ opacity: 0 }}
-		    animate={{ opacity: 1 }}
-		    transition={{ duration: 0.3 }}
-		    className={`${isNegative ? "text-red-600" : "text-green-600"} font-medium`}
-		  >
-		    {node.categoryName}: ₹{Number.isFinite(node.amount) ? Math.abs(node.amount).toFixed(2) : "0.00"}
-		  </motion.div>
+          <motion.a
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            href={`/transactions?categoryId=${node.categoryId}`}
+            className={`${
+              isNegative ? "text-red-600" : "text-green-600"
+            } font-medium hover:underline ml-1`}
+            onClick={(e) => e.stopPropagation()} // Prevent expanding on click
+          >
+            {node.categoryName}: ₹
+            {Number.isFinite(node.amount)
+              ? Math.abs(node.amount).toFixed(2)
+              : "0.00"}
+          </motion.a>
         </div>
         <AnimatePresence>
           {isExpanded && node.children && (
@@ -69,13 +76,16 @@ export default function CategorySpendSummary() {
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
             >
-              {node.children.map((child) => renderCategoryTree(child, level + 1))}
+              {node.children.map((child) =>
+                renderCategoryTree(child, level + 1)
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
     );
   };
+
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -109,7 +119,7 @@ export default function CategorySpendSummary() {
 
       <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
 	  {spendData
-	    ? Object.values(spendData).map((node) => renderCategoryTree(node))
+	    ? spendData.map((node) => renderCategoryTree(node))
 	    : <p>Loading...</p>}
       </div>
     </div>

@@ -47,11 +47,12 @@ public class AccountTransactionController {
         @RequestParam(required = false) String month,
         @RequestParam(required = false) String accountId,
         @RequestParam(required = false) String type,
-        @RequestParam(required = false) String search
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) String categoryId
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("date").descending());
         logger.info("Fetching transactions with filters - Month: {}, Account ID: {}, Type: {}, Search: {}", month, accountId, type, search);
-        return accountTransactionService.getFilteredTransactions(pageable, month, accountId, type, search);
+        return accountTransactionService.getFilteredTransactions(pageable, month, accountId, type, search, categoryId);
     }
 
 	@GetMapping("/{id}")

@@ -1,6 +1,7 @@
 package com.nklmthr.finance.personal.repository;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 import org.springframework.data.jpa.domain.Specification;
 
@@ -28,6 +29,9 @@ public class AccountTransactionSpecifications {
 
 	public static Specification<AccountTransaction> isRootTransaction() {
 		return (root, query, cb) -> cb.isNull(root.get("parent"));
+	}
+	public static Specification<AccountTransaction> hasCategory(Set<String> categoryIds) {
+		return (root, query, cb) -> root.get("category").get("id").in(categoryIds);
 	}
 
 	public static Specification<AccountTransaction> matchesSearch(String search) {

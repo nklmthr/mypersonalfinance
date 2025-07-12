@@ -1,6 +1,6 @@
 package com.nklmthr.finance.personal.controller;
 
-import java.util.Map;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -20,11 +20,11 @@ public class CategorySpendController {
     private CategorySpendService categorySpendService;
 
     @GetMapping
-    public ResponseEntity<Map<String, CategorySpendDTO>> getCategorySpendForMonth(
+    public ResponseEntity<List<CategorySpendDTO>> getCategorySpendForMonth(
             @RequestParam("month") Integer month,
             @RequestParam("year") Integer year
     ) {
-        Map<String, CategorySpendDTO> spends = categorySpendService.getMonthlyCategorySpendHierarchy(month, year);
+        List<CategorySpendDTO> spends = categorySpendService.getMonthlyCategorySpendHierarchy(month, year);
         return ResponseEntity.ok(spends);
     }
 }

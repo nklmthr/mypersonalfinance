@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import dayjs from "dayjs"; // ⬅️ Make sure you have this
-
+import dayjs from "dayjs";
+import { useSearchParams } from "react-router-dom";
 function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, accounts, categories, mode }) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
@@ -99,6 +99,7 @@ export default function Transactions() {
   const [splitTx, setSplitTx] = useState(null);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [filtersInitialized, setFiltersInitialized] = useState(false);
   const [page, setPage] = useState(0);
   const pageSize = 10;
 
@@ -106,8 +107,16 @@ export default function Transactions() {
   const [filterMonth, setFilterMonth] = useState(currentMonth);
   const [filterAccount, setFilterAccount] = useState('');
   const [filterType, setFilterType] = useState('ALL');
+  const [filterCategory, setFilterCategory] = useState('');
   const [search, setSearch] = useState('');
-
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const urlCategoryId = searchParams.get("categoryId");
+    if (urlCategoryId) {
+      setFilterCategory(urlCategoryId);
+    }
+    setFiltersInitialized(true);
+  }, [searchParams]);
   const emptyTx = {
     id: null,
     date: new Date().toISOString(),
@@ -129,6 +138,7 @@ export default function Transactions() {
         month: filterMonth,
         accountId: filterAccount,
         type: filterType,
+        categoryId: filterCategory,
         search
       });
       const [txRes, accRes, catRes] = await Promise.all([
@@ -146,8 +156,9 @@ export default function Transactions() {
   };
 
   useEffect(() => {
+    if (!filtersInitialized) return;
     fetchData();
-  }, [page, filterMonth, filterAccount, filterType, search]);
+  }, [page, filterMonth, filterAccount, filterType, filterCategory, search, filtersInitialized]);
 
   const saveTx = async (tx, method, url) => {
     const payload = {
@@ -191,12 +202,16 @@ export default function Transactions() {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-semibold">💸 Transactions</h2>
         <button
-          onClick={() => { setEditTx(null); setSplitTx(null); setAddTx(true); }}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >+ Add Transaction</button>
+          onClick={() => {
+            setEditTx(null);
+            setSplitTx(null);
+            setAddTx(true);
+          }}
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm sm:text-base"
+        >Add</button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-6 gap-4 mb-4">
         <input
           type="text"
           className="border rounded px-2 py-1"
@@ -221,15 +236,20 @@ export default function Transactions() {
           <option value="DEBIT">DEBIT</option>
           <option value="CREDIT">CREDIT</option>
         </select>
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="border rounded px-2 py-1">
+          <option value="">All Categories</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
         <button
           onClick={() => {
             setFilterMonth(currentMonth);
             setFilterAccount('');
             setFilterType('ALL');
+            setFilterCategory('');
             setSearch('');
             setPage(0);
           }}
-          className="ml-4 bg-gray-300 text-black px-4 py-1 rounded hover:bg-gray-400"
+          className="bg-gray-300 text-black px-4 py-1 rounded hover:bg-gray-400"
         >Clear Filters</button>
       </div>
 
@@ -276,7 +296,6 @@ export default function Transactions() {
 
       {paginationControls}
 
-      {/* Modals */}
       {addTx && (
         <TransactionForm
           transaction={{ ...emptyTx }}

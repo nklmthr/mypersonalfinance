@@ -1,6 +1,8 @@
 package com.nklmthr.finance.personal.service;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
@@ -49,6 +51,20 @@ public class CategoryService {
 
 	public List<FlatCategory> getFlatCategories() {
 		return categoryRepository.findAllProjectedBy(Sort.by("name").ascending());
+	}
+
+	public Set<String> getAllDescendantCategoryIds(String categoryId) {
+		Set<String> descendantIds = new HashSet<>();
+		collectChildCategoryIds(categoryId, descendantIds);
+		return descendantIds;
+	}
+
+	private void collectChildCategoryIds(String categoryId, Set<String> descendantIds) {
+		descendantIds.add(categoryId);
+		List<Category> children = categoryRepository.findByParentId(categoryId);
+		for (Category child : children) {
+			collectChildCategoryIds(child.getId(), descendantIds);
+		}
 	}
 
 }
