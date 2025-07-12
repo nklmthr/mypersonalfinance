@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -106,5 +107,40 @@ public class AccountTransactionService {
 			}
 		}
 		return false; // No match found, transaction is new
+	}
+
+	public List<AccountTransaction> getFilteredTransactionsForExport(String month, String accountId, String type,
+			String categoryId, String search) {
+		Specification<AccountTransaction> spec = Specification
+				.where(AccountTransactionSpecifications.isRootTransaction());
+
+		if (StringUtils.isNotBlank(accountId)) {
+			spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
+		}
+		if (StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
+			spec = spec.and(AccountTransactionSpecifications.hasTransactionType(TransactionType.valueOf(type)));
+		}
+		if (StringUtils.isNotBlank(month)) {
+			YearMonth ym = YearMonth.parse(month); // expected format: "2025-07"
+			logger.info("Filtering transactions for month: {}", ym);
+			LocalDateTime start = ym.atDay(1).atStartOfDay(); // 1st of the month, 00:00
+			LocalDateTime end = ym.atEndOfMonth().atTime(LocalTime.MAX); // end of month, 23:59:59.999999999
+			logger.info("Filtering transactions between start: {} and end: {}", start, end);
+			spec = spec.and(AccountTransactionSpecifications.dateBetween(start, end));
+		}
+		if (StringUtils.isNotBlank(search)) {
+			spec = spec.and(AccountTransactionSpecifications.matchesSearch(search));
+		}
+
+		if (StringUtils.isNotBlank(categoryId)) {
+			Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(categoryId);
+			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryIds));
+		}
+
+		logger.info(
+				"Fetching transactions with filters - Month: {}, Account ID: {}, Type: {}, Search: {}, Category ID: {}",
+				month, accountId, type, search, categoryId);
+
+		return accountTransactionRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "date"));
 	}
 }

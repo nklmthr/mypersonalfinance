@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  ChartBarIcon,
+  ArrowPathIcon,
+  ChevronRightIcon,
+  ChevronDownIcon,
+} from "@heroicons/react/24/outline";
 
 const months = [
   "January", "February", "March", "April", "May", "June",
@@ -12,6 +18,7 @@ export default function CategorySpendSummary() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [spendData, setSpendData] = useState(null);
   const [expanded, setExpanded] = useState({});
+  const formattedMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
   const fetchData = async () => {
     try {
@@ -44,23 +51,28 @@ export default function CategorySpendSummary() {
       <div key={node.categoryId}>
         <div
           style={{ paddingLeft: indent }}
-          className="flex items-center cursor-pointer group"
+          className="flex items-center py-1 cursor-pointer group transition-colors"
           onClick={() => hasChildren && toggleExpand(node.categoryId)}
         >
           {hasChildren && (
-            <span className="mr-1 text-gray-500 group-hover:text-gray-800">
-              {isExpanded ? "▼" : "▶"}
+            <span className="mr-2 text-gray-400 group-hover:text-gray-600">
+              {isExpanded ? (
+                <ChevronDownIcon className="h-4 w-4 inline-block" />
+              ) : (
+                <ChevronRightIcon className="h-4 w-4 inline-block" />
+              )}
             </span>
           )}
+
           <motion.a
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            href={`/transactions?categoryId=${node.categoryId}`}
-            className={`${
+            href={`/transactions?categoryId=${node.categoryId}&month=${formattedMonth}`}
+            className={`ml-1 text-sm font-medium hover:underline ${
               isNegative ? "text-red-600" : "text-green-600"
-            } font-medium hover:underline ml-1`}
-            onClick={(e) => e.stopPropagation()} // Prevent expanding on click
+            }`}
+            onClick={(e) => e.stopPropagation()}
           >
             {node.categoryName}: ₹
             {Number.isFinite(node.amount)
@@ -68,6 +80,7 @@ export default function CategorySpendSummary() {
               : "0.00"}
           </motion.a>
         </div>
+
         <AnimatePresence>
           {isExpanded && node.children && (
             <motion.div
@@ -86,18 +99,22 @@ export default function CategorySpendSummary() {
     );
   };
 
-
   return (
-    <div className="max-w-3xl mx-auto">
-      <h2 className="text-2xl font-bold flex items-center mb-6">
-        📊 <span className="ml-2">Category Spend Summary</span>
-      </h2>
+    <div className="max-w-4xl mx-auto px-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <ChartBarIcon className="h-6 w-6 text-indigo-600" />
+        <h2 className="text-2xl font-semibold text-gray-800">
+          Category Spend Summary
+        </h2>
+      </div>
 
-      <div className="flex gap-4 mb-4">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center mb-6">
         <select
-          className="border rounded px-3 py-2"
+          className="border rounded px-3 py-2 shadow-sm focus:outline-none focus:ring focus:ring-indigo-300"
           value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
+          onChange={(e) => setSelectedMonth(Number(e.target.value))}
         >
           {months.map((m, i) => (
             <option key={i} value={i + 1}>{m}</option>
@@ -105,22 +122,26 @@ export default function CategorySpendSummary() {
         </select>
         <input
           type="number"
-          className="border rounded px-3 py-2 w-24"
+          className="border rounded px-3 py-2 w-24 shadow-sm focus:outline-none focus:ring focus:ring-indigo-300"
           value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
+          onChange={(e) => setSelectedYear(Number(e.target.value))}
         />
         <button
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          className="flex items-center gap-1 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition"
           onClick={fetchData}
         >
-          🔄 Refresh
+          <ArrowPathIcon className="h-4 w-4" />
+          Refresh
         </button>
       </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-	  {spendData
-	    ? spendData.map((node) => renderCategoryTree(node))
-	    : <p>Loading...</p>}
+      {/* Card with Results */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 min-h-[200px]">
+        {spendData ? (
+          spendData.map((node) => renderCategoryTree(node))
+        ) : (
+          <p className="text-gray-500 text-sm">Loading...</p>
+        )}
       </div>
     </div>
   );

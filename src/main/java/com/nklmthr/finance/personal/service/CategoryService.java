@@ -1,13 +1,17 @@
 package com.nklmthr.finance.personal.service;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.dto.CategoryDTO;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.FlatCategory;
 import com.nklmthr.finance.personal.repository.CategoryRepository;
@@ -19,31 +23,42 @@ import lombok.RequiredArgsConstructor;
 public class CategoryService {
 
 	@Autowired
-    private CategoryRepository categoryRepository;
-    
-    public List<Category> getAllCategories() {
-        return categoryRepository.findAll();
-    }
+	private CategoryRepository categoryRepository;
 
-    public List<Category> getRootCategories() {
-        return categoryRepository.findByParentIsNull();
-    }
+	public List<CategoryDTO> getAllCategories() {
+		List<Category> allCategories = categoryRepository.findAllFlat();
 
-    public Category getCategoryById(String id) {
-        return categoryRepository.findById(id).orElse(null);
-    }
+		Map<String, CategoryDTO> dtoMap = new HashMap<>();
+		for (Category category : allCategories) {
+			dtoMap.put(category.getId(), new CategoryDTO(category));
+		}
 
-    public Category saveCategory(Category category) {
-        return categoryRepository.save(category);
-    }
+		// Connect children
+		for (CategoryDTO dto : dtoMap.values()) {
+			if (dto.getParentId() != null && dtoMap.containsKey(dto.getParentId())) {
+				dtoMap.get(dto.getParentId()).getChildren().add(dto);
+			}
+		}
 
-    public void deleteCategory(String id) {
-        categoryRepository.deleteById(id);
-    }
+		// Return all (not just roots)
+		return new ArrayList<>(dtoMap.values());
+	}
 
-    public List<Category> getChildren(String parentId) {
-        return categoryRepository.findByParentId(parentId);
-    }
+	public Category getCategoryById(String id) {
+		return categoryRepository.findById(id).orElse(null);
+	}
+
+	public Category saveCategory(Category category) {
+		return categoryRepository.save(category);
+	}
+
+	public void deleteCategory(String id) {
+		categoryRepository.deleteById(id);
+	}
+
+	public List<Category> getChildren(String parentId) {
+		return categoryRepository.findByParentId(parentId);
+	}
 
 	public Category getNonClassifiedCategory() {
 		return categoryRepository.findByName("Not Classified").get();

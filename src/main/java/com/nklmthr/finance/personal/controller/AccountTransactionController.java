@@ -55,6 +55,17 @@ public class AccountTransactionController {
         return accountTransactionService.getFilteredTransactions(pageable, month, accountId, type, search, categoryId);
     }
 
+	@GetMapping("/export")
+	public List<AccountTransaction> exportTransactions(
+	    @RequestParam(required = false) String month,
+	    @RequestParam(required = false) String accountId,
+	    @RequestParam(required = false) String type,
+	    @RequestParam(required = false) String categoryId,
+	    @RequestParam(required = false) String search
+	) {
+	    return accountTransactionService.getFilteredTransactionsForExport(month, accountId, type, categoryId, search);
+	}
+	
 	@GetMapping("/{id}")
 	public ResponseEntity<AccountTransaction> getById(@PathVariable String id) {
 		return accountTransactionService.getById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());

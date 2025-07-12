@@ -30,7 +30,7 @@ public class AccountBalanceSnapshot {
 	@Column
     private String id;
 
-    @ManyToOne(optional = false, fetch = FetchType.EAGER)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 

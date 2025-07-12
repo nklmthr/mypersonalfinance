@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.nklmthr.finance.personal.dto.CategoryDTO;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.FlatCategory;
 import com.nklmthr.finance.personal.service.CategoryService;
@@ -26,7 +27,7 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     @GetMapping
-    public List<Category> getAll() {
+    public List<CategoryDTO> getAll() {
         return categoryService.getAllCategories();
     }
     
@@ -35,11 +36,6 @@ public class CategoryController {
 		return categoryService.getFlatCategories();
 		
 	}
-
-    @GetMapping("/root")
-    public List<Category> getRootCategories() {
-        return categoryService.getRootCategories();
-    }
 
     @GetMapping("/{id}")
     public ResponseEntity<Category> getById(@PathVariable String id) {

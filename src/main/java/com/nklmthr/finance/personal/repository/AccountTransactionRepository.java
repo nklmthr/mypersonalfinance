@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -28,4 +29,8 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 	Page<AccountTransaction> findAll(Specification<AccountTransaction> spec, Pageable pageable);
 
 	List<AccountTransaction> findBySourceThreadId(String sourceThreadId);
+
+	@EntityGraph(attributePaths = { "category", "account", "account.accountType",
+	"account.institution" })
+	List<AccountTransaction> findAll(Specification<AccountTransaction> spec, Sort sort);
 }

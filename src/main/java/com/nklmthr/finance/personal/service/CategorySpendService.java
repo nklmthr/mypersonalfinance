@@ -13,41 +13,46 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.dto.CategoryDTO;
 import com.nklmthr.finance.personal.dto.CategorySpendDTO;
 import com.nklmthr.finance.personal.model.AccountTransaction;
-import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
-import com.nklmthr.finance.personal.repository.CategoryRepository;
 
 @Service
 public class CategorySpendService {
 
 	private static final Logger logger = LoggerFactory.getLogger(CategorySpendService.class);
 	@Autowired
-	private CategoryRepository categoryRepository;
+	private CategoryService categoryService;
 
 	@Autowired
 	private AccountTransactionRepository accountTransactionRepository;
 
 	public List<CategorySpendDTO> getMonthlyCategorySpendHierarchy(int month, int year) {
 		List<AccountTransaction> transactions = accountTransactionRepository.findByMonthAndYear(month, year);
+		logger.info("Fetched {} transactions for {}/{}", transactions.size(), month, year);
+
 		Map<String, BigDecimal> categorySums = new HashMap<>();
+		int uncategorized = 0;
 
-		// Aggregate transaction amounts by category
 		for (AccountTransaction tx : transactions) {
-			if (tx.getCategory() == null)
+			if (tx.getCategory() == null) {
+				uncategorized++;
 				continue;
-
+			}
 			String categoryId = tx.getCategory().getId();
 			BigDecimal current = categorySums.getOrDefault(categoryId, BigDecimal.ZERO);
 			categorySums.put(categoryId, current.add(tx.getAmount()));
 		}
+		logger.info("Transactions with no category: {}", uncategorized);
+		logger.info("Category sums built for {} categories", categorySums.size());
 
-		List<Category> allCategories = categoryRepository.findAll();
-		allCategories.sort(Comparator.comparingInt(this::countDescendants));
-		// Create DTOs with base amounts
+		List<CategoryDTO> allCategories = categoryService.getAllCategories();
+		logger.info("Fetched {} categories", allCategories.size());
+
+		allCategories.sort(Comparator.comparingInt(this::countDescendants).reversed());
 		Map<String, CategorySpendDTO> dtoMap = new HashMap<>();
-		for (Category category : allCategories) {
+		for (CategoryDTO category : allCategories) {
 			CategorySpendDTO dto = new CategorySpendDTO();
 			dto.setCategoryId(category.getId());
 			dto.setCategoryName(category.getName());
@@ -56,28 +61,23 @@ public class CategorySpendService {
 			dtoMap.put(category.getId(), dto);
 		}
 
-		// Build parent-child tree structure
 		Map<String, CategorySpendDTO> rootMap = new LinkedHashMap<>();
-		for (Category category : allCategories) {
+		for (CategoryDTO category : allCategories) {
 			CategorySpendDTO current = dtoMap.get(category.getId());
-			if (category.getParent() != null) {
-				CategorySpendDTO parent = dtoMap.get(category.getParent().getId());
+			if (category.getParentId() != null && dtoMap.containsKey(category.getParentId())) {
+				CategorySpendDTO parent = dtoMap.get(category.getParentId());
 				parent.getChildren().add(current);
 			} else {
 				rootMap.put(category.getId(), current);
 			}
 		}
 
-		// Perform bottom-up roll-up
 		for (CategorySpendDTO root : rootMap.values()) {
 			rollupAmount(root);
 		}
 
-		List<CategorySpendDTO> sortedRoots = new ArrayList<>(rootMap.values());
-
-		// Return as a list (not a map!)
-		return sortedRoots;
-		
+		logger.info("Returning {} root categories", rootMap.size());
+		return new ArrayList<>(rootMap.values());
 	}
 
 	private BigDecimal rollupAmount(CategorySpendDTO dto) {
@@ -91,9 +91,9 @@ public class CategorySpendService {
 		return total;
 	}
 
-	private int countDescendants(Category node) {
+	private int countDescendants(CategoryDTO node) {
 		int count = node.getChildren().size();
-		for (Category child : node.getChildren()) {
+		for (CategoryDTO child : node.getChildren()) {
 			count += countDescendants(child);
 		}
 		return count;

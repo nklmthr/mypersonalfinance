@@ -57,11 +57,10 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 				tx.setDescription(merchant);
 			}
 
-			// Explanation: set to fixed value or parsed info (optional)
 			Pattern refPattern = Pattern.compile("E\\d{9}_\\d{2}_\\d{2}"); // like E002523120_06_24
 			Matcher refMatcher = refPattern.matcher(emailContent);
 			if (refMatcher.find()) {
-				tx.setExplanation("Axis Credit Card Transaction Ref: " + refMatcher.group());
+				tx.setDescription(tx.getDescription() +"Transaction Ref: " + refMatcher.group());
 			}
 
 			tx.setType(TransactionType.DEBIT);

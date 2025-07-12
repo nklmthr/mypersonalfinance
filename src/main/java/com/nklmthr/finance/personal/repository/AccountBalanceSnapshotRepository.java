@@ -11,7 +11,13 @@ import com.nklmthr.finance.personal.model.AccountBalanceSnapshot;
 
 public interface AccountBalanceSnapshotRepository extends JpaRepository<AccountBalanceSnapshot, String> {
 	
-	@Query("SELECT s FROM AccountBalanceSnapshot s WHERE FUNCTION('MONTH', s.snapshotDate) = :month AND FUNCTION('YEAR', s.snapshotDate) = :year")
+	@Query("""
+		    SELECT abs FROM AccountBalanceSnapshot abs
+		    LEFT JOIN FETCH abs.account acc
+		    LEFT JOIN FETCH acc.accountType
+		    LEFT JOIN FETCH acc.institution
+		    WHERE MONTH(abs.snapshotDate) = :month AND YEAR(abs.snapshotDate) = :year
+		""")
 	List<AccountBalanceSnapshot> findByMonthAndYear(@Param("month") int month, @Param("year") int year);
 
 	boolean existsByAccountIdAndSnapshotDateAfter(String accountId, LocalDateTime snapshotDate);
