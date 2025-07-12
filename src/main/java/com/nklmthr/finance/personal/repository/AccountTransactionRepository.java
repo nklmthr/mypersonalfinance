@@ -2,6 +2,8 @@ package com.nklmthr.finance.personal.repository;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -23,7 +25,7 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 	@EntityGraph(attributePaths = { "category", "account", "account.accountType",
 			"account.institution" })
 	@Query("SELECT t FROM AccountTransaction t WHERE t.parent IS NULL ORDER BY t.date DESC")
-	List<AccountTransaction> findAllWithGraph();
+	Page<AccountTransaction> findAllWithGraph(Pageable pageable);
 
 	List<AccountTransaction> findBySourceThreadId(String sourceThreadId);
 }

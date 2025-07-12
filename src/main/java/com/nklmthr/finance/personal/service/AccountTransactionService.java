@@ -3,6 +3,8 @@ package com.nklmthr.finance.personal.service;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.model.AccountTransaction;
@@ -16,18 +18,15 @@ public class AccountTransactionService {
 
     private final AccountTransactionRepository accountTransactionRepository;
 
-    public List<AccountTransaction> getAll() {
-        return accountTransactionRepository.findAll();
+    public Page<AccountTransaction> getRootTransactions(Pageable pageable) {
+        return accountTransactionRepository.findAllWithGraph(pageable);
     }
 
     public Optional<AccountTransaction> getById(String id) {
         return accountTransactionRepository.findById(id);
     }
 
-    public List<AccountTransaction> getRootTransactions() {
-        return accountTransactionRepository.findAllWithGraph();
-    }
-
+    
     public List<AccountTransaction> getChildren(String parentId) {
         return accountTransactionRepository.findByParentId(parentId);
     }

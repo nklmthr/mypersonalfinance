@@ -2,6 +2,8 @@ package com.nklmthr.finance.personal.controller;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,13 +34,8 @@ public class AccountTransactionController {
     private final CategoryService categoryService;
 
     @GetMapping
-    public List<AccountTransaction> getAll() {
-        return accountTransactionService.getAll();
-    }
-
-    @GetMapping("/root")
-    public List<AccountTransaction> getRootTransactions() {
-        return accountTransactionService.getRootTransactions();
+    public Page<AccountTransaction> getRootTransactions(Pageable pageable) {
+        return accountTransactionService.getRootTransactions(pageable);
     }
 
     @GetMapping("/{id}")
