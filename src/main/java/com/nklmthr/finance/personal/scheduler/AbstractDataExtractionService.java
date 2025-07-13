@@ -49,7 +49,7 @@ public abstract class AbstractDataExtractionService {
 			for (AppUser appUser : appUserRepository.findAll()) {
 				logger.info("Processing for user: {}", appUser.getUsername());
 				GoogleAuthorizationCodeFlow flow = gmailAuthHelper.buildFlow(appUser.getUsername());
-				Credential credential = flow.loadCredential("user-"+appUser.getUsername());
+				Credential credential = flow.loadCredential("user-" + appUser.getUsername());
 				if (credential == null || credential.getAccessToken() == null) {
 					logger.warn("Gmail not connected for user: " + appUser.getUsername());
 					return; // Skip this user if token missing
@@ -95,9 +95,9 @@ public abstract class AbstractDataExtractionService {
 								.atZone(ZoneId.systemDefault()).toLocalDateTime());
 						accountTransaction.setDate(accountTransaction.getSourceTime());
 
-						extractTransactionData(accountTransaction, emailContent);
+						extractTransactionData(accountTransaction, emailContent, appUser);
 
-						if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction)) {
+						if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction, appUser)) {
 							logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
 						} else {
 							accountTransactionService.save(accountTransaction, appUser);
@@ -199,6 +199,6 @@ public abstract class AbstractDataExtractionService {
 	protected abstract String getSender();
 
 	protected abstract AccountTransaction extractTransactionData(AccountTransaction accountTransaction,
-			String emailContent);
+			String emailContent, AppUser appUser);
 
 }

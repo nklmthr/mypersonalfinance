@@ -278,6 +278,17 @@ export default function Transactions() {
 		}
 		return rangeWithDots;
 	};
+	
+	function flattenCategories(categories, prefix = "") {
+	  let flat = [];
+	  for (const c of categories) {
+	    flat.push({ id: c.id, name: prefix + c.name });
+	    if (c.children && c.children.length > 0) {
+	      flat = flat.concat(flattenCategories(c.children, prefix + "— "));
+	    }
+	  }
+	  return flat;
+	}
 
 	const paginationControls = (
 		<div className="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -376,8 +387,10 @@ export default function Transactions() {
 					<option value="CREDIT">CREDIT</option>
 				</select>
 				<select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="border rounded px-2 py-1">
-					<option value="">All Categories</option>
-					{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+				  <option value="">All Categories</option>
+				  {flattenCategories(categories).map(c => (
+				    <option key={c.id} value={c.id}>{c.name}</option>
+				  ))}
 				</select>
 				<button
 					onClick={() => {

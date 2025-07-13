@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.service.AccountService;
 
 @Service
@@ -60,9 +61,9 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	}
 
 	@Override
-	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent) {
+	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 		extractAmount(emailContent).ifPresent(tx::setAmount);
-		tx.setAccount(accountService.getAccountByName("Axis Salary Acc"));
+		tx.setAccount(accountService.getAccountByName("Axis Salary Acc", appUser));
 		extractDescription(emailContent).ifPresent(tx::setDescription);
 		tx.setType(TransactionType.DEBIT);
 		logger.debug("Extracted transaction: {}", tx);

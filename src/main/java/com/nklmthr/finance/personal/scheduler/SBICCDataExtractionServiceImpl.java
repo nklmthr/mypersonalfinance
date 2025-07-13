@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
 
 @Service
 public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionService {
@@ -42,7 +43,7 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 	}
 
 	@Override
-	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent) {
+	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 		try {
 			Matcher m = GENERIC_PATTERN.matcher(emailContent);
 			if (m.find()) {
@@ -64,9 +65,9 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 
 			// Account selection
 			if (emailContent.contains("2606")) {
-				tx.setAccount(accountService.getAccountByName("SBI Rupay Credit Card"));
+				tx.setAccount(accountService.getAccountByName("SBI Rupay Credit Card", appUser));
 			} else {
-				tx.setAccount(accountService.getAccountByName("SBIB-CCA-Signature"));
+				tx.setAccount(accountService.getAccountByName("SBIB-CCA-Signature", appUser));
 			}
 
 			tx.setType(TransactionType.DEBIT);

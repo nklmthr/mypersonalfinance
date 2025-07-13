@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.service.AccountService;
 
 @Service
@@ -46,7 +47,7 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 	}
 
 	@Override
-	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent) {
+	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 		try {
 
 	        // Extract amount
@@ -69,7 +70,7 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 	            tx.setDescription("Axis Bank Credit");
 	        }
 
-	        tx.setAccount(accountService.getAccountByName("Axis Salary Acc"));
+	        tx.setAccount(accountService.getAccountByName("Axis Salary Acc", appUser));
 	    } catch (Exception e) {
 	        logger.error("Failed to parse Axis credit transaction", e);
 	    }

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
 
 @Service
 public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionService {
@@ -39,7 +40,7 @@ public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionServ
 	}
 
 	@Override
-	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent) {
+	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 		Pattern pattern = Pattern.compile(
 				"INR ([\\d,]+\\.\\d{2}) on (\\w{3} \\d{2}, \\d{4}) at (\\d{2}:\\d{2}:\\d{2})\\. Info: (.+?)\\.");
 		Matcher matcher = pattern.matcher(emailContent);
@@ -53,7 +54,7 @@ public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionServ
 				tx.setAmount(amount);
 				tx.setDescription(merchant);
 				tx.setType(TransactionType.DEBIT);
-				tx.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon"));
+				tx.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon", appUser));
 			} catch (Exception e) {
 				logger.error("Error parsing transaction data: {}", e.getMessage());
 			}

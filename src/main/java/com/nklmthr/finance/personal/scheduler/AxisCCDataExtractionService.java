@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
 
 @Service
 public class AxisCCDataExtractionService extends AbstractDataExtractionService {
@@ -39,7 +40,7 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 		return "alerts@axisbank.com";
 	}
 
-	public AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent) {
+	public AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 		try {
 			// Amount (e.g., "INR 5090" or "INR 5,090.00")
 			Pattern amountPattern = Pattern.compile("for INR ([\\d,]+\\.?\\d*)");
@@ -64,8 +65,8 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 			}
 
 			tx.setType(TransactionType.DEBIT);
-			tx.setAccount(emailContent.contains("0434") ? accountService.getAccountByName("AXIS-CCA-Airtel")
-					: accountService.getAccountByName("Axis-Citi-PremierMiles"));
+			tx.setAccount(emailContent.contains("0434") ? accountService.getAccountByName("AXIS-CCA-Airtel", appUser)
+					: accountService.getAccountByName("Axis-Citi-PremierMiles", appUser));
 
 		} catch (Exception e) {
 			logger.error("Error parsing Axis CC transaction", e);

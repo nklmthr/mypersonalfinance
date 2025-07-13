@@ -97,8 +97,8 @@ public class AccountTransactionService {
 		accountTransactionRepository.deleteByAppUserAndId(appUser, id);
 	}
 
-	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
-		AppUser appUser = appUserService.getCurrentUser();
+	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction, AppUser appUser) {
+
 		List<AccountTransaction> existingAccTxnList = accountTransactionRepository
 				.findByAppUserAndSourceThreadId(appUser, newTransaction.getSourceThreadId());
 
@@ -123,6 +123,11 @@ public class AccountTransactionService {
 			}
 		}
 		return false; // No match found, transaction is new
+	}
+
+	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
+		AppUser appUser = appUserService.getCurrentUser();
+		return isTransactionAlreadyPresent(newTransaction, appUser);
 	}
 
 	public List<AccountTransaction> getFilteredTransactionsForExport(String month, String accountId, String type,

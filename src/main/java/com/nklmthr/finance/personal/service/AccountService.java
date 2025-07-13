@@ -92,6 +92,10 @@ public class AccountService {
 
 	public Account getAccountByName(String accountName) {
 		AppUser appUser = appUserService.getCurrentUser();
+		return getAccountByName(accountName, appUser);
+	}
+	
+	public Account getAccountByName(String accountName, AppUser appUser) {
 		return accountRepository.findByAppUserAndName(appUser, accountName)
 				.orElseThrow(() -> new RuntimeException("Account not found with name: " + accountName));
 	}
