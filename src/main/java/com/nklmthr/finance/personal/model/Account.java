@@ -40,4 +40,9 @@ public class Account {
     @ManyToOne(optional = false, fetch = FetchType.EAGER)
     @JoinColumn(name = "account_type_id", nullable = false)
     private AccountType accountType;
+    
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "app_user_id", nullable = false)
+    private AppUser appUser;
+    
 }

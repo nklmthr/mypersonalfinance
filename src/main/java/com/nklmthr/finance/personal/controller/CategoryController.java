@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.dto.CategoryDTO;
 import com.nklmthr.finance.personal.model.Category;
-import com.nklmthr.finance.personal.model.FlatCategory;
 import com.nklmthr.finance.personal.service.CategoryService;
 
 import lombok.RequiredArgsConstructor;
@@ -31,11 +30,6 @@ public class CategoryController {
         return categoryService.getAllCategories();
     }
     
-    @GetMapping("/flat")
-    public List<FlatCategory> getFlatCategories() {
-		return categoryService.getFlatCategories();
-		
-	}
 
     @GetMapping("/{id}")
     public ResponseEntity<Category> getById(@PathVariable String id) {

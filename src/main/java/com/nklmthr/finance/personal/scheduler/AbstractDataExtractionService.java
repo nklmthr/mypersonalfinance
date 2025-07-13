@@ -13,9 +13,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.Message;
 import com.google.api.services.gmail.model.MessagePart;
+import com.nklmthr.finance.personal.helper.GmailAuthHelper;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.repository.AppUserRepository;
 import com.nklmthr.finance.personal.scheduler.gmail.GmailServiceProvider;
 import com.nklmthr.finance.personal.service.AccountService;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
@@ -31,58 +37,72 @@ public abstract class AbstractDataExtractionService {
 	@Autowired
 	protected AccountTransactionService accountTransactionService;
 
+	@Autowired
+	private GmailAuthHelper gmailAuthHelper;
+
+	@Autowired
+	private AppUserRepository appUserRepository;
+
 	public void run() {
 		logger.info("\n\nStart: {}\n", this.getClass().getSimpleName());
 		try {
-			List<String> gmailAPIQueries = getGMailAPIQuery();
-			if (gmailAPIQueries == null || gmailAPIQueries.isEmpty()) {
-				logger.info("No queries found for {}", this.getClass().getSimpleName());
-				return;
-			} else {
-				for (String query : gmailAPIQueries) {
+			for (AppUser appUser : appUserRepository.findAll()) {
+				logger.info("Processing for user: {}", appUser.getUsername());
+				GoogleAuthorizationCodeFlow flow = gmailAuthHelper.buildFlow(appUser.getUsername());
+				Credential credential = flow.loadCredential("user-"+appUser.getUsername());
+				if (credential == null || credential.getAccessToken() == null) {
+					logger.warn("Gmail not connected for user: " + appUser.getUsername());
+					return; // Skip this user if token missing
+				}
+				Gmail gmailService = GmailServiceProvider.getGmailService(appUser);
 
-					List<Message> messages = GmailServiceProvider.getGmailService().users().messages().list("me")
-							.setQ(query).execute().getMessages();
+				List<String> gmailAPIQueries = getGMailAPIQuery();
+
+				if (gmailAPIQueries == null || gmailAPIQueries.isEmpty()) {
+					logger.info("No queries found for {}", this.getClass().getSimpleName());
+					continue;
+				}
+
+				for (String query : gmailAPIQueries) {
+					List<Message> messages = gmailService.users().messages().list("me").setQ(query).execute()
+							.getMessages();
+
 					if (messages == null || messages.isEmpty()) {
-						logger.info("No messages found.");
-						return;
+						logger.info("No messages found for query: {}", query);
+						continue;
 					}
 
 					logger.info("{}: {} messages found.", query, messages.size());
 
 					for (Message message : messages) {
-						Message mess = GmailServiceProvider.getGmailService().users().messages()
-								.get("me", message.getId()).setFormat("full").execute();
+						Message mess = gmailService.users().messages().get("me", message.getId()).setFormat("full")
+								.execute();
+
 						String emailContent = extractPlainText(mess);
-						logger.debug(emailContent);
+
 						if (StringUtils.isBlank(emailContent) || "[Empty content]".equals(emailContent)
 								|| "[Error extracting message]".equals(emailContent)) {
 							logger.warn("Skipping message with empty content.");
 							continue;
 						}
-						logger.debug("Processing message with ID: {}", message.getId());
-						logger.info(emailContent);
+
 						AccountTransaction accountTransaction = new AccountTransaction();
-						
-						accountTransaction.setCategory(categoryService.getNonClassifiedCategory());
+						accountTransaction.setAppUser(appUser);
+						accountTransaction.setCategory(categoryService.getNonClassifiedCategory(appUser));
 						accountTransaction.setSourceId(mess.getId());
 						accountTransaction.setSourceThreadId(mess.getThreadId());
 						accountTransaction.setSourceTime(Instant.ofEpochMilli(mess.getInternalDate())
 								.atZone(ZoneId.systemDefault()).toLocalDateTime());
 						accountTransaction.setDate(accountTransaction.getSourceTime());
-						logger.debug("Transaction Date: {} = {}", mess.getInternalDate(),
-								accountTransaction.getSourceTime());
+
 						extractTransactionData(accountTransaction, emailContent);
-						logger.debug("Transaction: {}", accountTransaction);
+
 						if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction)) {
-							logger.info("Ignoring already present Desc:{} Amount:{} Type:{}",
-									accountTransaction.getDescription(), accountTransaction.getAmount(),
-									accountTransaction.getType());
+							logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
 						} else {
-							accountTransactionService.save(accountTransaction);
+							accountTransactionService.save(accountTransaction, appUser);
 							logger.debug("Saved transaction: {}", accountTransaction.getDescription());
 						}
-
 					}
 				}
 			}
@@ -91,7 +111,6 @@ public abstract class AbstractDataExtractionService {
 		} finally {
 			logger.info("Finish: {} in ms", this.getClass().getSimpleName());
 		}
-
 	}
 
 	protected String extractPlainText(Message message) {
@@ -179,6 +198,7 @@ public abstract class AbstractDataExtractionService {
 
 	protected abstract String getSender();
 
-	protected abstract AccountTransaction extractTransactionData(AccountTransaction accountTransaction, String emailContent);
+	protected abstract AccountTransaction extractTransactionData(AccountTransaction accountTransaction,
+			String emailContent);
 
 }

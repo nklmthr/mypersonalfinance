@@ -6,7 +6,9 @@ import org.hibernate.annotations.UuidGenerator;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
@@ -36,4 +38,7 @@ public class AccountType {
 
 	@Transient
 	private BigDecimal accountTypeBalance;
+
+	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	private AppUser appUser;
 }

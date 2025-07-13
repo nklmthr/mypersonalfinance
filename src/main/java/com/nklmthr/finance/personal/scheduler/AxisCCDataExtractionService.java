@@ -18,7 +18,7 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 
 	private static final Logger logger = LoggerFactory.getLogger(AxisCCDataExtractionService.class);
 
-	@Scheduled(cron = "0 0/35 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/5 * * * ?") // Every 30 minutes
 	public void runTask() {
 		super.run();
 	}

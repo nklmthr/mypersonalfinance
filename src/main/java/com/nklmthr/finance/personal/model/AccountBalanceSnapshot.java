@@ -39,5 +39,8 @@ public class AccountBalanceSnapshot {
 
     @Column(nullable = false)
     private BigDecimal balance;
+    
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    private AppUser appUser;
 
 }

@@ -16,12 +16,17 @@ import org.springframework.stereotype.Service;
 import com.nklmthr.finance.personal.dto.CategoryDTO;
 import com.nklmthr.finance.personal.dto.CategorySpendDTO;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 
 @Service
 public class CategorySpendService {
 
 	private static final Logger logger = LoggerFactory.getLogger(CategorySpendService.class);
+	
+	@Autowired
+	private AppUserService appUserService;
+	
 	@Autowired
 	private CategoryService categoryService;
 
@@ -29,7 +34,8 @@ public class CategorySpendService {
 	private AccountTransactionRepository accountTransactionRepository;
 
 	public List<CategorySpendDTO> getMonthlyCategorySpendHierarchy(int month, int year) {
-		List<AccountTransaction> transactions = accountTransactionRepository.findByMonthAndYear(month, year);
+		AppUser appUser = appUserService.getCurrentUser();
+		List<AccountTransaction> transactions = accountTransactionRepository.findByAppUserAndMonthAndYear(appUser, month, year);
 		logger.info("Fetched {} transactions for {}/{}", transactions.size(), month, year);
 
 		Map<String, BigDecimal> categorySums = new HashMap<>();

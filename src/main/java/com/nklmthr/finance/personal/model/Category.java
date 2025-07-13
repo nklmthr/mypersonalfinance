@@ -37,4 +37,7 @@ public class Category {
 
     @Column(name = "system_category", nullable = false)
     private boolean systemCategory = false;
+    
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    private AppUser appUser;
 }

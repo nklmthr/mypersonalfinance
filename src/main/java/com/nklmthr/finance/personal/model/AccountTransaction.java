@@ -92,4 +92,7 @@ public class AccountTransaction {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @Builder.Default
     private List<AccountTransaction> children = new ArrayList<>();
+    
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    private AppUser appUser;
 }

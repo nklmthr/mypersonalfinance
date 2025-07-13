@@ -10,6 +10,7 @@ import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 import com.nklmthr.finance.personal.repository.AccountTransactionSpecifications;
 
@@ -26,6 +28,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class AccountTransactionService {
+	@Autowired
+	private AppUserService appUserService;
 
 	private final AccountTransactionRepository accountTransactionRepository;
 	private final CategoryService categoryService;
@@ -33,6 +37,7 @@ public class AccountTransactionService {
 
 	public Page<AccountTransaction> getFilteredTransactions(Pageable pageable, String month, String accountId,
 			String type, String search, String categoryId) {
+		AppUser appUser = appUserService.getCurrentUser();
 		Specification<AccountTransaction> spec = Specification
 				.where(AccountTransactionSpecifications.isRootTransaction());
 
@@ -59,6 +64,7 @@ public class AccountTransactionService {
 			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryIds));
 		}
 
+		spec = spec.and(AccountTransactionSpecifications.belongsToUser(appUser));
 		logger.info(
 				"Fetching transactions with filters - Month: {}, Account ID: {}, Type: {}, Search: {}, Category ID: {}",
 				month, accountId, type, search, categoryId);
@@ -67,24 +73,34 @@ public class AccountTransactionService {
 	}
 
 	public Optional<AccountTransaction> getById(String id) {
-		return accountTransactionRepository.findById(id);
+		AppUser appUser = appUserService.getCurrentUser();
+		return accountTransactionRepository.findByAppUserAndId(appUser, id);
 	}
 
 	public List<AccountTransaction> getChildren(String parentId) {
-		return accountTransactionRepository.findByParentId(parentId);
+		AppUser appUser = appUserService.getCurrentUser();
+		return accountTransactionRepository.findByAppUserAndParentId(appUser, parentId);
 	}
 
-	public AccountTransaction save(AccountTransaction transaction) {
+	public AccountTransaction save(AccountTransaction transaction, AppUser appUser) {
+		transaction.setAppUser(appUser);
 		return accountTransactionRepository.save(transaction);
 	}
 
+	public AccountTransaction save(AccountTransaction transaction) {
+		AppUser appUser = appUserService.getCurrentUser();
+		return save(transaction, appUser);
+	}
+
 	public void delete(String id) {
-		accountTransactionRepository.deleteById(id);
+		AppUser appUser = appUserService.getCurrentUser();
+		accountTransactionRepository.deleteByAppUserAndId(appUser, id);
 	}
 
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
+		AppUser appUser = appUserService.getCurrentUser();
 		List<AccountTransaction> existingAccTxnList = accountTransactionRepository
-				.findBySourceThreadId(newTransaction.getSourceThreadId());
+				.findByAppUserAndSourceThreadId(appUser, newTransaction.getSourceThreadId());
 
 		if (existingAccTxnList.isEmpty()) {
 			return false;
@@ -111,6 +127,7 @@ public class AccountTransactionService {
 
 	public List<AccountTransaction> getFilteredTransactionsForExport(String month, String accountId, String type,
 			String categoryId, String search) {
+		AppUser appUser = appUserService.getCurrentUser();
 		Specification<AccountTransaction> spec = Specification
 				.where(AccountTransactionSpecifications.isRootTransaction());
 
@@ -136,9 +153,9 @@ public class AccountTransactionService {
 			Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(categoryId);
 			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryIds));
 		}
-
+		spec = spec.and(AccountTransactionSpecifications.belongsToUser(appUser));
 		logger.info(
-				"Fetching transactions with filters - Month: {}, Account ID: {}, Type: {}, Search: {}, Category ID: {}",
+				"Fetching transactions for export with filters - Month: {}, Account ID: {}, Type: {}, Search: {}, Category ID: {}",
 				month, accountId, type, search, categoryId);
 
 		return accountTransactionRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "date"));

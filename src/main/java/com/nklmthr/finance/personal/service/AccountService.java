@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.model.Account;
+import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.repository.AccountRepository;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 import com.nklmthr.finance.personal.repository.AccountTypeRepository;
@@ -13,76 +14,86 @@ import com.nklmthr.finance.personal.repository.InstitutionRepository;
 
 @Service
 public class AccountService {
+	@Autowired
+	private AppUserService appUserService;
 
-    @Autowired
-    private AccountRepository accountRepository;
+	@Autowired
+	private AccountRepository accountRepository;
 
-    @Autowired
-    private InstitutionRepository institutionRepository;
+	@Autowired
+	private InstitutionRepository institutionRepository;
 
-    @Autowired
-    private AccountTypeRepository accountTypeRepository;
-    
-    @Autowired
-    private AccountTransactionRepository acountTransactionRepository;
+	@Autowired
+	private AccountTypeRepository accountTypeRepository;
 
-    public List<Account> getAllAccounts() {
-        return accountRepository.findAll();
-    }
+	@Autowired
+	private AccountTransactionRepository acountTransactionRepository;
 
-    public Account getAccount(String id) {
-        return accountRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Account not found with id: " + id));
-    }
+	public List<Account> getAllAccounts() {
+		AppUser appUser = appUserService.getCurrentUser();
+		return accountRepository.findAllByAppUser(appUser);
+	}
 
-    public Account createAccount(Account account) {
-        if (!institutionRepository.existsById(account.getInstitution().getId())) {
-            throw new RuntimeException("Institution not found");
-        }
-        if (!accountTypeRepository.existsById(account.getAccountType().getId())) {
-            throw new RuntimeException("AccountType not found");
-        }
-        return accountRepository.save(account);
-    }
+	public Account getAccount(String id) {
+		AppUser appUser = appUserService.getCurrentUser();
+		return accountRepository.findByAppUserAndId(appUser, id).orElseThrow(
+				() -> new RuntimeException("No access to this account or Account not found with id: " + id));
+	}
 
-    public Account updateAccount(String id, Account updatedAccount) {
-        Account account = getAccount(id);
+	public Account createAccount(Account account) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (institutionRepository.findByAppUserAndId(appUser, account.getInstitution().getId()).isEmpty()) {
+			throw new RuntimeException("Institution not found");
+		}
+		if (!accountTypeRepository.existsByAppUserAndId(appUser, account.getAccountType().getId())) {
+			throw new RuntimeException("AccountType not found");
+		}
+		account.setAppUser(appUser);
+		return accountRepository.save(account);
+	}
 
-        account.setName(updatedAccount.getName());
-        account.setBalance(updatedAccount.getBalance());
+	public Account updateAccount(String id, Account updatedAccount) {
+		AppUser appUser = appUserService.getCurrentUser();
+		Account account = getAccount(id);
 
-        if (updatedAccount.getInstitution() != null) {
-            account.setInstitution(updatedAccount.getInstitution());
-        }
-        if (updatedAccount.getAccountType() != null) {
-            account.setAccountType(updatedAccount.getAccountType());
-        }
+		account.setName(updatedAccount.getName());
+		account.setBalance(updatedAccount.getBalance());
 
-        return accountRepository.save(account);
-    }
+		if (updatedAccount.getInstitution() != null) {
+			account.setInstitution(updatedAccount.getInstitution());
+		}
+		if (updatedAccount.getAccountType() != null) {
+			account.setAccountType(updatedAccount.getAccountType());
+		}
+		account.setAppUser(appUser);
+		return accountRepository.save(account);
+	}
 
-    public void deleteAccount(String id) {
-    	if (!acountTransactionRepository.findByAccountId(id).isEmpty()) {
-            throw new IllegalStateException("Cannot delete account with existing transactions.");
-        }
-        accountRepository.deleteById(id);
-    }
-    
-    public List<Account> getFilteredAccounts(String accountTypeId, String institutionId) {
-        if (accountTypeId != null && institutionId != null) {
-            return accountRepository.findByAccountTypeIdAndInstitutionId(accountTypeId, institutionId);
-        } else if (accountTypeId != null) {
-            return accountRepository.findByAccountTypeId(accountTypeId);
-        } else if (institutionId != null) {
-            return accountRepository.findByInstitutionId(institutionId);
-        } else {
-            return accountRepository.findAll();
-        }
-    }
+	public void deleteAccount(String id) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (!acountTransactionRepository.findByAppUserAndAccountId(appUser, id).isEmpty()) {
+			throw new IllegalStateException("Cannot delete account with existing transactions.");
+		}
+		accountRepository.deleteById(id);
+	}
 
-	public Account getAccountByName(String string) {
-		return accountRepository.findByName(string)
-				.orElseThrow(() -> new RuntimeException("Account not found with name: " + string));
+	public List<Account> getFilteredAccounts(String accountTypeId, String institutionId) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (accountTypeId != null && institutionId != null) {
+			return accountRepository.findByAppUserAndAccountTypeIdAndInstitutionId(appUser, accountTypeId, institutionId);
+		} else if (accountTypeId != null) {
+			return accountRepository.findByAppUserAndAccountTypeId(appUser, accountTypeId);
+		} else if (institutionId != null) {
+			return accountRepository.findByAppUserAndInstitutionId(appUser, institutionId);
+		} else {
+			return accountRepository.findAllByAppUser(appUser);
+		}
+	}
+
+	public Account getAccountByName(String accountName) {
+		AppUser appUser = appUserService.getCurrentUser();
+		return accountRepository.findByAppUserAndName(appUser, accountName)
+				.orElseThrow(() -> new RuntimeException("Account not found with name: " + accountName));
 	}
 
 }

@@ -95,7 +95,7 @@ export default function AccountTypes() {
             </tr>
           </thead>
           <tbody>
-            {accountTypes.map((account) => (
+            {Array.isArray(accountTypes) && accountTypes.map((account) => (
               <tr key={account.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2 border-b">
                   {editingId === account.id ? (

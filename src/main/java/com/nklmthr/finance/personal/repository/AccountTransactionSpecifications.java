@@ -7,6 +7,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -30,6 +31,7 @@ public class AccountTransactionSpecifications {
 	public static Specification<AccountTransaction> isRootTransaction() {
 		return (root, query, cb) -> cb.isNull(root.get("parent"));
 	}
+
 	public static Specification<AccountTransaction> hasCategory(Set<String> categoryIds) {
 		return (root, query, cb) -> root.get("category").get("id").in(categoryIds);
 	}
@@ -46,5 +48,9 @@ public class AccountTransactionSpecifications {
 
 			return cb.or(descriptionMatch, explanationMatch, typeMatch, accountMatch, categoryMatch);
 		};
+	}
+
+	public static Specification<AccountTransaction> belongsToUser(AppUser appUser) {
+		return (root, query, cb) -> cb.equal(root.get("appUser"), appUser);
 	}
 }

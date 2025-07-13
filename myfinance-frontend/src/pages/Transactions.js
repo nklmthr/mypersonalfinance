@@ -216,7 +216,7 @@ export default function Transactions() {
 			const [txRes, accRes, catRes] = await Promise.all([
 				axios.get(`/api/transactions?${params}`),
 				axios.get("/api/accounts"),
-				axios.get("/api/categories/flat"),
+				axios.get("/api/categories"),
 			]);
 			setTransactions(txRes.data.content);
 			setTotalPages(txRes.data.totalPages);
