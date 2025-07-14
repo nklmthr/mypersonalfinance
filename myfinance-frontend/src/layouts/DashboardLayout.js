@@ -13,17 +13,19 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function DashboardLayout({ children }) {
+	const backendUrl = process.env.REACT_APP_BACKEND_URL;
 	const handleConnectGmail = async () => {
 	  try {
-	    const res = await axios.get("http://localhost:8080/oauth/authorize", {
-	      withCredentials: true,
-	    });
+		const res = await axios.get(
+		  window.location.origin+`/oauth/authorize?redirectOrigin`,
+		  { withCredentials: true }
+		);
 	    window.location.href = res.data.authUrl; // Redirect the browser to Google
 	  } catch (err) {
 	    alert("Failed to get Gmail authorization URL");
 	    console.error(err);
 	  }
-	};	
+	};
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-100 via-white to-gray-200 text-gray-800 relative">
       {/* Global background texture */}
@@ -96,13 +98,13 @@ export default function DashboardLayout({ children }) {
               Profile
             </button>
 			<button
-			  className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition"
-			  onClick={() => {
-			    window.location.href = "http://localhost:8080/oauth/authorize";
-			  }}
-			>
-			  Connect Gmail
-			</button>
+			        className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition"
+			        onClick={() => {
+			          window.location.href = `${backendUrl}/oauth/authorize`;
+			        }}
+			      >
+			        Connect Gmail
+			      </button>
 			<Link to="/logout" className="text-sm font-medium text-red-600 hover:underline ml-auto">
 			  Logout
 			</Link>

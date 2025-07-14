@@ -1,6 +1,8 @@
 package com.nklmthr.finance.personal.controller;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,8 +21,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.enums.TransactionType;
+import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.service.AccountService;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
 import com.nklmthr.finance.personal.service.CategoryService;
@@ -102,8 +107,31 @@ public class AccountTransactionController {
 			return ResponseEntity.ok(accountTransactionService.save(tx));
 		}).orElse(ResponseEntity.notFound().build());
 	}
+	
+	@PostMapping("/transfer")
+    public ResponseEntity<?> createTransfer(@RequestBody TransferRequest request) throws Exception {
+		AccountTransaction debit = accountTransactionService.getById(request.getSourceTransactionId()).orElseThrow(() -> new Exception());
+		Account fromAccount = accountService.getAccount(debit.getAccount().getId());
+		
+        Account toAccount = accountService.getAccount(request.getDestinationAccountId());
+        debit.setCategory(categoryService.getTransferCategory());
 
-	@PostMapping("/transactions/split")
+        // Create CREDIT transaction
+        AccountTransaction credit = new AccountTransaction();
+        credit.setAccount(toAccount);
+        credit.setAmount(debit.getAmount());
+        credit.setDate(debit.getDate());
+        credit.setDescription(debit.getDescription());
+        credit.setExplanation(request.getExplanation());
+        credit.setType(TransactionType.CREDIT);
+        credit.setCategory(categoryService.getTransferCategory());
+
+        accountTransactionService.save(debit);
+        accountTransactionService.save(credit);
+
+        return ResponseEntity.ok(Map.of("message", "Transfer successful"));
+    }
+	@PostMapping("/split")
 	public ResponseEntity<AccountTransaction> splitTransaction(@RequestBody AccountTransaction transaction) {
 		if (transaction.getParent() == null || transaction.getParent().getId() == null) {
 			return ResponseEntity.badRequest().build();

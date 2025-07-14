@@ -61,6 +61,11 @@ public class CategoryService {
 	public Set<String> getAllDescendantCategoryIds(String categoryId) {
 		return getAllDescendantCategoryIds(appUserService.getCurrentUser(), categoryId);
 	}
+	
+	public Category getTransferCategory() {
+		return categoryRepository.findByAppUserAndName(appUserService.getCurrentUser(), "TRANSFERS")
+				.orElseThrow(() -> new RuntimeException("TRANSFERS category not found"));
+	}
 
 	// ----------------- Background Job / Explicit AppUser -------------------
 
@@ -119,4 +124,6 @@ public class CategoryService {
 			collectChildCategoryIds(appUser, child.getId(), descendantIds);
 		}
 	}
+
+	
 }
