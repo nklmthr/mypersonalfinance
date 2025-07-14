@@ -24,6 +24,7 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 
 	List<AccountTransaction> findByAppUserAndAccountId(AppUser appUser, String accountId);
 
+	@EntityGraph(attributePaths = { "category" })
 	@Query("SELECT t FROM AccountTransaction t WHERE t.appUser = :appUser AND FUNCTION('MONTH', t.date) = :month AND FUNCTION('YEAR', t.date) = :year")
 	List<AccountTransaction> findByAppUserAndMonthAndYear(
 			@Param("appUser") AppUser appUser,

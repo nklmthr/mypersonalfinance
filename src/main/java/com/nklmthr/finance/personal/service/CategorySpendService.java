@@ -49,11 +49,13 @@ public class CategorySpendService {
 			String categoryId = tx.getCategory().getId();
 			BigDecimal current = categorySums.getOrDefault(categoryId, BigDecimal.ZERO);
 			categorySums.put(categoryId, current.add(tx.getAmount()));
+			logger.info("Processing TX {} with category {}", tx.getDescription(), tx.getCategory().getName());
 		}
 		logger.info("Transactions with no category: {}", uncategorized);
 		logger.info("Category sums built for {} categories", categorySums.size());
 
-		List<CategoryDTO> allCategories = categoryService.getAllCategories();
+		List<CategoryDTO> rootCategories = categoryService.getAllCategories();
+		List<CategoryDTO> allCategories = flattenCategoryTree(rootCategories);
 		logger.info("Fetched {} categories", allCategories.size());
 
 		allCategories.sort(Comparator.comparingInt(this::countDescendants).reversed());
@@ -103,6 +105,21 @@ public class CategorySpendService {
 			count += countDescendants(child);
 		}
 		return count;
+	}
+	
+	private List<CategoryDTO> flattenCategoryTree(List<CategoryDTO> roots) {
+		List<CategoryDTO> flatList = new ArrayList<>();
+		for (CategoryDTO root : roots) {
+			collectCategories(root, flatList);
+		}
+		return flatList;
+	}
+
+	private void collectCategories(CategoryDTO node, List<CategoryDTO> flatList) {
+		flatList.add(node);
+		for (CategoryDTO child : node.getChildren()) {
+			collectCategories(child, flatList);
+		}
 	}
 
 }

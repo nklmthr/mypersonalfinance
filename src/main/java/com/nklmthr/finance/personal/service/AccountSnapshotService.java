@@ -28,22 +28,27 @@ public class AccountSnapshotService {
 		LocalDateTime twoWeeksAgo = snapshotDate.minusDays(14);
 		List<Account> accounts = accountRepository.findAll();
 
-		boolean anyExists = accounts.stream().anyMatch(
-				account -> snapshotRepository.existsByAppUserAndAccountIdAndSnapshotDateAfter(appUser, account.getId(), twoWeeksAgo));
+		// 🔍 Get all recent snapshot records for this user in one DB call
+		List<AccountBalanceSnapshot> recentSnapshots = snapshotRepository
+				.findByAppUserAndSnapshotDateAfter(appUser, twoWeeksAgo);
 
-		if (anyExists) {
+		if (!recentSnapshots.isEmpty()) {
 			throw new IllegalStateException("Snapshots already exist for some accounts in the last 2 weeks.");
 		}
 
 		List<AccountBalanceSnapshot> snapshots = new ArrayList<>();
 		for (Account account : accounts) {
-			AccountBalanceSnapshot snapshot = AccountBalanceSnapshot.builder().account(account)
-					.balance(account.getBalance()).snapshotDate(snapshotDate).appUser(appUser).build();
-
+			AccountBalanceSnapshot snapshot = AccountBalanceSnapshot.builder()
+					.account(account)
+					.balance(account.getBalance())
+					.snapshotDate(snapshotDate)
+					.appUser(appUser)
+					.build();
 			snapshots.add(snapshot);
 		}
 
 		snapshotRepository.saveAll(snapshots);
 	}
+
 
 }

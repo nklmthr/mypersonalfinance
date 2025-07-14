@@ -32,4 +32,7 @@ public interface AccountBalanceSnapshotRepository extends JpaRepository<AccountB
 	);
 
 	List<AccountBalanceSnapshot> findAllByAppUser(AppUser appUser);
+	
+	List<AccountBalanceSnapshot> findByAppUserAndSnapshotDateAfter(AppUser appUser, LocalDateTime date);
+
 }

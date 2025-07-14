@@ -432,17 +432,27 @@ export default function Transactions() {
 								<span className="text-sm">{tx.account?.name}</span>
 							</div>
 							<select
-								className="w-full border rounded px-2 py-1 text-sm"
-								value={tx.category?.id || ""}
-								onChange={e => {
-									saveTx({ ...tx, categoryId: e.target.value, accountId: tx.account?.id, parentId: tx.parent?.id }, "put", `/api/transactions/${tx.id}`);
-								}}
+							  className="w-full border rounded px-2 py-1 text-sm"
+							  value={tx.category?.id || ""}
+							  onChange={e => {
+							    saveTx(
+							      {
+							        ...tx,
+							        categoryId: e.target.value,
+							        accountId: tx.account?.id,
+							        parentId: tx.parent?.id
+							      },
+							      "put",
+							      `/api/transactions/${tx.id}`
+							    );
+							  }}
 							>
-								<option value="">— Category —</option>
-								{categories.map(c => (
-									<option key={c.id} value={c.id}>{c.name}</option>
-								))}
+							  <option value="">— Category —</option>
+							  {flattenCategories(categories).map(c => (
+							    <option key={c.id} value={c.id}>{c.name}</option>
+							  ))}
 							</select>
+
 							<div className="text-sm text-gray-500">{tx.date.replace("T", " ").slice(0, 19)}</div>
 							<div className="flex items-center space-x-2 text-sm">
 								<button className="text-purple-600 hover:underline" onClick={() => setSplitTx({ ...emptyTx, parentId: tx.id, accountId: tx.account?.id })}>Split</button>
