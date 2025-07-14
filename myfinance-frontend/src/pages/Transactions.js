@@ -7,6 +7,15 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, accounts, categories, mode }) {
+	useEffect(() => {
+			const handleKeyDown = (e) => {
+				if (e.key === "Escape") {
+					onCancel();
+				}
+			};
+			document.addEventListener("keydown", handleKeyDown);
+			return () => document.removeEventListener("keydown", handleKeyDown);
+		}, [onCancel]);
 	return (
 		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
 			<form
@@ -453,7 +462,17 @@ export default function Transactions() {
 							  ))}
 							</select>
 
-							<div className="text-sm text-gray-500">{tx.date.replace("T", " ").slice(0, 19)}</div>
+							<div className="text-sm text-gray-500">
+							  {new Date(tx.date).toLocaleString('en-GB', {
+							    weekday: 'short',     // e.g. "Mon", "Tue"
+							    day: '2-digit',       // e.g. "14"
+							    month: 'short',       // e.g. "Jul"
+							    hour: '2-digit',
+							    minute: '2-digit',
+							    second: '2-digit',
+							    hour12: false
+							  }).replace(',', '')}
+							</div>
 							<div className="flex items-center space-x-2 text-sm">
 								<button className="text-purple-600 hover:underline" onClick={() => setSplitTx({ ...emptyTx, parentId: tx.id, accountId: tx.account?.id })}>Split</button>
 								<button className="text-red-600 hover:underline" onClick={() => deleteTx(tx.id)}>Delete</button>
