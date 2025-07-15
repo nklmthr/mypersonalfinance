@@ -7,100 +7,105 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, accounts, categories, mode }) {
+	const [children, setChildren] = useState(transaction.children || []);
+
 	useEffect(() => {
-		const handleKeyDown = (e) => {
-			if (e.key === "Escape") {
-				onCancel();
-			}
-		};
+		const handleKeyDown = (e) => e.key === "Escape" && onCancel();
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, [onCancel]);
+
+	const addChild = () => {
+		setChildren([...children, {
+			description: "",
+			amount: "",
+			categoryId: ""
+		}]);
+	};
+
+	const updateChild = (index, key, value) => {
+		const updated = [...children];
+		updated[index][key] = value;
+		setChildren(updated);
+	};
+
+	const flattenCategories = (categories, prefix = "") => {
+		let flat = [];
+		for (const c of categories) {
+			flat.push({ id: c.id, name: prefix + c.name });
+			if (c.children && c.children.length > 0) {
+				flat = flat.concat(flattenCategories(c.children, prefix + "— "));
+			}
+		}
+		return flat;
+	};
+
+	const submit = () => {
+		const total = children.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+		const parentAmt = parseFloat(transaction.amount);
+		if (isNaN(parentAmt) || total !== parentAmt) {
+			alert(`Child transaction amounts must sum up to ₹${isNaN(parentAmt) ? 0 : parentAmt}`);
+			return;
+		}
+		const enrichedChildren = children.map(c => ({
+			...c,
+			date: transaction.date,
+			type: transaction.type,
+			accountId: transaction.accountId
+		}));
+		const enrichedParent = {
+			...transaction,
+			children: enrichedChildren,
+			id: transaction.id || null,
+			description: transaction.description || "",
+			explanation: transaction.explanation || "",
+			amount: parseFloat(transaction.amount) || 0,
+			type: transaction.type || "DEBIT",
+			accountId: transaction.accountId || "",
+			categoryId: transaction.categoryId || "",
+			parentId: transaction.parentId || null,
+		};
+		onSubmit(enrichedParent);
+	};
+
 	return (
 		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
 			<form
-				onSubmit={e => { e.preventDefault(); onSubmit(); }}
-				className="bg-white p-6 rounded shadow-lg w-full max-w-md space-y-4"
+				onSubmit={e => { e.preventDefault(); submit(); }}
+				className="bg-white p-6 rounded shadow-lg w-full max-w-2xl space-y-4"
 			>
-				<h3 className="text-lg font-semibold">{mode === "add" ? "Add" : mode === "split" ? "Split" : "Edit"} Transaction</h3>
+				<h3 className="text-lg font-semibold">{mode === "split" ? "Split Transaction" : mode === "add" ? "Add" : "Edit"} Transaction</h3>
 
-				<label className="block">
-					<span className="text-sm">Date</span>
-					<input type="date" className="mt-1 block w-full border rounded px-2 py-1"
-						value={transaction.date.slice(0, 10)}
-						onChange={e => setTransaction(tx => ({ ...tx, date: e.target.value }))}
-						required />
-				</label>
+				<div className="grid grid-cols-3 gap-2 font-bold text-sm">
+					<span>Description</span>
+					<span>Amount</span>
+					<span>Category</span>
+				</div>
 
-				<label className="block">
-					<span className="text-sm">Description</span>
-					<input type="text" className="mt-1 block w-full border rounded px-2 py-1"
-						value={transaction.description}
-						onChange={e => setTransaction(tx => ({ ...tx, description: e.target.value }))}
-						required />
-				</label>
+				{children.map((child, idx) => (
+					<div key={idx} className="grid grid-cols-3 gap-2">
+						<input type="text" value={child.description} onChange={e => updateChild(idx, "description", e.target.value)} className="border rounded px-2 py-1" />
+						<input type="number" value={child.amount} onChange={e => updateChild(idx, "amount", e.target.value)} className="border rounded px-2 py-1" />
+						<select value={child.categoryId || ""} onChange={e => updateChild(idx, "categoryId", e.target.value)} className="border rounded px-2 py-1">
+							<option value="">— None —</option>
+							{flattenCategories(categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+						</select>
+					</div>
+				))}
 
-				<label className="block">
-					<span className="text-sm">Explanation</span>
-					<input type="text" className="mt-1 block w-full border rounded px-2 py-1"
-						value={transaction.explanation || ""}
-						onChange={e => setTransaction(tx => ({ ...tx, explanation: e.target.value }))}
-					/>
-				</label>
-
-				<label className="block">
-					<span className="text-sm">Amount</span>
-					<input type="number" step="0.01" className="mt-1 block w-full border rounded px-2 py-1"
-						value={transaction.amount}
-						onChange={e => setTransaction(tx => ({ ...tx, amount: e.target.value }))}
-						required />
-				</label>
-
-				<label className="block">
-					<span className="text-sm">Type</span>
-					<select className="mt-1 block w-full border rounded px-2 py-1"
-						value={transaction.type}
-						onChange={e => setTransaction(tx => ({ ...tx, type: e.target.value }))}>
-						<option>DEBIT</option>
-						<option>CREDIT</option>
-					</select>
-				</label>
-
-				<label className="block">
-					<span className="text-sm">Account</span>
-					<select className="mt-1 block w-full border rounded px-2 py-1"
-						value={transaction.accountId}
-						onChange={e => setTransaction(tx => ({ ...tx, accountId: e.target.value }))}
-						required>
-						<option value="">— Select —</option>
-						{accounts.map(a => (
-							<option key={a.id} value={a.id}>{a.name}</option>
-						))}
-					</select>
-				</label>
-
-				<label className="block">
-					<span className="text-sm">Category</span>
-					<select className="mt-1 block w-full border rounded px-2 py-1"
-						value={transaction.categoryId}
-						onChange={e => setTransaction(tx => ({ ...tx, categoryId: e.target.value }))}>
-						<option value="">— None —</option>
-						{categories.map(c => (
-							<option key={c.id} value={c.id}>{c.name}</option>
-						))}
-					</select>
-				</label>
+				<button type="button" onClick={addChild} className="bg-gray-200 px-4 py-1 rounded text-sm">+ Add Child</button>
 
 				<div className="flex justify-end space-x-2">
 					<button type="button" onClick={onCancel} className="px-4 py-1">Cancel</button>
 					<button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
-						{mode === "add" ? "Add" : mode === "split" ? "Split" : "Save"}
+						{mode === "split" ? "Split" : mode === "add" ? "Add" : "Save"}
 					</button>
 				</div>
 			</form>
 		</div>
 	);
 }
+
 
 function TransferForm({ transaction, setTransaction, onCancel, onSubmit, accounts }) {
 	useEffect(() => {
