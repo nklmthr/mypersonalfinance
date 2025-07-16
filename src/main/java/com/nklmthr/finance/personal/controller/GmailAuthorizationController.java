@@ -43,20 +43,23 @@ public class GmailAuthorizationController {
 	@GetMapping("/oauth/authorize")
 	public void authorize(HttpServletResponse response) throws Exception {
 		AppUser currentUser = appUserService.getCurrentUser();
-		String url = gmailAuthHelper.getAuthorizationUrl(currentUser.getUsername());
+		String url = gmailAuthHelper.getAuthorizationUrl(currentUser);
 		response.sendRedirect(url);
 	}
 
 	@GetMapping("/oauth/callback")
-	public void oauthCallback(@RequestParam("code") String code, @RequestParam("state") String userId,
+	public void oauthCallback(@RequestParam("code") String code, @RequestParam("state") String username,
 			HttpServletResponse response) throws IOException {
 		try {
-			gmailAuthHelper.exchangeCodeForTokens(userId, code);
+			AppUser user = appUserService.findByUsername(username);
+			gmailAuthHelper.exchangeCodeForTokens(user, code);
 			response.sendRedirect(frontendBaseUrl);
 		} catch (Exception e) {
 			response.sendError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Authorization failed: " + e.getMessage());
 		}
 	}
+
+
 
 	@GetMapping("/api/auth/status")
 	public ResponseEntity<?> status() {

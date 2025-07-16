@@ -1,5 +1,6 @@
 package com.nklmthr.finance.personal.scheduler;
 
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,13 +16,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
+import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.json.JsonFactory;
+import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.gmail.Gmail;
+import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.Message;
 import com.google.api.services.gmail.model.MessagePart;
-import com.nklmthr.finance.personal.helper.GmailAuthHelper;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.repository.AppUserRepository;
+import com.nklmthr.finance.personal.scheduler.gmail.AppUserDataStoreFactory;
 import com.nklmthr.finance.personal.scheduler.gmail.GmailServiceProvider;
 import com.nklmthr.finance.personal.service.AccountService;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
@@ -38,23 +44,32 @@ public abstract class AbstractDataExtractionService {
 	protected AccountTransactionService accountTransactionService;
 
 	@Autowired
-	private GmailAuthHelper gmailAuthHelper;
+	private GmailServiceProvider gmailServiceProvider;
 
 	@Autowired
 	private AppUserRepository appUserRepository;
+	private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
+	private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
 
 	public void run() {
 		logger.info("\n\nStart: {}\n", this.getClass().getSimpleName());
 		try {
 			for (AppUser appUser : appUserRepository.findAll()) {
 				logger.info("Processing for user: {}", appUser.getUsername());
-				GoogleAuthorizationCodeFlow flow = gmailAuthHelper.buildFlow(appUser.getUsername());
-				Credential credential = flow.loadCredential("user-" + appUser.getUsername());
+				var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
+						new InputStreamReader(getClass().getResourceAsStream(CREDENTIALS_FILE_PATH)));
+				AppUserDataStoreFactory factory = new AppUserDataStoreFactory(appUser, appUserRepository);
+
+				GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+						GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY, clientSecrets,
+						List.of(GmailScopes.GMAIL_READONLY)).setDataStoreFactory(factory).setAccessType("offline")
+						.build();
+				Credential credential = flow.loadCredential(appUser.getUsername());
 				if (credential == null || credential.getAccessToken() == null) {
 					logger.warn("Gmail not connected for user: " + appUser.getUsername());
 					return; // Skip this user if token missing
 				}
-				Gmail gmailService = GmailServiceProvider.getGmailService(appUser);
+				Gmail gmailService = gmailServiceProvider.getGmailService(appUser);
 
 				List<String> gmailAPIQueries = getGMailAPIQuery();
 

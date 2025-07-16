@@ -27,7 +27,7 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 
 	private static final Pattern REF_PATTERN = Pattern.compile("Ref No\\.\\s*(\\d+)");
 
-	@Scheduled(cron = "0 0/5 * * * ?")
+	@Scheduled(cron = "0 0/2 * * * ?")
 	public void runTask() {
 		super.run();
 	}

@@ -42,7 +42,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	};
 
 
-	@Scheduled(cron = "0 0/5 * * * ?")
+	@Scheduled(cron = "0 0/2 * * * ?")
 	public void runTask() {
 		super.run();
 	}

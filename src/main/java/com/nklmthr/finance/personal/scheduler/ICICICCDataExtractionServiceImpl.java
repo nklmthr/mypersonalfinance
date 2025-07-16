@@ -24,7 +24,7 @@ public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionServ
 		impl.run();
 	}
 
-	@Scheduled(cron = "0 0/5 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/2 * * * ?") // Every 30 minutes
 	public void runTask() {
 		super.run();
 	}

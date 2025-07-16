@@ -3,8 +3,8 @@ package com.nklmthr.finance.personal.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.nklmthr.finance.personal.model.Account;
@@ -21,7 +21,7 @@ public interface AccountRepository extends JpaRepository<Account, String> {
 
 	Optional<Account> findByAppUserAndName(AppUser appUser, String string);
 
-	List<Account> findAllByAppUser(@Param("appUser") AppUser appUser);
+	List<Account> findAllByAppUser(AppUser appUser, Sort sort);
 
 	Optional<Account> findByAppUserAndId(AppUser appUser, String id);
 }

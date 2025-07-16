@@ -19,7 +19,7 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 
 	private static final Logger logger = LoggerFactory.getLogger(AxisCCDataExtractionService.class);
 
-	@Scheduled(cron = "0 0/5 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "0 0/2 * * * ?") // Every 30 minutes
 	public void runTask() {
 		super.run();
 	}
@@ -56,12 +56,6 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 			if (merchantMatcher.find()) {
 				String merchant = merchantMatcher.group(1).trim();
 				tx.setDescription(merchant);
-			}
-
-			Pattern refPattern = Pattern.compile("E\\d{9}_\\d{2}_\\d{2}"); // like E002523120_06_24
-			Matcher refMatcher = refPattern.matcher(emailContent);
-			if (refMatcher.find()) {
-				tx.setDescription(tx.getDescription() +"Transaction Ref: " + refMatcher.group());
 			}
 
 			tx.setType(TransactionType.DEBIT);

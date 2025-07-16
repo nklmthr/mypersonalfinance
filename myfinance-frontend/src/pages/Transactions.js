@@ -1,39 +1,25 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../auth/api";
 import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import NProgress from "nprogress";
+import "nprogress/nprogress.css";
 
 function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, accounts, categories, mode }) {
-	const [children, setChildren] = useState(transaction.children || []);
-
 	useEffect(() => {
-		const handleKeyDown = (e) => e.key === "Escape" && onCancel();
-		document.addEventListener("keydown", handleKeyDown);
-		return () => document.removeEventListener("keydown", handleKeyDown);
+		const handler = (e) => e.key === "Escape" && onCancel();
+		document.addEventListener("keydown", handler);
+		return () => document.removeEventListener("keydown", handler);
 	}, [onCancel]);
-
-	const addChild = () => {
-		setChildren([...children, {
-			description: "",
-			amount: "",
-			categoryId: ""
-		}]);
-	};
-
-	const updateChild = (index, key, value) => {
-		const updated = [...children];
-		updated[index][key] = value;
-		setChildren(updated);
-	};
 
 	const flattenCategories = (categories, prefix = "") => {
 		let flat = [];
 		for (const c of categories) {
 			flat.push({ id: c.id, name: prefix + c.name });
-			if (c.children && c.children.length > 0) {
+			if (c.children?.length > 0) {
 				flat = flat.concat(flattenCategories(c.children, prefix + "— "));
 			}
 		}
@@ -41,71 +27,86 @@ function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, acco
 	};
 
 	const submit = () => {
-		const total = children.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
-		const parentAmt = parseFloat(transaction.amount);
-		if (isNaN(parentAmt) || total !== parentAmt) {
-			alert(`Child transaction amounts must sum up to ₹${isNaN(parentAmt) ? 0 : parentAmt}`);
-			return;
-		}
-		const enrichedChildren = children.map(c => ({
-			...c,
-			date: transaction.date,
-			type: transaction.type,
-			accountId: transaction.accountId
-		}));
-		const enrichedParent = {
+		onSubmit({
 			...transaction,
-			children: enrichedChildren,
-			id: transaction.id || null,
-			description: transaction.description || "",
-			explanation: transaction.explanation || "",
-			amount: parseFloat(transaction.amount) || 0,
-			type: transaction.type || "DEBIT",
-			accountId: transaction.accountId || "",
-			categoryId: transaction.categoryId || "",
-			parentId: transaction.parentId || null,
-		};
-		onSubmit(enrichedParent);
+			amount: parseFloat(transaction.amount),
+		});
 	};
 
 	return (
 		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
 			<form
-				onSubmit={e => { e.preventDefault(); submit(); }}
-				className="bg-white p-6 rounded shadow-lg w-full max-w-2xl space-y-4"
+				onSubmit={(e) => { e.preventDefault(); submit(); }}
+				className="bg-white p-6 rounded shadow-lg w-full max-w-md space-y-4"
 			>
-				<h3 className="text-lg font-semibold">{mode === "split" ? "Split Transaction" : mode === "add" ? "Add" : "Edit"} Transaction</h3>
+				<h3 className="text-lg font-semibold">{mode === "add" ? "Add" : "Edit"} Transaction</h3>
 
-				<div className="grid grid-cols-3 gap-2 font-bold text-sm">
-					<span>Description</span>
-					<span>Amount</span>
-					<span>Category</span>
-				</div>
+				<input
+					type="text"
+					placeholder="Description"
+					value={transaction.description || ""}
+					onChange={e => setTransaction(t => ({ ...t, description: e.target.value }))}
+					className="w-full border rounded px-3 py-2"
+					required
+				/>
 
-				{children.map((child, idx) => (
-					<div key={idx} className="grid grid-cols-3 gap-2">
-						<input type="text" value={child.description} onChange={e => updateChild(idx, "description", e.target.value)} className="border rounded px-2 py-1" />
-						<input type="number" value={child.amount} onChange={e => updateChild(idx, "amount", e.target.value)} className="border rounded px-2 py-1" />
-						<select value={child.categoryId || ""} onChange={e => updateChild(idx, "categoryId", e.target.value)} className="border rounded px-2 py-1">
-							<option value="">— None —</option>
-							{flattenCategories(categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-						</select>
-					</div>
-				))}
+				<input
+					type="number"
+					placeholder="Amount"
+					value={transaction.amount}
+					onChange={e => setTransaction(t => ({ ...t, amount: e.target.value }))}
+					className="w-full border rounded px-3 py-2"
+					required
+				/>
 
-				<button type="button" onClick={addChild} className="bg-gray-200 px-4 py-1 rounded text-sm">+ Add Child</button>
+				<select
+					className="w-full border rounded px-3 py-2"
+					value={transaction.accountId || ""}
+					onChange={e => setTransaction(t => ({ ...t, accountId: e.target.value }))}
+					required
+				>
+					<option value="">— Select Account —</option>
+					{accounts.map(a => (
+						<option key={a.id} value={a.id}>{a.name}</option>
+					))}
+				</select>
+
+				<select
+					className="w-full border rounded px-3 py-2"
+					value={transaction.categoryId || ""}
+					onChange={e => setTransaction(t => ({ ...t, categoryId: e.target.value }))}
+				>
+					<option value="">— Select Category —</option>
+					{flattenCategories(categories).map(c => (
+						<option key={c.id} value={c.id}>{c.name}</option>
+					))}
+				</select>
+
+				<input
+					type="datetime-local"
+					value={transaction.date ? transaction.date.substring(0, 16) : ""}
+					onChange={e => setTransaction(t => ({ ...t, date: e.target.value }))}
+					className="w-full border rounded px-3 py-2"
+					required
+				/>
+
+				<textarea
+					placeholder="Explanation (optional)"
+					value={transaction.explanation || ""}
+					onChange={e => setTransaction(t => ({ ...t, explanation: e.target.value }))}
+					className="w-full border rounded px-3 py-2"
+				/>
 
 				<div className="flex justify-end space-x-2">
 					<button type="button" onClick={onCancel} className="px-4 py-1">Cancel</button>
 					<button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
-						{mode === "split" ? "Split" : mode === "add" ? "Add" : "Save"}
+						{mode === "add" ? "Add" : "Save"}
 					</button>
 				</div>
 			</form>
 		</div>
 	);
 }
-
 
 function TransferForm({ transaction, setTransaction, onCancel, onSubmit, accounts }) {
 	useEffect(() => {
@@ -117,7 +118,7 @@ function TransferForm({ transaction, setTransaction, onCancel, onSubmit, account
 	return (
 		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
 			<form
-				onSubmit={e => { e.preventDefault(); onSubmit(); }}
+				onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
 				className="bg-white p-6 rounded shadow-lg w-full max-w-md space-y-4"
 			>
 				<h3 className="text-lg font-semibold">Transfer Funds</h3>
@@ -164,52 +165,136 @@ function TransferForm({ transaction, setTransaction, onCancel, onSubmit, account
 		</div>
 	);
 }
+
+function TransactionSplit({ transaction, setTransaction, onCancel, onSubmit, categories }) {
+	const [children, setChildren] = useState(transaction.children || []);
+
+	useEffect(() => {
+		const handler = (e) => e.key === "Escape" && onCancel();
+		document.addEventListener("keydown", handler);
+		return () => document.removeEventListener("keydown", handler);
+	}, [onCancel]);
+
+	const addChild = () => {
+		setChildren([...children, {
+			description: "",
+			amount: "",
+			categoryId: ""
+		}]);
+	};
+
+	const updateChild = (index, key, value) => {
+		const updated = [...children];
+		updated[index][key] = value;
+		setChildren(updated);
+	};
+
+	const flattenCategories = (categories, prefix = "") => {
+		let flat = [];
+		for (const c of categories) {
+			flat.push({ id: c.id, name: prefix + c.name });
+			if (c.children && c.children.length > 0) {
+				flat = flat.concat(flattenCategories(c.children, prefix + "— "));
+			}
+		}
+		return flat;
+	};
+
+	const submit = () => {
+		const total = children.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+		const parentAmt = parseFloat(transaction.amount);
+		if (isNaN(parentAmt) || total !== parentAmt) {
+			alert(`Child transaction amounts must sum up to ₹${isNaN(parentAmt) ? 0 : parentAmt}`);
+			return;
+		}
+		const enrichedChildren = children.map(c => ({
+			...c,
+			date: transaction.date,
+			type: transaction.type,
+			accountId: transaction.accountId
+		}));
+		onSubmit({
+			...transaction,
+			children: enrichedChildren
+		});
+	};
+
+	return (
+		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+			<form
+				onSubmit={e => { e.preventDefault(); submit(); }}
+				className="bg-white p-6 rounded shadow-lg w-full max-w-2xl space-y-4"
+			>
+				<h3 className="text-lg font-semibold">Split Transaction</h3>
+
+				<div className="grid grid-cols-3 gap-2 font-bold text-sm">
+					<span>Description</span>
+					<span>Amount</span>
+					<span>Category</span>
+				</div>
+
+				{children.map((child, idx) => (
+					<div key={idx} className="grid grid-cols-3 gap-2">
+						<input type="text" value={child.description} onChange={e => updateChild(idx, "description", e.target.value)} className="border rounded px-2 py-1" />
+						<input type="number" value={child.amount} onChange={e => updateChild(idx, "amount", e.target.value)} className="border rounded px-2 py-1" />
+						<select value={child.categoryId || ""} onChange={e => updateChild(idx, "categoryId", e.target.value)} className="border rounded px-2 py-1">
+							<option value="">— None —</option>
+							{flattenCategories(categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+						</select>
+					</div>
+				))}
+
+				<button type="button" onClick={addChild} className="bg-gray-200 px-4 py-1 rounded text-sm">+ Add Child</button>
+
+				<div className="flex justify-end space-x-2">
+					<button type="button" onClick={onCancel} className="px-4 py-1">Cancel</button>
+					<button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">Split</button>
+				</div>
+			</form>
+		</div>
+	);
+}
+
 export default function Transactions() {
-	// all previous useStates
 	const [transactions, setTransactions] = useState([]);
+	const [expandedParents, setExpandedParents] = useState({});
 	const [accounts, setAccounts] = useState([]);
 	const [categories, setCategories] = useState([]);
 	const [editTx, setEditTx] = useState(null);
-	const [addTx, setAddTx] = useState(false);
 	const [splitTx, setSplitTx] = useState(null);
 	const [transferTx, setTransferTx] = useState(null);
-	const [totalPages, setTotalPages] = useState(1);
 	const [loading, setLoading] = useState(false);
-	const [filtersInitialized, setFiltersInitialized] = useState(false);
 	const [page, setPage] = useState(0);
-	const pageSize = 10;
+	const [totalPages, setTotalPages] = useState(0);
+	const [pageSize, setPageSize] = useState(10);
 
 	const [searchParams] = useSearchParams();
-	const urlMonth = searchParams.get("month");
-	const urlCategoryId = searchParams.get("categoryId");
 	const currentMonth = dayjs().format("YYYY-MM");
-
-	const [filterMonth, setFilterMonth] = useState(urlMonth || currentMonth);
+	const [filterMonth, setFilterMonth] = useState(searchParams.get("month") || currentMonth);
 	const [filterAccount, setFilterAccount] = useState('');
 	const [filterType, setFilterType] = useState('ALL');
-	const [filterCategory, setFilterCategory] = useState(urlCategoryId || '');
+	const [filterCategory, setFilterCategory] = useState(searchParams.get("categoryId") || '');
 	const [search, setSearch] = useState('');
 
-	const emptyTx = {
-		id: null,
-		date: new Date().toISOString(),
-		description: "",
-		explanation: "",
-		amount: "",
-		type: "DEBIT",
-		accountId: "",
-		categoryId: "",
-		parentId: null,
+	NProgress.configure({ showSpinner: false });
+
+	const overlayStyle = {
+		position: 'fixed',
+		top: 0, left: 0, right: 0, bottom: 0,
+		backgroundColor: 'rgba(255,255,255,0.3)',
+		zIndex: 9999, cursor: 'wait',
 	};
 
-	useEffect(() => { setFiltersInitialized(true); }, []);
+	const toggleExpand = (id) => {
+		setExpandedParents(prev => ({ ...prev, [id]: !prev[id] }));
+	};
 
 	const fetchData = async () => {
 		setLoading(true);
+		NProgress.start();
 		try {
 			const params = new URLSearchParams({
-				page,
-				size: pageSize,
+				page, size: pageSize,
 				month: filterMonth,
 				accountId: filterAccount,
 				type: filterType,
@@ -218,25 +303,25 @@ export default function Transactions() {
 			if (filterCategory) params.append("categoryId", filterCategory);
 
 			const [txRes, accRes, catRes] = await Promise.all([
-				axios.get(`/api/transactions?${params}`),
-				axios.get("/api/accounts"),
-				axios.get("/api/categories"),
+				api.get(`/transactions?${params}`),
+				api.get("/accounts"),
+				api.get("/categories"),
 			]);
 			setTransactions(txRes.data.content);
 			setTotalPages(txRes.data.totalPages);
 			setAccounts(accRes.data);
 			setCategories(catRes.data);
 		} finally {
+			NProgress.done();
 			setLoading(false);
 		}
 	};
 
-	useEffect(() => {
-		if (!filtersInitialized) return;
-		fetchData();
-	}, [page, filterMonth, filterAccount, filterType, filterCategory, search, filtersInitialized]);
+	useEffect(() => { fetchData(); }, [page, pageSize, filterMonth, filterAccount, filterType, filterCategory, search]);
 
 	const saveTx = async (tx, method, url) => {
+		setLoading(true);
+		NProgress.start();
 		const payload = {
 			description: tx.description,
 			explanation: tx.explanation || "",
@@ -247,164 +332,216 @@ export default function Transactions() {
 			category: tx.categoryId ? { id: tx.categoryId } : null,
 			parent: tx.parentId ? { id: tx.parentId } : null
 		};
-		await axios[method](url, payload);
-		fetchData();
+		await api[method](url, payload);
+		await fetchData();
+		NProgress.done();
+		setLoading(false);
 	};
 
 	const deleteTx = async (id) => {
 		if (!window.confirm("Delete this transaction?")) return;
-		await axios.delete(`/api/transactions/${id}`);
-		fetchData();
+		setLoading(true);
+		NProgress.start();
+		await api.delete(`/transactions/${id}`);
+		await fetchData();
+		NProgress.done();
+		setLoading(false);
 	};
 
-	function flattenCategories(categories, prefix = "") {
+	const flattenCategories = (categories, prefix = "") => {
 		let flat = [];
 		for (const c of categories) {
 			flat.push({ id: c.id, name: prefix + c.name });
-			if (c.children && c.children.length > 0) {
+			if (c.children?.length > 0) {
 				flat = flat.concat(flattenCategories(c.children, prefix + "— "));
 			}
 		}
 		return flat;
-	}
+	};
 
-	// Pagination rendering skipped here for brevity...
+	const renderRow = (tx, isChild = false) => (
+		<div
+			key={tx.id}
+			className={`grid grid-cols-1 sm:grid-cols-[1.5rem_2fr_1fr_1.5fr_1fr_max-content] gap-2 py-2 px-3 rounded border ${isChild ? "bg-gray-50 border-dashed" : "bg-white border-gray-200"} items-center`}
+		>
+			<div className="text-sm">
+				{!isChild && tx.children?.length > 0 && (
+					<button onClick={() => toggleExpand(tx.id)} className="text-gray-600 hover:text-black">
+						{expandedParents[tx.id] ? "▲" : "▼"}
+					</button>
+				)}
+			</div>
+
+			<div>
+				<div className="truncate">{tx.description}</div>
+				<div className="text-xs text-gray-500">{tx.explanation}</div>
+			</div>
+
+			<div className="text-gray-700">
+				<span className={`font-semibold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+					₹{tx.amount}
+				</span>
+				<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">{tx.type}</span><br />
+				<span className="text-sm">{tx.account?.name}</span>
+			</div>
+
+			<select
+				className="w-full border rounded px-2 py-1 text-sm"
+				value={tx.category?.id || ""}
+				onChange={e => {
+					saveTx({ ...tx, categoryId: e.target.value, accountId: tx.account?.id, parentId: tx.parent?.id }, "put", `/transactions/${tx.id}`);
+				}}
+			>
+				<option value="">— Category —</option>
+				{flattenCategories(categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+			</select>
+
+			<div className="text-sm text-gray-500">
+				{new Date(tx.date).toLocaleString('en-GB', {
+					weekday: 'short', day: '2-digit', month: 'short',
+					hour: '2-digit', minute: '2-digit', second: '2-digit',
+					hour12: false
+				}).replace(',', '')}
+			</div>
+
+			<div className="flex items-center space-x-2 text-sm">
+				{!isChild && (
+					<button className="text-purple-600 hover:underline" onClick={() => setSplitTx({ ...tx, parentId: tx.id, accountId: tx.account?.id })}>Split</button>
+				)}
+				{!isChild && (!tx.children || tx.children.length === 0) && (
+					<button className="text-teal-600 hover:underline" onClick={() => setTransferTx({ ...tx, accountId: tx.account?.id, destinationAccountId: "", explanation: tx.explanation || "" })}>Transfer</button>
+				)}
+				<button className="text-red-600 hover:underline" onClick={() => deleteTx(tx.id)}>Delete</button>
+				<button className="text-blue-600 hover:underline" onClick={() => setEditTx({ ...tx, accountId: tx.account?.id, categoryId: tx.category?.id })}>Update</button>
+			</div>
+		</div>
+	);
+
+	const renderPagination = () => {
+		if (totalPages <= 1) return null;
+
+		const pages = [];
+		for (let i = 0; i < totalPages; i++) {
+			if (i === 0 || i === totalPages - 1 || Math.abs(i - page) <= 2) {
+				pages.push(i);
+			} else if (
+				(pages.length > 0 && pages[pages.length - 1] !== -1)
+			) {
+				pages.push(-1); // Ellipsis
+			}
+		}
+
+		return (
+			<div className="flex flex-wrap items-center gap-2 text-sm mt-4 justify-between">
+				<div>
+					<button disabled={page === 0} onClick={() => setPage(0)} className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50">First</button>
+					<button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 ml-1">Prev</button>
+					{pages.map((p, idx) =>
+						p === -1 ? (
+							<span key={idx} className="px-2 py-1">...</span>
+						) : (
+							<button
+								key={p}
+								className={`px-2 py-1 rounded ${p === page ? "bg-blue-600 text-white" : "bg-gray-200"}`}
+								onClick={() => setPage(p)}
+							>
+								{p + 1}
+							</button>
+						)
+					)}
+					<button disabled={page === totalPages - 1} onClick={() => setPage(p => p + 1)} className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 ml-1">Next</button>
+					<button disabled={page === totalPages - 1} onClick={() => setPage(totalPages - 1)} className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 ml-1">Last</button>
+				</div>
+				<div>
+					<label className="mr-2">Rows:</label>
+					<select value={pageSize} onChange={(e) => { setPageSize(+e.target.value); setPage(0); }} className="border px-2 py-1 rounded">
+						<option value={10}>10</option>
+						<option value={20}>20</option>
+						<option value={50}>50</option>
+						<option value={100}>100</option>
+					</select>
+				</div>
+			</div>
+		);
+	};
 
 	return (
-		<div className="p-4 space-y-4">
-			{/* Filters, Export, Pagination Controls etc. */}
-			{/* Transactions List */}
-			{transactions.map(tx => (
-				<div key={tx.id} className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1.5fr_1fr_max-content] gap-2 py-2 px-3 bg-white rounded border border-gray-200 items-center">
-					<div>
-						<div className="truncate">{tx.description}</div>
-						<div className="text-xs text-gray-500">{tx.explanation}</div>
-					</div>
-					<div className="text-gray-700">
-						<span className={`
-							font-semibold 
-							${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}
-						`}>
-							₹{tx.amount}
-						</span>
-						<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">
-							{tx.type}
-						</span><br />
-						<span className="text-sm">{tx.account?.name}</span>
-					</div>
-					<select
-						className="w-full border rounded px-2 py-1 text-sm"
-						value={tx.category?.id || ""}
-						onChange={e => {
-							saveTx(
-								{
-									...tx,
-									categoryId: e.target.value,
-									accountId: tx.account?.id,
-									parentId: tx.parent?.id
-								},
-								"put",
-								`/api/transactions/${tx.id}`
-							);
-						}}
-					>
-						<option value="">— Category —</option>
-						{flattenCategories(categories).map(c => (
-							<option key={c.id} value={c.id}>{c.name}</option>
-						))}
-					</select>
-					<div className="text-sm text-gray-500">
-						{new Date(tx.date).toLocaleString('en-GB', {
-							weekday: 'short',
-							day: '2-digit',
-							month: 'short',
-							hour: '2-digit',
-							minute: '2-digit',
-							second: '2-digit',
-							hour12: false
-						}).replace(',', '')}
-					</div>
-					<div className="flex items-center space-x-2 text-sm">
-						<button className="text-purple-600 hover:underline" onClick={() => setSplitTx({ ...emptyTx, parentId: tx.id, accountId: tx.account?.id })}>Split</button>
-						<button
-							className="text-teal-600 hover:underline"
-							onClick={() =>
-								setTransferTx({
-									...tx,
-									accountId: tx.account?.id, // ✅ Ensure this line is added
-									destinationAccountId: "",
-									explanation: tx.explanation || "",
-								})
-							}
-						>
-							Transfer
-						</button>
-						<button className="text-red-600 hover:underline" onClick={() => deleteTx(tx.id)}>Delete</button>
-						<button className="text-blue-600 hover:underline" onClick={() => setEditTx({ ...tx, accountId: tx.account?.id, categoryId: tx.category?.id })}>Update</button>
-					</div>
-				</div>
-			))}
+		<div className="flex flex-wrap items-center justify-between gap-4">
+			{/* Filters */}
+			<div className="flex flex-wrap gap-4 items-center">
+				<input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border px-2 py-1 rounded text-sm" />
+				<select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className="border px-2 py-1 rounded text-sm">
+					<option value="">All Accounts</option>
+					{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+				</select>
+				<select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="border px-2 py-1 rounded text-sm">
+					<option value="">All Categories</option>
+					{flattenCategories(categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+				</select>
+				<select value={filterType} onChange={e => setFilterType(e.target.value)} className="border px-2 py-1 rounded text-sm">
+					<option value="ALL">All Types</option>
+					<option value="CREDIT">Credit</option>
+					<option value="DEBIT">Debit</option>
+				</select>
+				<input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search" className="border px-2 py-1 rounded text-sm" />
+				<button
+				    onClick={() => setEditTx({
+				      id: null, description: "", explanation: "",
+				      amount: 0, date: dayjs().format("YYYY-MM-DDTHH:mm"),
+				      type: "DEBIT", accountId: "", categoryId: ""
+				    })}
+				    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
+				  >
+				    Add Transaction
+				  </button>
+			</div>
+
+			{renderPagination()}
+
+			{/* Rows */}
+			{transactions.flatMap(tx => [
+				renderRow(tx),
+				...(expandedParents[tx.id] && tx.children ? tx.children.map(child => renderRow(child, true)) : [])
+			])}
+
+			{renderPagination()}
 
 			{/* Modals */}
-			{addTx && (
-				<TransactionForm
-					transaction={{ ...emptyTx }}
-					setTransaction={() => { }}
-					onCancel={() => setAddTx(false)}
-					onSubmit={async () => {
-						await saveTx(emptyTx, "post", "/api/transactions");
-						setAddTx(false);
-					}}
-					accounts={accounts}
-					categories={categories}
-					mode="add"
-				/>
-			)}
-			{editTx && (
-				<TransactionForm
-					transaction={editTx}
-					setTransaction={setEditTx}
-					onCancel={() => setEditTx(null)}
-					onSubmit={async () => {
-						await saveTx(editTx, "put", `/api/transactions/${editTx.id}`);
-						setEditTx(null);
-					}}
-					accounts={accounts}
-					categories={categories}
-					mode="edit"
-				/>
-			)}
 			{splitTx && (
-				<TransactionForm
-					transaction={splitTx}
-					setTransaction={setSplitTx}
-					onCancel={() => setSplitTx(null)}
-					onSubmit={async () => {
-						await saveTx(splitTx, "post", "/api/transactions");
-						setSplitTx(null);
-					}}
-					accounts={accounts}
-					categories={categories}
-					mode="split"
-				/>
+				<TransactionSplit transaction={splitTx} setTransaction={setSplitTx} onCancel={() => setSplitTx(null)} onSubmit={async (enrichedParent) => {
+					setLoading(true); NProgress.start();
+					const childrenPayload = enrichedParent.children.map(c => ({
+						description: c.description, amount: c.amount,
+						date: enrichedParent.date, type: enrichedParent.type,
+						account: { id: enrichedParent.accountId },
+						category: c.categoryId ? { id: c.categoryId } : null,
+						parentId: enrichedParent.parentId
+					}));
+					await api.post("/transactions/split", childrenPayload);
+					setSplitTx(null); await fetchData(); NProgress.done(); setLoading(false);
+				}} categories={categories} />
 			)}
+
 			{transferTx && (
-				<TransferForm
-					transaction={transferTx}
-					setTransaction={setTransferTx}
-					onCancel={() => setTransferTx(null)}
-					onSubmit={async () => {
-						await axios.post("/api/transactions/transfer", {
-							sourceTransactionId: transferTx.id,
-							destinationAccountId: transferTx.destinationAccountId,
-							explanation: transferTx.explanation
-						});
-						setTransferTx(null);
-						fetchData();
-					}}
-					accounts={accounts}
-				/>
+				<TransferForm transaction={transferTx} setTransaction={setTransferTx} onCancel={() => setTransferTx(null)} onSubmit={async () => {
+					setLoading(true); NProgress.start();
+					await api.post("/transactions/transfer", {
+						sourceTransactionId: transferTx.id,
+						destinationAccountId: transferTx.destinationAccountId,
+						explanation: transferTx.explanation
+					});
+					setTransferTx(null); await fetchData(); NProgress.done(); setLoading(false);
+				}} accounts={accounts} />
 			)}
+
+			{editTx && (
+				<TransactionForm transaction={editTx} setTransaction={setEditTx} onCancel={() => setEditTx(null)} onSubmit={async (updatedTx) => {
+					await saveTx(updatedTx, "put", `/transactions/${updatedTx.id}`);
+					setEditTx(null);
+				}} accounts={accounts} categories={categories} mode="edit" />
+			)}
+
+			{loading && <div style={overlayStyle} />}
 		</div>
 	);
 }

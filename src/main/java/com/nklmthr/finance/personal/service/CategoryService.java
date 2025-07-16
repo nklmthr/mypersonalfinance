@@ -61,7 +61,7 @@ public class CategoryService {
 	public Set<String> getAllDescendantCategoryIds(String categoryId) {
 		return getAllDescendantCategoryIds(appUserService.getCurrentUser(), categoryId);
 	}
-	
+
 	public Category getTransferCategory() {
 		return categoryRepository.findByAppUserAndName(appUserService.getCurrentUser(), "TRANSFERS")
 				.orElseThrow(() -> new RuntimeException("TRANSFERS category not found"));
@@ -85,9 +85,7 @@ public class CategoryService {
 
 		logger.info("Found {} categories for user {}", dtoMap.size(), appUser.getUsername());
 
-		return dtoMap.values().stream()
-				.filter(dto -> dto.getParentId() == null)
-				.collect(Collectors.toList());
+		return dtoMap.values().stream().filter(dto -> dto.getParentId() == null).collect(Collectors.toList());
 	}
 
 	public Category getCategoryById(AppUser appUser, String id) {
@@ -125,5 +123,10 @@ public class CategoryService {
 		}
 	}
 
-	
+	public Category getSplitTrnsactionCategory() {
+		AppUser appUser = appUserService.getCurrentUser();
+		return categoryRepository.findByAppUserAndName(appUser, "SPLIT")
+				.orElseThrow(() -> new RuntimeException("Default category not found"));
+	}
+
 }

@@ -31,4 +31,8 @@ public class AppUserService {
 	public void save(AppUser user) {
 		appUserRepository.save(user);
 	}
+	
+	public AppUserRepository getRepository() {
+	    return appUserRepository;
+	}
 }

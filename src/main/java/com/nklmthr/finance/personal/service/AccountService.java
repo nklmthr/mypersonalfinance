@@ -3,6 +3,7 @@ package com.nklmthr.finance.personal.service;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.model.Account;
@@ -31,7 +32,7 @@ public class AccountService {
 
 	public List<Account> getAllAccounts() {
 		AppUser appUser = appUserService.getCurrentUser();
-		return accountRepository.findAllByAppUser(appUser);
+		return accountRepository.findAllByAppUser(appUser, Sort.by("name").ascending());
 	}
 
 	public Account getAccount(String id) {
@@ -86,7 +87,7 @@ public class AccountService {
 		} else if (institutionId != null) {
 			return accountRepository.findByAppUserAndInstitutionId(appUser, institutionId);
 		} else {
-			return accountRepository.findAllByAppUser(appUser);
+			return accountRepository.findAllByAppUser(appUser, Sort.by("name").ascending());
 		}
 	}
 

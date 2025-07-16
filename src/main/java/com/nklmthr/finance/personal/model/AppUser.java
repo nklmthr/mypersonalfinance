@@ -38,6 +38,14 @@ public class AppUser {
 	
 	@Builder.Default
 	private boolean enabled = true;
+	
+	@Column(length = 4096)
+	private String gmailAccessToken;
+
+	@Column(length = 4096)
+	private String gmailRefreshToken;
+
+	private Long gmailTokenExpiry; 
 
 	// Optional: audit fields
 	private LocalDateTime createdAt;
