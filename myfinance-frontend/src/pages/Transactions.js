@@ -267,10 +267,11 @@ export default function Transactions() {
 	const [page, setPage] = useState(0);
 	const [totalPages, setTotalPages] = useState(0);
 	const [pageSize, setPageSize] = useState(10);
+	const [totalCount, setTotalCount] = useState(0);
 
 	const [searchParams] = useSearchParams();
 	const currentMonth = dayjs().format("YYYY-MM");
-	const [filterMonth, setFilterMonth] = useState(searchParams.get("month") || currentMonth);
+	const [filterMonth, setFilterMonth] = useState(searchParams.get("month") || "");
 	const [filterAccount, setFilterAccount] = useState('');
 	const [filterType, setFilterType] = useState('ALL');
 	const [filterCategory, setFilterCategory] = useState(searchParams.get("categoryId") || '');
@@ -311,14 +312,19 @@ export default function Transactions() {
 			setTotalPages(txRes.data.totalPages);
 			setAccounts(accRes.data);
 			setCategories(catRes.data);
+			setTotalCount(txRes.data.totalElements);
 		} finally {
 			NProgress.done();
 			setLoading(false);
 		}
 	};
+	useEffect(() => {
+		if (page > 0 && page >= Math.ceil(totalCount / pageSize)) {
+			setPage(0); // 👈 If out of range, reset to first page
+		}
+	}, [totalCount, page, pageSize]);
 
 	useEffect(() => { fetchData(); }, [page, pageSize, filterMonth, filterAccount, filterType, filterCategory, search]);
-
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
 		NProgress.start();
@@ -397,11 +403,7 @@ export default function Transactions() {
 			</select>
 
 			<div className="text-sm text-gray-500">
-				{new Date(tx.date).toLocaleString('en-GB', {
-					weekday: 'short', day: '2-digit', month: 'short',
-					hour: '2-digit', minute: '2-digit', second: '2-digit',
-					hour12: false
-				}).replace(',', '')}
+			  {dayjs(tx.date).format("ddd, DD MMM YY HH:mm:ss")}
 			</div>
 
 			<div className="flex items-center space-x-2 text-sm">
@@ -469,32 +471,74 @@ export default function Transactions() {
 		<div className="flex flex-wrap items-center justify-between gap-4">
 			{/* Filters */}
 			<div className="flex flex-wrap gap-4 items-center">
-				<input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border px-2 py-1 rounded text-sm" />
-				<select value={filterAccount} onChange={e => setFilterAccount(e.target.value)} className="border px-2 py-1 rounded text-sm">
+				<input
+					type="month"
+					value={filterMonth}
+					onChange={e => setFilterMonth(e.target.value)}
+					className="border px-2 py-1 rounded text-sm"
+				/>
+
+				<select
+					value={filterAccount}
+					onChange={e => setFilterAccount(e.target.value)}
+					className="border px-2 py-1 rounded text-sm"
+				>
 					<option value="">All Accounts</option>
 					{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
 				</select>
-				<select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="border px-2 py-1 rounded text-sm">
+
+				<select
+					value={filterCategory}
+					onChange={e => setFilterCategory(e.target.value)}
+					className="border px-2 py-1 rounded text-sm"
+				>
 					<option value="">All Categories</option>
 					{flattenCategories(categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
 				</select>
-				<select value={filterType} onChange={e => setFilterType(e.target.value)} className="border px-2 py-1 rounded text-sm">
+
+				<select
+					value={filterType}
+					onChange={e => setFilterType(e.target.value)}
+					className="border px-2 py-1 rounded text-sm"
+				>
 					<option value="ALL">All Types</option>
 					<option value="CREDIT">Credit</option>
 					<option value="DEBIT">Debit</option>
 				</select>
-				<input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search" className="border px-2 py-1 rounded text-sm" />
+
+				<input
+					value={search}
+					onChange={e => setSearch(e.target.value)}
+					placeholder="Search"
+					className="border px-2 py-1 rounded text-sm"
+				/>
+
 				<button
-				    onClick={() => setEditTx({
-				      id: null, description: "", explanation: "",
-				      amount: 0, date: dayjs().format("YYYY-MM-DDTHH:mm"),
-				      type: "DEBIT", accountId: "", categoryId: ""
-				    })}
-				    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
-				  >
-				    Add Transaction
-				  </button>
+					onClick={() => {
+						setFilterMonth("");
+						setFilterAccount("");
+						setFilterCategory("");
+						setFilterType("ALL");
+						setSearch("");
+						setPage(0); // Optional: reset to first page when filters cleared
+					}}
+					className="text-sm text-red-600 underline ml-2"
+				>
+					Clear All Filters
+				</button>
+
+				<button
+					onClick={() => setEditTx({
+						id: null, description: "", explanation: "",
+						amount: 0, date: dayjs().format("YYYY-MM-DDTHH:mm"),
+						type: "DEBIT", accountId: "", categoryId: ""
+					})}
+					className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
+				>
+					Add Transaction
+				</button>
 			</div>
+
 
 			{renderPagination()}
 

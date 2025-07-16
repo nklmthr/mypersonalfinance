@@ -36,7 +36,7 @@ import lombok.RequiredArgsConstructor;
 public class AccountTransactionService {
 	@Autowired
 	private AppUserService appUserService;
-	
+
 	@Autowired
 	private AccountService accountService;
 
@@ -49,7 +49,6 @@ public class AccountTransactionService {
 		AppUser appUser = appUserService.getCurrentUser();
 		Specification<AccountTransaction> spec = Specification
 				.where(AccountTransactionSpecifications.isRootTransaction());
-
 		if (StringUtils.isNotBlank(accountId)) {
 			spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
 		}
@@ -67,120 +66,125 @@ public class AccountTransactionService {
 		if (StringUtils.isNotBlank(search)) {
 			spec = spec.and(AccountTransactionSpecifications.matchesSearch(search));
 		}
-
 		if (StringUtils.isNotBlank(categoryId)) {
 			Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(categoryId);
 			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryIds));
 		}
-
 		spec = spec.and(AccountTransactionSpecifications.belongsToUser(appUser));
 		logger.info(
 				"Fetching transactions with filters - Month: {}, Account ID: {}, Type: {}, Search: {}, Category ID: {}",
 				month, accountId, type, search, categoryId);
-
-		return accountTransactionRepository.findAll(spec, pageable);
+		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
+		page.getContent().forEach(tx -> {
+			if (tx.getDescription() != null && tx.getDescription().length() > 40) {
+				tx.setDescription(tx.getDescription().substring(0, 40));
+			}
+			if (tx.getExplanation() != null && tx.getExplanation().length() > 40) {
+				tx.setExplanation(tx.getExplanation().substring(0, 40));
+			}
+		});
+		return page;
 	}
-	
+
 	@Transactional
 	public void createTransfer(TransferRequest request) throws Exception {
-	    AppUser appUser = appUserService.getCurrentUser();
+		AppUser appUser = appUserService.getCurrentUser();
 
-	    AccountTransaction debit = getById(request.getSourceTransactionId())
-	            .orElseThrow(() -> new Exception("Source transaction not found"));
+		AccountTransaction debit = getById(request.getSourceTransactionId())
+				.orElseThrow(() -> new Exception("Source transaction not found"));
 
-	    Account toAccount = accountService.getAccount(request.getDestinationAccountId());
+		Account toAccount = accountService.getAccount(request.getDestinationAccountId());
 
-	    // Set category to Transfer
-	    debit.setCategory(categoryService.getTransferCategory());
+		// Set category to Transfer
+		debit.setCategory(categoryService.getTransferCategory());
 
-	    // Create CREDIT transaction
-	    AccountTransaction credit = new AccountTransaction();
-	    credit.setAccount(toAccount);
-	    toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
-	    credit.setAmount(debit.getAmount());
-	    credit.setDate(debit.getDate());
-	    credit.setDescription(debit.getDescription());
-	    credit.setExplanation(request.getExplanation());
-	    credit.setType(TransactionType.CREDIT);
-	    credit.setCategory(categoryService.getTransferCategory());
+		// Create CREDIT transaction
+		AccountTransaction credit = new AccountTransaction();
+		credit.setAccount(toAccount);
+		toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
+		credit.setAmount(debit.getAmount());
+		credit.setDate(debit.getDate());
+		credit.setDescription(debit.getDescription());
+		credit.setExplanation(request.getExplanation());
+		credit.setType(TransactionType.CREDIT);
+		credit.setCategory(categoryService.getTransferCategory());
 
-	    save(debit, appUser);
-	    save(credit, appUser);
+		save(debit, appUser);
+		save(credit, appUser);
 	}
 
 	@Transactional
 	public ResponseEntity<String> splitTransaction(List<SplitTransactionRequest> splitTransactions) {
-	    if (splitTransactions == null || splitTransactions.isEmpty()) {
-	        return ResponseEntity.badRequest().body("No split transactions provided");
-	    }
+		if (splitTransactions == null || splitTransactions.isEmpty()) {
+			return ResponseEntity.badRequest().body("No split transactions provided");
+		}
 
-	    AppUser appUser = appUserService.getCurrentUser();
+		AppUser appUser = appUserService.getCurrentUser();
 
-	    String parentId = splitTransactions.get(0).getParentId();
-	    Optional<AccountTransaction> parentOpt = getById(parentId);
-	    if (parentOpt.isEmpty()) {
-	        return ResponseEntity.badRequest().body("Parent transaction not found");
-	    }
+		String parentId = splitTransactions.get(0).getParentId();
+		Optional<AccountTransaction> parentOpt = getById(parentId);
+		if (parentOpt.isEmpty()) {
+			return ResponseEntity.badRequest().body("Parent transaction not found");
+		}
 
-	    AccountTransaction parent = parentOpt.get();
-	    parent.setCategory(categoryService.getSplitTrnsactionCategory());
+		AccountTransaction parent = parentOpt.get();
+		parent.setCategory(categoryService.getSplitTrnsactionCategory());
 
-	    BigDecimal totalSplitAmount = BigDecimal.ZERO;
+		BigDecimal totalSplitAmount = BigDecimal.ZERO;
 
-	    for (SplitTransactionRequest st : splitTransactions) {
-	        logger.info("Processing split transaction: {}", st);
-	        AccountTransaction child = new AccountTransaction();
-	        child.setDescription(st.getDescription());
-	        child.setAmount(st.getAmount());
-	        child.setDate(st.getDate());
-	        child.setType(st.getType());
-	        child.setAccount(accountService.getAccount(st.getAccount().getId()));
-	        child.setCategory(st.getCategory() != null ? categoryService.getCategoryById(st.getCategory().getId()) : null);
-	        child.setParent(parent);
-	        child.setAppUser(appUser);
-	        totalSplitAmount = totalSplitAmount.add(child.getAmount());
-	        accountTransactionRepository.save(child);
-	    }
+		for (SplitTransactionRequest st : splitTransactions) {
+			logger.info("Processing split transaction: {}", st);
+			AccountTransaction child = new AccountTransaction();
+			child.setDescription(st.getDescription());
+			child.setAmount(st.getAmount());
+			child.setDate(st.getDate());
+			child.setType(st.getType());
+			child.setAccount(accountService.getAccount(st.getAccount().getId()));
+			child.setCategory(
+					st.getCategory() != null ? categoryService.getCategoryById(st.getCategory().getId()) : null);
+			child.setParent(parent);
+			child.setAppUser(appUser);
+			totalSplitAmount = totalSplitAmount.add(child.getAmount());
+			accountTransactionRepository.save(child);
+		}
 
-	    if (totalSplitAmount.compareTo(parent.getAmount()) != 0) {
-	        return ResponseEntity.badRequest().body("Parent transaction amount does not match split amounts");
-	    }
+		if (totalSplitAmount.compareTo(parent.getAmount()) != 0) {
+			return ResponseEntity.badRequest().body("Parent transaction amount does not match split amounts");
+		}
 
-	    accountTransactionRepository.save(parent);
-	    return ResponseEntity.ok("Split successful");
+		accountTransactionRepository.save(parent);
+		return ResponseEntity.ok("Split successful");
 	}
-	
+
 	@Transactional
 	public Optional<AccountTransaction> updateTransaction(String id, AccountTransaction tx) {
-	    return getById(id).map(existing -> {
-	        AppUser appUser = appUserService.getCurrentUser();
+		return getById(id).map(existing -> {
+			AppUser appUser = appUserService.getCurrentUser();
 
-	        tx.setId(id);
-	        tx.setAppUser(appUser);
-	        tx.setAccount(accountService.getAccount(tx.getAccount().getId()));
-	        tx.setCategory(categoryService.getCategoryById(tx.getCategory().getId()));
+			tx.setId(id);
+			tx.setAppUser(appUser);
+			tx.setAccount(accountService.getAccount(tx.getAccount().getId()));
+			tx.setCategory(categoryService.getCategoryById(tx.getCategory().getId()));
 
-	        // Preserve immutable fields
-	        tx.setParent(existing.getParent());
-	        tx.setChildren(existing.getChildren());
-	        tx.setSourceId(existing.getSourceId());
-	        tx.setSourceThreadId(existing.getSourceThreadId());
-	        tx.setHref(existing.getHref());
-	        tx.setHrefText(existing.getHrefText());
-	        tx.setSourceTime(existing.getSourceTime());
+			// Preserve immutable fields
+			tx.setParent(existing.getParent());
+			tx.setChildren(existing.getChildren());
+			tx.setSourceId(existing.getSourceId());
+			tx.setSourceThreadId(existing.getSourceThreadId());
+			tx.setHref(existing.getHref());
+			tx.setHrefText(existing.getHrefText());
+			tx.setSourceTime(existing.getSourceTime());
 
-	        // Update balance logic
-	        if (tx.getType().equals(TransactionType.DEBIT)) {
-	            tx.getAccount().setBalance(tx.getAccount().getBalance().subtract(tx.getAmount()));
-	        } else {
-	            tx.getAccount().setBalance(tx.getAccount().getBalance().add(tx.getAmount()));
-	        }
+			// Update balance logic
+			if (tx.getType().equals(TransactionType.DEBIT)) {
+				tx.getAccount().setBalance(tx.getAccount().getBalance().subtract(tx.getAmount()));
+			} else {
+				tx.getAccount().setBalance(tx.getAccount().getBalance().add(tx.getAmount()));
+			}
 
-	        return accountTransactionRepository.save(tx);
-	    });
+			return accountTransactionRepository.save(tx);
+		});
 	}
-
-
 
 	public Optional<AccountTransaction> getById(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
