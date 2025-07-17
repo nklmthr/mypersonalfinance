@@ -1,4 +1,4 @@
-package com.nklmthr.finance.personal.helper;
+package com.nklmthr.finance.personal.service.gmail;
 
 import java.io.InputStreamReader;
 import java.util.List;
@@ -14,7 +14,6 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.gmail.GmailScopes;
 import com.nklmthr.finance.personal.model.AppUser;
-import com.nklmthr.finance.personal.scheduler.gmail.AppUserDataStoreFactory;
 import com.nklmthr.finance.personal.service.AppUserService;
 
 @Component

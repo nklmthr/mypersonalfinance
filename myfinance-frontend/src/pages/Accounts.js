@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "./../auth/api";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
 
@@ -48,8 +48,8 @@ export default function Accounts() {
   const fetchAll = async () => {
     try {
       const [instRes, typeRes] = await Promise.all([
-        axios.get("/api/institutions"),
-        axios.get("/api/account-types"),
+        api.get("/institutions"),
+        api.get("/account-types"),
       ]);
       setInstitutions(instRes.data);
       setAccountTypes(typeRes.data);
@@ -63,7 +63,7 @@ export default function Accounts() {
       const params = {};
       if (accountTypeId) params.accountTypeId = accountTypeId;
       if (institutionId) params.institutionId = institutionId;
-      const res = await axios.get("/api/accounts/filter", { params });
+      const res = await api.get("/accounts/filter", { params });
       setAccounts(res.data);
     } catch (err) {
       console.error("Fetch accounts error:", err);
@@ -72,7 +72,7 @@ export default function Accounts() {
 
   const handleAdd = async () => {
     try {
-      await axios.post("/api/accounts", {
+      await api.post("/accounts", {
         name: newAccount.name,
         balance: newAccount.balance,
         institution: { id: newAccount.institutionId },
@@ -99,7 +99,7 @@ export default function Accounts() {
 
   const handleEditSave = async () => {
     try {
-      await axios.put(`/api/accounts/${editData.id}`, {
+      await api.put(`/accounts/${editData.id}`, {
         id: editData.id,
         name: editData.name,
         balance: editData.balance,
@@ -116,7 +116,7 @@ export default function Accounts() {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this account?")) return;
     try {
-      await axios.delete(`/api/accounts/${id}`);
+      await api.delete(`/accounts/${id}`);
       fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
     } catch (err) {
       if (err.response && err.response.status === 409) {
@@ -175,7 +175,6 @@ export default function Accounts() {
         </button>
       </div>
 
-      {/* Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Account Type</label>
@@ -197,7 +196,6 @@ export default function Accounts() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto rounded shadow bg-white">
         <table className="min-w-full text-sm text-gray-700">
           <thead className="bg-gray-100 text-left">

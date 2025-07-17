@@ -16,10 +16,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.nklmthr.finance.personal.helper.GmailAuthHelper;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.security.SecurityConfig;
 import com.nklmthr.finance.personal.service.AppUserService;
+import com.nklmthr.finance.personal.service.gmail.GmailAuthHelper;
 
 import jakarta.servlet.http.HttpServletResponse;
 

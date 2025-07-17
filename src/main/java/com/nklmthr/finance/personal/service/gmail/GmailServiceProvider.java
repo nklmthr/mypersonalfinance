@@ -1,4 +1,4 @@
-package com.nklmthr.finance.personal.scheduler.gmail;
+package com.nklmthr.finance.personal.service.gmail;
 
 import java.io.InputStreamReader;
 import java.util.List;
@@ -32,8 +32,7 @@ public class GmailServiceProvider {
 
 		var flow = new GoogleAuthorizationCodeFlow.Builder(GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY,
 				clientSecrets, List.of(GmailScopes.GMAIL_READONLY)).setAccessType("offline")
-				.setDataStoreFactory(new AppUserDataStoreFactory(appUser, appUserRepository)) // ✅ fixed
-				.build();
+				.setDataStoreFactory(new AppUserDataStoreFactory(appUser, appUserRepository)).build();
 
 		var credential = flow.loadCredential(userKey);
 

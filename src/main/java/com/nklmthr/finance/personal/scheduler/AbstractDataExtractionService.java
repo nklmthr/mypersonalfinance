@@ -27,11 +27,11 @@ import com.google.api.services.gmail.model.MessagePart;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.repository.AppUserRepository;
-import com.nklmthr.finance.personal.scheduler.gmail.AppUserDataStoreFactory;
-import com.nklmthr.finance.personal.scheduler.gmail.GmailServiceProvider;
 import com.nklmthr.finance.personal.service.AccountService;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
 import com.nklmthr.finance.personal.service.CategoryService;
+import com.nklmthr.finance.personal.service.gmail.AppUserDataStoreFactory;
+import com.nklmthr.finance.personal.service.gmail.GmailServiceProvider;
 
 public abstract class AbstractDataExtractionService {
 	private static final Logger logger = LoggerFactory.getLogger(AbstractDataExtractionService.class);
@@ -59,13 +59,13 @@ public abstract class AbstractDataExtractionService {
 				var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
 						new InputStreamReader(getClass().getResourceAsStream(CREDENTIALS_FILE_PATH)));
 				AppUserDataStoreFactory factory = new AppUserDataStoreFactory(appUser, appUserRepository);
-
 				GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
 						GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY, clientSecrets,
 						List.of(GmailScopes.GMAIL_READONLY)).setDataStoreFactory(factory).setAccessType("offline")
 						.build();
-				Credential credential = flow.loadCredential(appUser.getUsername());
-				if (credential == null || credential.getAccessToken() == null) {
+
+				Credential credential = flow.loadCredential("user");
+				if (StringUtils.isBlank(credential.getAccessToken()) || StringUtils.isAllBlank(credential.getRefreshToken())) {
 					logger.warn("Gmail not connected for user: " + appUser.getUsername());
 					return; // Skip this user if token missing
 				}
