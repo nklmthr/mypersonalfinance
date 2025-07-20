@@ -31,7 +31,7 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 		service.run();
 	}
 
-	@Scheduled(cron = "0 0/2 * * * ?") // Every 30 minutes
+	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
 		super.run();
 	}

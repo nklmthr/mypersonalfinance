@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.dto.CategoryDTO;
 import com.nklmthr.finance.personal.dto.CategorySpendDTO;
+import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
@@ -23,10 +24,10 @@ import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 public class CategorySpendService {
 
 	private static final Logger logger = LoggerFactory.getLogger(CategorySpendService.class);
-	
+
 	@Autowired
 	private AppUserService appUserService;
-	
+
 	@Autowired
 	private CategoryService categoryService;
 
@@ -35,20 +36,21 @@ public class CategorySpendService {
 
 	public List<CategorySpendDTO> getMonthlyCategorySpendHierarchy(int month, int year) {
 		AppUser appUser = appUserService.getCurrentUser();
-		List<AccountTransaction> transactions = accountTransactionRepository.findByAppUserAndMonthAndYear(appUser, month, year);
+		List<AccountTransaction> transactions = accountTransactionRepository.findByAppUserAndMonthAndYear(appUser,
+				month, year);
 		logger.info("Fetched {} transactions for {}/{}", transactions.size(), month, year);
 
 		Map<String, BigDecimal> categorySums = new HashMap<>();
 		int uncategorized = 0;
 
 		for (AccountTransaction tx : transactions) {
-			if (tx.getCategory() == null) {
-				uncategorized++;
-				continue;
-			}
 			String categoryId = tx.getCategory().getId();
 			BigDecimal current = categorySums.getOrDefault(categoryId, BigDecimal.ZERO);
-			categorySums.put(categoryId, current.add(tx.getAmount()));
+			if (tx.getType().equals(TransactionType.CREDIT)) {
+				categorySums.put(categoryId, current.add(tx.getAmount()));
+			} else {
+				categorySums.put(categoryId, current.subtract(tx.getAmount()));
+			}
 			logger.info("Processing TX {} with category {}", tx.getDescription(), tx.getCategory().getName());
 		}
 		logger.info("Transactions with no category: {}", uncategorized);
@@ -106,7 +108,7 @@ public class CategorySpendService {
 		}
 		return count;
 	}
-	
+
 	private List<CategoryDTO> flattenCategoryTree(List<CategoryDTO> roots) {
 		List<CategoryDTO> flatList = new ArrayList<>();
 		for (CategoryDTO root : roots) {

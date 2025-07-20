@@ -26,6 +26,11 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	@Autowired
 	private AccountService accountService;
 
+	@Scheduled(cron = "${my.scheduler.cron}")
+	public void runTask() {
+		super.run();
+	}
+	
 	// Matches typical debit messages, including ATM debits
 	private static final Pattern AMOUNT_PATTERN = Pattern.compile(
 			"Amount Debited: INR\\s+([\\d,]+(?:\\.\\d+)?)"
@@ -42,10 +47,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	};
 
 
-	@Scheduled(cron = "0 0/2 * * * ?")
-	public void runTask() {
-		super.run();
-	}
+	
 
 	@Override
 	protected List<String> getEmailSubject() {

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -221,26 +222,44 @@ public class AccountTransactionService {
 		accountTransactionRepository.deleteByAppUserAndId(appUser, id);
 	}
 
+	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction, AppUser appUser) {
 
+		logger.info(
+				"New transaction date: {}, amount: {}, description: {}, type: {}, sourceId: {}, sourceThreadId: {}, sourceTime: {}",
+				newTransaction.getDate(), newTransaction.getAmount(), newTransaction.getDescription(),
+				newTransaction.getType(), newTransaction.getSourceId(), newTransaction.getSourceThreadId(),
+				newTransaction.getSourceTime());
 		List<AccountTransaction> existingAccTxnList = accountTransactionRepository
 				.findByAppUserAndSourceThreadId(appUser, newTransaction.getSourceThreadId());
-
+		logger.info("Found {} existing transactions for sourceThreadId: {}", existingAccTxnList.size(),
+				newTransaction.getSourceThreadId());
 		if (existingAccTxnList.isEmpty()) {
 			return false;
 		}
 		// Check if the new transaction matches any existing transaction
-		for (AccountTransaction existingTxn : existingAccTxnList) {
-			if (existingTxn.getDate().equals(newTransaction.getDate())
-					&& existingTxn.getAmount().compareTo(newTransaction.getAmount()) == 0
-					&& existingTxn.getDescription().equalsIgnoreCase(newTransaction.getDescription())
-					&& existingTxn.getType().equals(newTransaction.getType())) {
-				return true; // Transaction already exists
-			}
 
+		for (AccountTransaction existingTxn : existingAccTxnList) {
+			boolean isDateClose = Math
+					.abs(ChronoUnit.MINUTES.between(existingTxn.getDate(), newTransaction.getDate())) <= 1;
+
+			boolean isAmountEqual = existingTxn.getAmount().compareTo(newTransaction.getAmount()) == 0;
+			boolean isDescriptionEqual = existingTxn.getDescription().equalsIgnoreCase(newTransaction.getDescription());
+			boolean isTypeEqual = existingTxn.getType().equals(newTransaction.getType());
+
+			boolean isMatch = isDateClose && isAmountEqual && isDescriptionEqual && isTypeEqual;
+
+			logger.debug("Checking against existing transaction: date: {}, amount: {}, description: {}, type: {}, match: {}",
+					existingTxn.getDate(), existingTxn.getAmount(), existingTxn.getDescription(), existingTxn.getType(),
+					isMatch);
+
+			if (isMatch) {
+				logger.info("Applied Dedupe logic: Found existing transaction matching new transaction");
+				updateTransactionWithSourceInfo(existingTxn, newTransaction);
+				return true; // Transaction already exists (within 1-minute window)
+			}
 		}
-		// Check if the new transaction matches any existing transaction by
-		// sourceMessageId
+
 		for (AccountTransaction existingTxn : existingAccTxnList) {
 			if (existingTxn.getSourceId().equals(newTransaction.getSourceId())) {
 				return true; // Transaction already exists by sourceMessageId
@@ -249,11 +268,21 @@ public class AccountTransactionService {
 		return false; // No match found, transaction is new
 	}
 
+	@Transactional
+	private void updateTransactionWithSourceInfo(AccountTransaction existingTxn, AccountTransaction newTransaction) {
+		existingTxn.setSourceId(newTransaction.getSourceId());
+		existingTxn.setSourceThreadId(newTransaction.getSourceThreadId());
+		existingTxn.setSourceTime(newTransaction.getSourceTime());
+		existingTxn.setDate(newTransaction.getDate());
+		accountTransactionRepository.save(existingTxn);
+	}
+	
+	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
 		AppUser appUser = appUserService.getCurrentUser();
 		return isTransactionAlreadyPresent(newTransaction, appUser);
 	}
-
+	@Transactional
 	public List<AccountTransaction> getFilteredTransactionsForExport(String month, String accountId, String type,
 			String categoryId, String search) {
 		AppUser appUser = appUserService.getCurrentUser();
