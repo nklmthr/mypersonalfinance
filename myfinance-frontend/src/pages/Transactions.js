@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
-
+import useDebounce from "../hooks/useDebounce";
 function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, accounts, categories, mode }) {
 	useEffect(() => {
 		const handler = (e) => e.key === "Escape" && onCancel();
@@ -276,6 +276,7 @@ export default function Transactions() {
 	const [filterType, setFilterType] = useState('ALL');
 	const [filterCategory, setFilterCategory] = useState(searchParams.get("categoryId") || '');
 	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebounce(search, 500); 
 
 	NProgress.configure({ showSpinner: false });
 
@@ -324,7 +325,7 @@ export default function Transactions() {
 		}
 	}, [totalCount, page, pageSize]);
 
-	useEffect(() => { fetchData(); }, [page, pageSize, filterMonth, filterAccount, filterType, filterCategory, search]);
+	useEffect(() => { fetchData(); }, [page, pageSize, filterMonth, filterAccount, filterType, filterCategory, debouncedSearch]);
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
 		NProgress.start();
@@ -366,57 +367,59 @@ export default function Transactions() {
 	};
 
 	const renderRow = (tx, isChild = false) => (
-		<div
-			key={tx.id}
-			className={`grid grid-cols-1 sm:grid-cols-[1.5rem_2fr_1fr_1.5fr_1fr_max-content] gap-2 py-2 px-3 rounded border ${isChild ? "bg-gray-50 border-dashed" : "bg-white border-gray-200"} items-center`}
-		>
-			<div className="text-sm">
-				{!isChild && tx.children?.length > 0 && (
-					<button onClick={() => toggleExpand(tx.id)} className="text-gray-600 hover:text-black">
-						{expandedParents[tx.id] ? "▲" : "▼"}
-					</button>
-				)}
-			</div>
+	  <div
+	    key={tx.id}
+	    className={`grid grid-cols-1 sm:grid-cols-[1.5rem_2fr_1fr_1.5fr_1fr_max-content] gap-2 py-2 px-3 rounded border items-start sm:items-center text-sm ${isChild ? "bg-gray-50 border-dashed" : "bg-white border-gray-200"}`}
+	  >
+	    <div className="text-xs">
+	      {!isChild && tx.children?.length > 0 && (
+	        <button onClick={() => toggleExpand(tx.id)} className="text-gray-600 hover:text-black">
+	          {expandedParents[tx.id] ? "▲" : "▼"}
+	        </button>
+	      )}
+	    </div>
 
-			<div>
-				<div className="truncate">{tx.description}</div>
-				<div className="text-xs text-gray-500">{tx.explanation}</div>
-			</div>
+	    <div className="flex flex-col">
+	      <div className="truncate font-medium text-gray-800">{tx.description}</div>
+	      <div className="text-xs text-gray-500 break-words">{tx.explanation}</div>
+	    </div>
 
-			<div className="text-gray-700">
-				<span className={`font-semibold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-					₹{tx.amount}
-				</span>
-				<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">{tx.type}</span><br />
-				<span className="text-sm">{tx.account?.name}</span>
-			</div>
+	    <div className="text-gray-700">
+	      <span className={`font-semibold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+	        ₹{tx.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+	      </span>
+	      <span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">{tx.type}</span><br />
+	      <span className="text-xs text-gray-500">{tx.account?.name}</span>
+	    </div>
 
-			<select
-				className="w-full border rounded px-2 py-1 text-sm"
-				value={tx.category?.id || ""}
-				onChange={e => {
-					saveTx({ ...tx, categoryId: e.target.value, accountId: tx.account?.id, parentId: tx.parent?.id }, "put", `/transactions/${tx.id}`);
-				}}
-			>
-				<option value="">— Category —</option>
-				{flattenCategories(categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-			</select>
+	    <div>
+	      <select
+	        className="w-full border rounded px-2 py-1 text-xs sm:text-sm"
+	        value={tx.category?.id || ""}
+	        onChange={e => {
+	          saveTx({ ...tx, categoryId: e.target.value, accountId: tx.account?.id, parentId: tx.parent?.id }, "put", `/transactions/${tx.id}`);
+	        }}
+	      >
+	        <option value="">— Category —</option>
+	        {flattenCategories(categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+	      </select>
+	    </div>
 
-			<div className="text-sm text-gray-500">
-			  {dayjs(tx.date).format("ddd, DD MMM YY HH:mm:ss")}
-			</div>
+	    <div className="text-xs sm:text-sm text-gray-500">
+	      {dayjs(tx.date).format("ddd, DD MMM YY HH:mm")}
+	    </div>
 
-			<div className="flex items-center space-x-2 text-sm">
-				{!isChild && (
-					<button className="text-purple-600 hover:underline" onClick={() => setSplitTx({ ...tx, parentId: tx.id, accountId: tx.account?.id })}>Split</button>
-				)}
-				{!isChild && (!tx.children || tx.children.length === 0) && (
-					<button className="text-teal-600 hover:underline" onClick={() => setTransferTx({ ...tx, accountId: tx.account?.id, destinationAccountId: "", explanation: tx.explanation || "" })}>Transfer</button>
-				)}
-				<button className="text-red-600 hover:underline" onClick={() => deleteTx(tx.id)}>Delete</button>
-				<button className="text-blue-600 hover:underline" onClick={() => setEditTx({ ...tx, accountId: tx.account?.id, categoryId: tx.category?.id })}>Update</button>
-			</div>
-		</div>
+	    <div className="flex flex-wrap gap-1 sm:space-x-2 text-xs sm:text-sm">
+	      {!isChild && (
+	        <button className="text-purple-600 hover:underline" onClick={() => setSplitTx({ ...tx, parentId: tx.id, accountId: tx.account?.id })}>Split</button>
+	      )}
+	      {!isChild && (!tx.children || tx.children.length === 0) && (
+	        <button className="text-teal-600 hover:underline" onClick={() => setTransferTx({ ...tx, accountId: tx.account?.id, destinationAccountId: "", explanation: tx.explanation || "" })}>Transfer</button>
+	      )}
+	      <button className="text-red-600 hover:underline" onClick={() => deleteTx(tx.id)}>Delete</button>
+	      <button className="text-blue-600 hover:underline" onClick={() => setEditTx({ ...tx, accountId: tx.account?.id, categoryId: tx.category?.id })}>Update</button>
+	    </div>
+	  </div>
 	);
 
 	const renderPagination = () => {

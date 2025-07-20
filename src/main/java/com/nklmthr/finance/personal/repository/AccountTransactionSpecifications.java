@@ -1,5 +1,6 @@
 package com.nklmthr.finance.personal.repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Set;
 
@@ -38,17 +39,33 @@ public class AccountTransactionSpecifications {
 
 	public static Specification<AccountTransaction> matchesSearch(String search) {
 		return (Root<AccountTransaction> root, CriteriaQuery<?> query, CriteriaBuilder cb) -> {
-			String likeSearch = "%" + search.toLowerCase() + "%";
+			Predicate combined;
 
-			Predicate descriptionMatch = cb.like(cb.lower(root.get("description")), likeSearch);
-			Predicate explanationMatch = cb.like(cb.lower(root.get("explanation")), likeSearch);
-			Predicate typeMatch = cb.like(cb.lower(root.get("type").as(String.class)), likeSearch);
-			Predicate accountMatch = cb.like(cb.lower(root.get("account").get("name")), likeSearch);
-			Predicate categoryMatch = cb.like(cb.lower(root.get("category").get("name")), likeSearch);
+			try {
+				BigDecimal searchAmount = new BigDecimal(search);
+				BigDecimal lower = searchAmount.subtract(BigDecimal.valueOf(100));
+				BigDecimal upper = searchAmount.add(BigDecimal.valueOf(100));
+				Predicate amountMatch = cb.between(root.get("amount"), lower, upper);
 
-			return cb.or(descriptionMatch, explanationMatch, typeMatch, accountMatch, categoryMatch);
+				// You can also optionally combine this with text search if desired
+				combined = amountMatch;
+			} catch (NumberFormatException e) {
+				String likeSearch = "%" + search.toLowerCase() + "%";
+
+				Predicate descriptionMatch = cb.like(cb.lower(root.get("description")), likeSearch);
+				Predicate explanationMatch = cb.like(cb.lower(root.get("explanation")), likeSearch);
+				Predicate typeMatch = cb.like(cb.lower(root.get("type").as(String.class)), likeSearch);
+				Predicate accountMatch = cb.like(cb.lower(root.get("account").get("name")), likeSearch);
+				Predicate categoryMatch = cb.like(cb.lower(root.get("category").get("name")), likeSearch);
+
+				combined = cb.or(descriptionMatch, explanationMatch, typeMatch, accountMatch, categoryMatch);
+			}
+
+			return combined;
 		};
 	}
+
+
 
 	public static Specification<AccountTransaction> belongsToUser(AppUser appUser) {
 		return (root, query, cb) -> cb.equal(root.get("appUser"), appUser);
