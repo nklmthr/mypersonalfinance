@@ -44,10 +44,13 @@ public class BalanceSheetService {
 
 	public BalanceSheetDTO generateMonthlyBalanceSheet(LocalDate date) {
 		AppUser appUser = appUserService.getCurrentUser();
+
 		String monthLabel = formatMonth(date);
 
-		List<AccountBalanceSnapshot> snapshots = accountBalanceSnapshotRepository.findByAppUserAndMonthAndYear(appUser,
-				date.getMonth().getValue(), date.getYear());
+		LocalDate fromDate = date.minusDays(7);
+		LocalDate toDate = date.plusDays(7);
+		List<AccountBalanceSnapshot> snapshots = accountBalanceSnapshotRepository.findByAppUserAndSnapshotRange(appUser,
+				fromDate.atStartOfDay(), toDate.atStartOfDay());
 
 		Map<String, BigDecimal> classificationTotals = new LinkedHashMap<>();
 		BigDecimal total = BigDecimal.ZERO;
