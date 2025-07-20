@@ -10,8 +10,6 @@ export default function BalanceSheetPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const navigate = useNavigate();
 
-  import { parse, format } from "date-fns";
-
   const fetchBalanceSheet = () => {
     axios.get(`/api/balance-sheet/yearly?year=${selectedYear}`).then((res) => {
       const responseData = res.data || [];
