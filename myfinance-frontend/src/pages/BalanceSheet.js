@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { parse, format } from "date-fns";
-import api from "../api"; // Adjust the import based on your project structure
+import api from "../auth/api"; // Adjust the import based on your project structure
 export default function BalanceSheetPage() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -11,7 +11,7 @@ export default function BalanceSheetPage() {
 
   const fetchBalanceSheet = () => {
     api
-      .get(`/balance-sheet/yearly?year=${selectedYear}`, { withCredentials: true })
+      .get(`/balance-sheet/year/${selectedYear}`, { withCredentials: true })
       .then((res) => {
         const responseData = res.data || [];
         const allMonthsSet = new Set();
