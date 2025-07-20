@@ -1,52 +1,57 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";
-
+import { parse, format } from "date-fns";
+import api from "../api"; // Adjust the import based on your project structure
 export default function BalanceSheetPage() {
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
   const [months, setMonths] = useState([]);
   const [rowsByClassification, setRowsByClassification] = useState({});
   const [summaryByMonth, setSummaryByMonth] = useState({});
   const [loading, setLoading] = useState(false);
-  const [year, setYear] = useState(new Date().getFullYear());
-  const navigate = useNavigate();
 
   const fetchBalanceSheet = () => {
-    axios.get(`/api/balance-sheet/yearly?year=${selectedYear}`).then((res) => {
-      const responseData = res.data || [];
-      const allMonthsSet = new Set();
-      const classificationMap = {};
-      const monthSummaries = {};
+    api
+      .get(`/balance-sheet/yearly?year=${selectedYear}`, { withCredentials: true })
+      .then((res) => {
+        const responseData = res.data || [];
+        const allMonthsSet = new Set();
+        const classificationMap = {};
+        const monthSummaries = {};
 
-      responseData.forEach((monthBlock) => {
-        const monthKey = Object.keys(monthBlock.summaryByMonth)[0]; // e.g., "01-Jul-2025"
-        const parsedDate = parse(monthKey, "dd-MMM-yyyy", new Date());
-        const monthLabel = format(parsedDate, "MMM yyyy"); // e.g., "Jul 2025"
-        allMonthsSet.add(monthLabel);
-        monthSummaries[monthLabel] = monthBlock.summaryByMonth[monthKey];
+        responseData.forEach((monthBlock) => {
+          const monthKey = Object.keys(monthBlock.summaryByMonth)[0]; // e.g., "01-Jul-2025"
+          const parsedDate = parse(monthKey, "dd-MMM-yyyy", new Date());
+          const monthLabel = format(parsedDate, "MMM yyyy"); // e.g., "Jul 2025"
+          allMonthsSet.add(monthLabel);
+          monthSummaries[monthLabel] = monthBlock.summaryByMonth[monthKey];
 
-        monthBlock.rows.forEach((row) => {
-          const classification = row.classification;
-          if (!classificationMap[classification]) {
-            classificationMap[classification] = {};
-          }
-          classificationMap[classification][monthLabel] = row.balancesByMonth[monthKey];
+          monthBlock.rows.forEach((row) => {
+            const classification = row.classification;
+            if (!classificationMap[classification]) {
+              classificationMap[classification] = {};
+            }
+            classificationMap[classification][monthLabel] = row.balancesByMonth[monthKey];
+          });
         });
+
+        const sortedMonths = Array.from(allMonthsSet).sort(
+          (a, b) => new Date("01 " + a) - new Date("01 " + b)
+        );
+
+        setMonths(sortedMonths);
+        setRowsByClassification(classificationMap);
+        setSummaryByMonth(monthSummaries);
+      })
+      .catch((err) => {
+        if (err.response?.status === 401) {
+          window.location.href = "/login"; // session check
+        }
       });
-
-      const sortedMonths = Array.from(allMonthsSet).sort(
-        (a, b) => new Date("01 " + a) - new Date("01 " + b)
-      );
-
-      setMonths(sortedMonths);
-      setRowsByClassification(classificationMap);
-      setSummaryByMonth(monthSummaries);
-    });
   };
-
 
   useEffect(() => {
     fetchBalanceSheet();
-  }, [year]);
+  }, [selectedYear]);
 
   const formatCurrency = (val) =>
     `₹${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -55,14 +60,12 @@ export default function BalanceSheetPage() {
     setLoading(true);
     const today = new Date().toISOString().split("T")[0];
     try {
-      await axios.post(`/api/accounts/snapshot?date=${today}`);
+      await api.post(`/accounts/snapshot?date=${today}`, {}, { withCredentials: true });
       alert("Snapshot created successfully!");
       fetchBalanceSheet();
     } catch (error) {
-      if (error.response?.status === 409) {
+      if (error.response && error.response.status === 409) {
         alert("❗ Snapshot already exists in the last 2 weeks.");
-      } else if (error.response?.status === 401) {
-        navigate("/login");
       } else {
         alert("Failed to create snapshot.");
       }
@@ -77,15 +80,15 @@ export default function BalanceSheetPage() {
         <h2 className="text-xl font-bold">📉 Balance Sheet - Yearly View</h2>
         <div className="flex items-center gap-2">
           <select
-            value={year}
-            onChange={(e) => setYear(parseInt(e.target.value))}
             className="border rounded px-2 py-1 text-sm"
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(Number(e.target.value))}
           >
-            {[...Array(5)].map((_, i) => {
-              const y = new Date().getFullYear() - i;
+            {[...Array(6)].map((_, idx) => {
+              const year = currentYear - idx;
               return (
-                <option key={y} value={y}>
-                  {y}
+                <option key={year} value={year}>
+                  {year}
                 </option>
               );
             })}
