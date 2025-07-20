@@ -15,8 +15,8 @@ public class BalanceSheetController {
     private BalanceSheetService balanceSheetService;
 
     // GET /api/balance-sheet/last-six-months
-    @GetMapping("/last-six-months")
-    public List<BalanceSheetDTO> getLastSixMonthsBalanceSheet() {
-        return balanceSheetService.generateBalanceSheetLastSixMonths();
+    @GetMapping("/year/{year}")
+    public List<BalanceSheetDTO> getLastSixMonthsBalanceSheet(@PathVariable("year") int year) {
+        return balanceSheetService.generateBalanceSheet(year);
     }
 }

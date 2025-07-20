@@ -3,6 +3,7 @@ package com.nklmthr.finance.personal.service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,14 +30,24 @@ public class BalanceSheetService {
 	@Autowired
 	private AccountBalanceSnapshotRepository accountBalanceSnapshotRepository;
 
-	public List<BalanceSheetDTO> generateBalanceSheetLastSixMonths() {
+	public List<BalanceSheetDTO> generateBalanceSheet(int year) {
 		List<BalanceSheetDTO> result = new ArrayList<>();
-		LocalDate now = LocalDate.now().withDayOfMonth(1); // First day of this month
+		int currentYear = LocalDate.now().getYear();
 
-		for (int i = 0; i < 12; i++) {
-			LocalDate targetMonth = now.minusMonths(i);
-			BalanceSheetDTO dto = generateMonthlyBalanceSheet(targetMonth);
-			result.add(dto);
+		if (year == currentYear) {
+			// Rolling last 12 months including current month
+			for (int i = 11; i >= 0; i--) {
+				LocalDate targetMonth = LocalDate.now().minusMonths(i).withDayOfMonth(1);
+				BalanceSheetDTO dto = generateMonthlyBalanceSheet(targetMonth);
+				result.add(dto);
+			}
+		} else {
+			// All 12 months of given year
+			for (int month = 1; month <= 12; month++) {
+				LocalDate targetMonth = LocalDate.of(year, month, 1);
+				BalanceSheetDTO dto = generateMonthlyBalanceSheet(targetMonth);
+				result.add(dto);
+			}
 		}
 
 		return result;
