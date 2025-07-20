@@ -33,7 +33,7 @@ public class BalanceSheetService {
 		List<BalanceSheetDTO> result = new ArrayList<>();
 		LocalDate now = LocalDate.now().withDayOfMonth(1); // First day of this month
 
-		for (int i = 0; i < 6; i++) {
+		for (int i = 0; i < 12; i++) {
 			LocalDate targetMonth = now.minusMonths(i);
 			BalanceSheetDTO dto = generateMonthlyBalanceSheet(targetMonth);
 			result.add(dto);
