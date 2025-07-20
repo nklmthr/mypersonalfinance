@@ -53,8 +53,15 @@ export default function BalanceSheetPage() {
     fetchBalanceSheet();
   }, [selectedYear]);
 
-  const formatCurrency = (val) =>
-    `₹${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const formatCurrency = (val) => {
+    if (val === undefined || val === null || isNaN(val)) return "-";
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(val);
+  };
 
   const handleSnapshot = async () => {
     setLoading(true);
@@ -84,7 +91,7 @@ export default function BalanceSheetPage() {
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
           >
-            {[...Array(6)].map((_, idx) => {
+            {[...Array(10)].map((_, idx) => {
               const year = currentYear - idx;
               return (
                 <option key={year} value={year}>
