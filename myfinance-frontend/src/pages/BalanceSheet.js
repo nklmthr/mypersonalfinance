@@ -10,40 +10,41 @@ export default function BalanceSheetPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const navigate = useNavigate();
 
+  import { parse, format } from "date-fns";
+
   const fetchBalanceSheet = () => {
-    axios
-      .get(`/api/balance-sheet/year/${year}`)
-      .then((res) => {
-        const responseData = res.data || [];
-        const allMonths = Array.from({ length: 12 }, (_, i) =>
-          new Date(year, i).toLocaleString("default", { month: "short", year: "numeric" })
-        );
+    axios.get(`/api/balance-sheet/yearly?year=${selectedYear}`).then((res) => {
+      const responseData = res.data || [];
+      const allMonthsSet = new Set();
+      const classificationMap = {};
+      const monthSummaries = {};
 
-        const classificationMap = {};
-        const monthSummaries = {};
+      responseData.forEach((monthBlock) => {
+        const monthKey = Object.keys(monthBlock.summaryByMonth)[0]; // e.g., "01-Jul-2025"
+        const parsedDate = parse(monthKey, "dd-MMM-yyyy", new Date());
+        const monthLabel = format(parsedDate, "MMM yyyy"); // e.g., "Jul 2025"
+        allMonthsSet.add(monthLabel);
+        monthSummaries[monthLabel] = monthBlock.summaryByMonth[monthKey];
 
-        responseData.forEach((monthBlock) => {
-          const month = Object.keys(monthBlock.summaryByMonth)[0];
-          monthSummaries[month] = monthBlock.summaryByMonth[month];
-          monthBlock.rows.forEach((row) => {
-            const classification = row.classification;
-            if (!classificationMap[classification]) classificationMap[classification] = {};
-            classificationMap[classification][month] = row.balancesByMonth[month];
-          });
+        monthBlock.rows.forEach((row) => {
+          const classification = row.classification;
+          if (!classificationMap[classification]) {
+            classificationMap[classification] = {};
+          }
+          classificationMap[classification][monthLabel] = row.balancesByMonth[monthKey];
         });
-
-        setMonths(allMonths);
-        setRowsByClassification(classificationMap);
-        setSummaryByMonth(monthSummaries);
-      })
-      .catch((err) => {
-        if (err.response && err.response.status === 401) {
-          navigate("/login");
-        } else {
-          console.error("Error fetching balance sheet:", err);
-        }
       });
+
+      const sortedMonths = Array.from(allMonthsSet).sort(
+        (a, b) => new Date("01 " + a) - new Date("01 " + b)
+      );
+
+      setMonths(sortedMonths);
+      setRowsByClassification(classificationMap);
+      setSummaryByMonth(monthSummaries);
+    });
   };
+
 
   useEffect(() => {
     fetchBalanceSheet();
