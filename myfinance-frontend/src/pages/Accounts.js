@@ -25,7 +25,7 @@ export default function Accounts() {
 	const [editData, setEditData] = useState({
 		id: null,
 		name: "",
-		balance: "", // ✅ string
+		balance: "", 
 		institutionId: "",
 		accountTypeId: "",
 	});
@@ -126,28 +126,27 @@ export default function Accounts() {
 		const setData = isEdit ? setEditData : setNewAccount;
 		const saveFn = isEdit ? handleEditSave : handleAdd;
 
-		const handleKeyDown = (e) => {
-			if (e.key === "Enter") {
-				// prevent Save if user is typing in an input or select
-				const tag = e.target.tagName.toLowerCase();
-				const isInput = tag === "input" || tag === "select" || tag === "textarea";
-
-				if (isInput) return;
-
-				e.preventDefault();
-				saveFn();
-			}
-			if (e.key === "Escape") {
-				isEdit ? setShowEditModal(false) : setShowAddModal(false);
-			}
-		};
+		useEffect(() => {
+			const listener = (e) => {
+				if (e.key === "Escape") {
+					isEdit ? setShowEditModal(false) : setShowAddModal(false);
+				}
+				if (e.key === "Enter" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "SELECT") {
+					e.preventDefault();
+					saveFn();
+				}
+			};
+			document.addEventListener("keydown", listener);
+			return () => document.removeEventListener("keydown", listener);
+		}, []);
 
 
 		return (
 			<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
 				<div className="bg-white p-6 rounded w-full max-w-lg space-y-4">
 					<h3 className="text-lg font-semibold">{isEdit ? "Edit" : "Add"} Account</h3>
-					<form onKeyDown={handleKeyDown} onSubmit={(e) => { e.preventDefault(); saveFn(); }} className="space-y-4">
+					<form onSubmit={(e) => { e.preventDefault(); saveFn(); }} className="space-y-4">
+
 						<input
 							className={inputClass}
 							placeholder="Name"
@@ -170,6 +169,7 @@ export default function Accounts() {
 							<input
 								type="text"
 								inputMode="decimal"
+								autoFocus
 								className={inputClass}
 								placeholder="Balance"
 								value={data.balance}
@@ -257,7 +257,7 @@ export default function Accounts() {
 			</div>
 
 			{showAddModal && <AccountModal />}
-			{showEditModal && <AccountModal isEdit />}
+			{showEditModal && <AccountModal isEdit key={editData.id || "new"}/>}
 		</div>
 	);
 }
