@@ -22,8 +22,7 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 
 	// Slash-based fallback pattern
 	private static final Pattern GENERIC_PATTERN = Pattern.compile(
-			"Rs\\.([\\d\\.]+) spent on your SBI Credit Card ending .*? at (.*?) on (\\d{2}[/-]\\d{2}[/-]\\d{2})",
-			Pattern.CASE_INSENSITIVE);
+			"Rs\\.([\\d,]+\\.\\d{2})\\s+spent on your SBI Credit Card.*?at (.*?) on");
 
 	private static final Pattern REF_PATTERN = Pattern.compile("Ref No\\.\\s*(\\d+)");
 
@@ -47,12 +46,11 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 		try {
 			Matcher m = GENERIC_PATTERN.matcher(emailContent);
 			if (m.find()) {
-				// Amount
-				tx.setAmount(new BigDecimal(m.group(1)));
+				// Amount (remove commas)
+				tx.setAmount(new BigDecimal(m.group(1).replace(",", "")));
 
 				// Merchant
 				tx.setDescription(m.group(2).trim());
-
 			} else {
 				logger.warn("No SBI Credit Card match found in: {}", emailContent);
 			}
@@ -60,7 +58,7 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 			// UPI Ref
 			Matcher ref = REF_PATTERN.matcher(emailContent);
 			if (ref.find()) {
-				tx.setDescription(tx.getDescription()+" UPI Ref " + ref.group(1));
+				tx.setDescription(tx.getDescription() + " UPI Ref " + ref.group(1));
 			}
 
 			// Account selection
@@ -76,5 +74,6 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 		}
 		return tx;
 	}
+
 
 }
