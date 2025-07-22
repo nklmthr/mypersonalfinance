@@ -14,19 +14,21 @@ import {
   XMarkIcon,
   EnvelopeIcon,
 } from "@heroicons/react/24/outline";
-import axios from "axios";
+import api from "./../auth/api"
 
 export default function DashboardLayout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(null);
   const [gmailConnected, setGmailConnected] = useState(false);
 
   useEffect(() => {
     const checkGmailStatus = async () => {
       try {
-        const res = await axios.get("/api/gmail/status", { withCredentials: true });
-        setGmailConnected(res.data.connected);
+        const res = await api.get("/gmail/status", { withCredentials: true }); // ⬅️ missing `await` added
+        console.log("Gmail connected?", res.data.connected);
+        setGmailConnected(res.data.connected === true);
       } catch (err) {
         console.error("Failed to check Gmail status:", err);
+        setGmailConnected(false); // fallback on failure
       }
     };
 
@@ -108,19 +110,33 @@ export default function DashboardLayout({ children }) {
               Profile
             </Link>
 
-            {gmailConnected ? (
-              <span className="flex items-center gap-1 text-green-700 text-sm px-3 py-2 rounded border border-green-300 bg-green-50">
-                <EnvelopeIcon className="h-4 w-4" />
-                Gmail Connected
-              </span>
-            ) : (
-              <button
-                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition text-sm"
-                onClick={handleConnectGmail}
-              >
-                Connect Gmail
-              </button>
-            )}
+			{gmailConnected === null ? null : gmailConnected ? (
+			  <div
+			    className="flex items-center gap-2 text-green-700 text-sm px-3 py-2 rounded border border-green-300 bg-green-50"
+			    title="Your Gmail account is connected"
+			  >
+			    <img
+			      src="/gmail-icon.png"
+			      alt="Gmail Connected"
+			      className="h-5 w-5"
+			    />
+			    Connected
+			  </div>
+			) : (
+			  <button
+			    className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition text-sm"
+			    onClick={handleConnectGmail}
+			    title="Connect your Gmail account"
+			  >
+			    <img
+			      src="/gmail-notconnected-icon.png"
+			      alt="Gmail Not Connected"
+			      className="h-5 w-5"
+			    />
+			    Connect Gmail
+			  </button>
+			)}
+
 
             <Link to="/logout" className="text-sm font-medium text-red-600 hover:underline">
               Logout

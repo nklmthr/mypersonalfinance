@@ -47,6 +47,16 @@ export default function CategorySpendSummary() {
   const toggleExpand = (id) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
+  const formatCurrency = (val) => {
+    if (!Number.isFinite(val)) return "₹0.00";
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Math.abs(val));
+  };
+
 
   const renderCategoryTree = (node, level = 0) => {
     if (!node) return null;
@@ -83,10 +93,7 @@ export default function CategorySpendSummary() {
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            {node.categoryName}: ₹
-            {Number.isFinite(node.amount)
-              ? Math.abs(node.amount).toFixed(2)
-              : "0.00"}
+            {node.categoryName}: {formatCurrency(node.amount)}
           </motion.a>
         </div>
 
