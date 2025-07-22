@@ -51,7 +51,7 @@ public class CategorySpendService {
 			} else {
 				categorySums.put(categoryId, current.subtract(tx.getAmount()));
 			}
-			logger.info("Processing TX {} with category {}", tx.getDescription(), tx.getCategory().getName());
+			logger.debug("Processing TX {} with category {}", tx.getDescription(), tx.getCategory().getName());
 		}
 		logger.info("Transactions with no category: {}", uncategorized);
 		logger.info("Category sums built for {} categories", categorySums.size());

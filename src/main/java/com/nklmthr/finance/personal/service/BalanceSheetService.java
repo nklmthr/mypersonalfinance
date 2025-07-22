@@ -35,14 +35,14 @@ public class BalanceSheetService {
 
 		if (year == currentYear) {
 			// Rolling last 12 months including current month
-			for (int i = 11; i >= 0; i--) {
+			for (int i = 0; i <= 11; i++) {
 				LocalDate targetMonth = LocalDate.now().minusMonths(i).withDayOfMonth(1);
 				BalanceSheetDTO dto = generateMonthlyBalanceSheet(targetMonth);
 				result.add(dto);
 			}
 		} else {
 			// All 12 months of given year
-			for (int month = 1; month <= 12; month++) {
+			for (int month = 12; month > 0; month--) {
 				LocalDate targetMonth = LocalDate.of(year, month, 1);
 				BalanceSheetDTO dto = generateMonthlyBalanceSheet(targetMonth);
 				result.add(dto);

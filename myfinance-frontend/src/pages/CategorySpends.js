@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
+import api from "./../auth/api";
 import {
   ChartBarIcon,
   ArrowPathIcon,
@@ -27,7 +27,7 @@ export default function CategorySpendSummary() {
     setLoading(true);
     NProgress.start();
     try {
-      const res = await axios.get("/api/category-spends", {
+      const res = await api.get("/category-spends", {
         params: { month: selectedMonth, year: selectedYear },
       });
       setSpendData(res.data);
@@ -55,7 +55,7 @@ export default function CategorySpendSummary() {
     const hasChildren = node.children && node.children.length > 0;
     const isExpanded = expanded[node.categoryId];
     const isNegative = node.amount < 0;
-
+	const isZero = node.amount === 0;
     return (
       <div key={node.categoryId}>
         <div
@@ -79,7 +79,7 @@ export default function CategorySpendSummary() {
             transition={{ duration: 0.3 }}
             href={`/transactions?categoryId=${node.categoryId}&month=${formattedMonth}`}
             className={`ml-1 text-sm font-medium hover:underline ${
-              isNegative ? "text-red-600" : "text-green-600"
+              isZero? "text-blue-600": isNegative ? "text-red-600" : "text-green-600"
             }`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -99,7 +99,7 @@ export default function CategorySpendSummary() {
               transition={{ duration: 0.3 }}
             >
               {node.children.map((child) =>
-                renderCategoryTree(child, level + 1)
+                renderCategoryTree(child, level + 3)
               )}
             </motion.div>
           )}

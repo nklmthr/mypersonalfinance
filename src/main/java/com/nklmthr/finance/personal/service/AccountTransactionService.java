@@ -48,8 +48,11 @@ public class AccountTransactionService {
 	public Page<AccountTransaction> getFilteredTransactions(Pageable pageable, String month, String accountId,
 			String type, String search, String categoryId) {
 		AppUser appUser = appUserService.getCurrentUser();
-		Specification<AccountTransaction> spec = Specification
-				.where(AccountTransactionSpecifications.isRootTransaction());
+		Specification<AccountTransaction> spec = Specification.where(null);
+
+		if (StringUtils.isBlank(categoryId)) {
+		    spec = spec.and(AccountTransactionSpecifications.isRootTransaction());
+		}
 		if (StringUtils.isNotBlank(accountId)) {
 			spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
 		}
@@ -82,6 +85,11 @@ public class AccountTransactionService {
 			}
 			if (tx.getExplanation() != null && tx.getExplanation().length() > 40) {
 				tx.setExplanation(tx.getExplanation().substring(0, 40));
+			}
+			if(tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
+				tx.setAmount(tx.getChildren().stream()
+						.map(AccountTransaction::getAmount)
+						.reduce(BigDecimal.ZERO, BigDecimal::add));
 			}
 		});
 		return page;
