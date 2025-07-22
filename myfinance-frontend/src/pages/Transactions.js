@@ -703,9 +703,11 @@ export default function Transactions() {
 					mode={editTx.id ? "edit" : "add"}
 				/>
 			)}
-
-
-			{loading && <div style={overlayStyle} />}
+			{loading && (
+				<div className="fixed inset-0 bg-white bg-opacity-40 z-50 flex items-center justify-center">
+					<div className="loader ease-linear rounded-full border-4 border-t-4 border-blue-500 h-10 w-10 animate-spin"></div>
+				</div>
+			)}
 		</div>
 
 	);

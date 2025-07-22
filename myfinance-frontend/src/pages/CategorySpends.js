@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
+import NProgress from "nprogress";
+import "nprogress/nprogress.css";
 import {
   ChartBarIcon,
   ArrowPathIcon,
@@ -19,8 +21,11 @@ export default function CategorySpendSummary() {
   const [spendData, setSpendData] = useState(null);
   const [expanded, setExpanded] = useState({});
   const formattedMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-
+  const [loading, setLoading] = useState(false);
+  NProgress.configure({ showSpinner: false });
   const fetchData = async () => {
+    setLoading(true);
+    NProgress.start();
     try {
       const res = await axios.get("/api/category-spends", {
         params: { month: selectedMonth, year: selectedYear },
@@ -28,8 +33,12 @@ export default function CategorySpendSummary() {
       setSpendData(res.data);
     } catch (err) {
       console.error("Fetch error:", err);
+    } finally {
+      NProgress.done();
+      setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchData();
@@ -143,6 +152,11 @@ export default function CategorySpendSummary() {
           <p className="text-gray-500 text-sm">Loading...</p>
         )}
       </div>
+	  {loading && (
+	    <div className="fixed inset-0 bg-white bg-opacity-50 z-50 flex items-center justify-center">
+	      <div className="loader ease-linear rounded-full border-4 border-t-4 border-indigo-500 h-10 w-10 animate-spin"></div>
+	    </div>
+	  )}
     </div>
   );
 }

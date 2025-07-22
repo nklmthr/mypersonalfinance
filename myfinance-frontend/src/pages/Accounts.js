@@ -36,20 +36,9 @@ export default function Accounts() {
 		fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
 	}, [selectedAccountTypeId, selectedInstitutionId]);
 
-	const fetchAll = async () => {
-		try {
-			const [instRes, typeRes] = await Promise.all([
-				api.get("/institutions"),
-				api.get("/account-types"),
-			]);
-			setInstitutions(instRes.data);
-			setAccountTypes(typeRes.data);
-		} catch (err) {
-			console.error("Fetch error:", err);
-		}
-	};
-
 	const fetchAccounts = async (accountTypeId = "", institutionId = "") => {
+		setLoading(true);
+		NProgress.start();
 		try {
 			const params = {};
 			if (accountTypeId) params.accountTypeId = accountTypeId;
@@ -59,9 +48,15 @@ export default function Accounts() {
 		} catch (err) {
 			console.error("Fetch accounts error:", err);
 		}
+		finally {
+			NProgress.done();
+			setLoading(false);
+		}
 	};
 
 	const handleAdd = async () => {
+		setLoading(true);
+		NProgress.start();
 		try {
 			await api.post("/accounts", {
 				name: newAccount.name,
@@ -74,6 +69,10 @@ export default function Accounts() {
 			fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
 		} catch (err) {
 			console.error("Add error:", err);
+		}
+		finally {
+			NProgress.done();
+			setLoading(false);
 		}
 	};
 
@@ -89,6 +88,8 @@ export default function Accounts() {
 	};
 
 	const handleEditSave = async () => {
+		setLoading(true);
+		NProgress.start();
 		try {
 			await api.put(`/accounts/${editData.id}`, {
 				id: editData.id,
@@ -102,10 +103,16 @@ export default function Accounts() {
 		} catch (err) {
 			console.error("Update error:", err);
 		}
+		finally {
+			NProgress.done();
+			setLoading(false);
+		}
 	};
 
 	const handleDelete = async (id) => {
 		if (!window.confirm("Delete this account?")) return;
+		setLoading(true);
+		NProgress.start();
 		try {
 			await api.delete(`/accounts/${id}`);
 			fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
@@ -116,6 +123,10 @@ export default function Accounts() {
 				alert("An unexpected error occurred.");
 			}
 			console.error("Delete error:", err);
+		}
+		finally {
+			NProgress.done();
+			setLoading(false);
 		}
 	};
 
@@ -258,6 +269,12 @@ export default function Accounts() {
 
 			{showAddModal && <AccountModal />}
 			{showEditModal && <AccountModal isEdit key={editData.id || "new"}/>}
+			{loading && (
+				<div className="fixed inset-0 bg-white bg-opacity-40 z-50 flex items-center justify-center">
+					<div className="loader ease-linear rounded-full border-4 border-t-4 border-blue-500 h-10 w-10 animate-spin"></div>
+				</div>
+			)}
 		</div>
+		
 	);
 }

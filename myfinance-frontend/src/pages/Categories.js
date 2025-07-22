@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "./../auth/api";
+import NProgress from "nprogress";
+import "nprogress/nprogress.css";
 
 export default function Categories() {
   const [categories, setCategories] = useState([]);
@@ -10,19 +12,25 @@ export default function Categories() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [newCategory, setNewCategory] = useState({ name: "", parentId: "" });
   const [editCategory, setEditCategory] = useState({ id: "", name: "", parentId: "" });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchCategories();
   }, []);
 
   const fetchCategories = async () => {
+    setLoading(true);
+    NProgress.start();
     try {
-      const res = await axios.get("/api/categories");
+      const res = await api.get("/categories");
       const nestedTree = res.data;
       setCategories(nestedTree);
       setAllCategories(flattenTree(nestedTree));
     } catch (err) {
       console.error("Failed to fetch categories:", err);
+    } finally {
+      setLoading(false);
+      NProgress.done();
     }
   };
 
@@ -47,57 +55,72 @@ export default function Categories() {
   const isExpanded = (id) => expanded.has(id);
 
   const handleAdd = async () => {
+    setLoading(true);
+    NProgress.start();
     try {
       const payload = {
         name: newCategory.name,
         parent: newCategory.parentId ? { id: newCategory.parentId } : null,
       };
-      await axios.post("/api/categories", payload);
+      await api.post("/categories", payload);
       setNewCategory({ name: "", parentId: "" });
       setShowAddModal(false);
       fetchCategories();
     } catch (err) {
       console.error("Add category failed:", err);
+    } finally {
+      setLoading(false);
+      NProgress.done();
     }
   };
 
   const handleEditSave = async () => {
+    setLoading(true);
+    NProgress.start();
     try {
       const payload = {
         name: editCategory.name,
         parent: editCategory.parentId ? { id: editCategory.parentId } : null,
       };
-      await axios.put(`/api/categories/${editCategory.id}`, payload);
+      await api.put(`/categories/${editCategory.id}`, payload);
       setShowEditModal(false);
       fetchCategories();
     } catch (err) {
       console.error("Edit category failed:", err);
+    } finally {
+      setLoading(false);
+      NProgress.done();
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this category?")) return;
+    setLoading(true);
+    NProgress.start();
     try {
-      await axios.delete(`/api/categories/${id}`);
+      await api.delete(`/categories/${id}`);
       fetchCategories();
     } catch (err) {
       console.error("Delete category failed:", err);
+    } finally {
+      setLoading(false);
+      NProgress.done();
     }
   };
 
   const inputClass =
-    "border px-3 py-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+    "border px-3 py-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50";
 
   const renderCategoryTree = (nodes, depth = 0) =>
     nodes.map((cat) => (
       <div
         key={cat.id}
-        className={`ml-${depth * 2} mt-1 border-l border-gray-300 pl-2`}
+        className={`ml-${depth * 2} mt-1 border-l border-blue-200 pl-2`}
       >
-        <div className="flex justify-between items-center text-sm text-gray-800 hover:bg-gray-100 px-1 py-0.5 rounded">
+        <div className="flex justify-between items-center text-sm text-gray-800 hover:bg-blue-50 px-1 py-0.5 rounded">
           <div className="flex items-center gap-1 cursor-pointer" onClick={() => toggleExpand(cat.id)}>
             {cat.children && cat.children.length > 0 && (
-              <span className="text-gray-500 text-xs w-4">{isExpanded(cat.id) ? "▼" : "▶"}</span>
+              <span className="text-blue-500 text-xs w-4">{isExpanded(cat.id) ? "▼" : "▶"}</span>
             )}
             <span className="font-medium">{cat.name}</span>
           </div>
@@ -140,7 +163,7 @@ export default function Categories() {
   );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 bg-blue-50 min-h-screen">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-semibold text-gray-800">📂 Category Hierarchy</h2>
         <button
@@ -151,7 +174,7 @@ export default function Categories() {
         </button>
       </div>
 
-      <div className="bg-white shadow rounded p-4 text-sm leading-tight border border-gray-200">
+      <div className="bg-white shadow rounded p-4 text-sm leading-tight border border-blue-200">
         {categories.length === 0 ? (
           <div className="text-gray-500">No categories found.</div>
         ) : (
@@ -231,6 +254,12 @@ export default function Categories() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {loading && (
+        <div className="fixed inset-0 bg-white bg-opacity-50 flex items-center justify-center z-50">
+          <div className="loader ease-linear rounded-full border-4 border-t-4 border-blue-600 h-10 w-10 animate-spin"></div>
+        </div>
       )}
     </div>
   );

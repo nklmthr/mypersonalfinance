@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { parse, format } from "date-fns";
-import api from "../auth/api"; // Adjust the import based on your project structure
+import api from "../auth/api"; 
+import NProgress from "nprogress";
+import "nprogress/nprogress.css";
+
 export default function BalanceSheetPage() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -8,8 +11,10 @@ export default function BalanceSheetPage() {
   const [rowsByClassification, setRowsByClassification] = useState({});
   const [summaryByMonth, setSummaryByMonth] = useState({});
   const [loading, setLoading] = useState(false);
-
+  NProgress.configure({ showSpinner: false });
   const fetchBalanceSheet = () => {
+    setLoading(true);
+    NProgress.start();
     api
       .get(`/balance-sheet/year/${selectedYear}`, { withCredentials: true })
       .then((res) => {
@@ -19,9 +24,9 @@ export default function BalanceSheetPage() {
         const monthSummaries = {};
 
         responseData.forEach((monthBlock) => {
-          const monthKey = Object.keys(monthBlock.summaryByMonth)[0]; // e.g., "01-Jul-2025"
+          const monthKey = Object.keys(monthBlock.summaryByMonth)[0];
           const parsedDate = parse(monthKey, "dd-MMM-yyyy", new Date());
-          const monthLabel = format(parsedDate, "MMM yyyy"); // e.g., "Jul 2025"
+          const monthLabel = format(parsedDate, "MMM yyyy");
           allMonthsSet.add(monthLabel);
           monthSummaries[monthLabel] = monthBlock.summaryByMonth[monthKey];
 
@@ -44,10 +49,15 @@ export default function BalanceSheetPage() {
       })
       .catch((err) => {
         if (err.response?.status === 401) {
-          window.location.href = "/login"; // session check
+          window.location.href = "/login";
         }
+      })
+      .finally(() => {
+        NProgress.done();
+        setLoading(false);
       });
   };
+
 
   useEffect(() => {
     fetchBalanceSheet();
@@ -146,6 +156,11 @@ export default function BalanceSheetPage() {
           </tbody>
         </table>
       </div>
+	  {loading && (
+	    <div className="fixed inset-0 bg-white bg-opacity-40 z-50 flex items-center justify-center">
+	      <div className="loader ease-linear rounded-full border-4 border-t-4 border-blue-500 h-10 w-10 animate-spin"></div>
+	    </div>
+	  )}
     </div>
   );
 }
