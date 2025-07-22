@@ -62,5 +62,18 @@ public class GmailAuthHelper {
 	    .setAccessType("offline")
 	    .build();
 	}
+	
+	public boolean isUserConnected(String username) {
+		try {
+			AppUser user = appUserService.findByUsername(username);
+			return user.getGmailAccessToken() != null
+					&& user.getGmailRefreshToken() != null
+					&& (user.getGmailTokenExpiry() == null || user.getGmailTokenExpiry() > System.currentTimeMillis());
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+
 
 }

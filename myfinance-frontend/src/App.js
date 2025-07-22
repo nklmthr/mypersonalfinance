@@ -13,6 +13,7 @@ import Logout from "./pages/Logout";
 import RequireAuth from "./auth/RequireAuth";
 import Signup from "./pages/Signup";
 import Overview from "./pages/Overview";
+import Profile from "./pages/Profile";
 export default function App() {
 	return (
 		<Router>
@@ -28,6 +29,16 @@ export default function App() {
 						<RequireAuth>
 							<DashboardLayout pageTitle="🏠 Home">
 								<Overview />
+							</DashboardLayout>
+						</RequireAuth>
+					}
+				/>
+				<Route
+					path="/profile"
+					element={
+						<RequireAuth>
+							<DashboardLayout pageTitle="🏠 Home">
+								{<Profile />}
 							</DashboardLayout>
 						</RequireAuth>
 					}
