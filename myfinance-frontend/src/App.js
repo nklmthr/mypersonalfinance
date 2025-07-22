@@ -14,6 +14,7 @@ import RequireAuth from "./auth/RequireAuth";
 import Signup from "./pages/Signup";
 import Overview from "./pages/Overview";
 import Profile from "./pages/Profile";
+import UploadedStatements from "./pages/UploadedStatements";
 export default function App() {
 	return (
 		<Router>
@@ -33,6 +34,17 @@ export default function App() {
 						</RequireAuth>
 					}
 				/>
+				<Route
+					path="/uploaded-statements"
+					element={
+						<RequireAuth>
+							<DashboardLayout pageTitle="🏠 Home">
+								<UploadedStatements />
+							</DashboardLayout>
+						</RequireAuth>
+					}
+				/>
+
 				<Route
 					path="/profile"
 					element={

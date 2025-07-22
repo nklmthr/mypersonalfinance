@@ -77,6 +77,10 @@ export default function DashboardLayout({ children }) {
             <CreditCardIcon className="h-5 w-5" />
             Transactions
           </Link>
+		  <Link to="/uploaded-statements" onClick={handleNavClick} className="flex items-center gap-2 hover:text-blue-500">
+		    <FolderIcon className="h-5 w-5" />
+		    Uploaded Statements
+		  </Link>
           <Link to="/accounts" onClick={handleNavClick} className="flex items-center gap-2 hover:text-blue-500">
             <Squares2X2Icon className="h-5 w-5" />
             Accounts
