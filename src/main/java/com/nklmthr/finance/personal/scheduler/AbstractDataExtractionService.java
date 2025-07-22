@@ -65,7 +65,8 @@ public abstract class AbstractDataExtractionService {
 						.build();
 
 				Credential credential = flow.loadCredential("user");
-				if (StringUtils.isBlank(credential.getAccessToken()) || StringUtils.isAllBlank(credential.getRefreshToken())) {
+				if (credential == null || StringUtils.isBlank(credential.getAccessToken())
+						|| StringUtils.isAllBlank(credential.getRefreshToken())) {
 					logger.warn("Gmail not connected for user: " + appUser.getUsername());
 					return; // Skip this user if token missing
 				}
