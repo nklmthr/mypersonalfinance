@@ -40,7 +40,7 @@ export default function ProfilePage() {
   const handleDisconnectGmail = async () => {
     try {
       setLoading(true);
-      await api.post("/api/gmail/disconnect");
+      await api.post("/gmail/disconnect");
       setGmailConnected(false);
       alert("Gmail disconnected");
     } catch (err) {
