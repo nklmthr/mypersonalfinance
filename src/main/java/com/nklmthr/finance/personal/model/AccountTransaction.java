@@ -95,4 +95,9 @@ public class AccountTransaction {
     
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     private AppUser appUser;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploaded_statement_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private UploadedStatement uploadedStatement;
 }

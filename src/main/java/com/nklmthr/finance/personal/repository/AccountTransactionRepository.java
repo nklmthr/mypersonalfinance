@@ -15,6 +15,7 @@ import org.springframework.stereotype.Repository;
 
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.model.UploadedStatement;
 
 @Repository
 public interface AccountTransactionRepository extends JpaRepository<AccountTransaction, String> {
@@ -42,4 +43,8 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 	Optional<AccountTransaction> findByAppUserAndId(AppUser appUser, String id);
 
 	void deleteByAppUserAndId(AppUser appUser, String id);
+
+	List<AccountTransaction> findByAppUserAndUploadedStatement(AppUser appUser, UploadedStatement statement);
+
+	void deleteAllByAppUserAndIdIn(AppUser appUser, List<String> list);
 }

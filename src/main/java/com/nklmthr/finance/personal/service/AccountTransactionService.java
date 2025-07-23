@@ -26,6 +26,7 @@ import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.model.UploadedStatement;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 import com.nklmthr.finance.personal.repository.AccountTransactionSpecifications;
 
@@ -83,8 +84,8 @@ public class AccountTransactionService {
 			if (tx.getDescription() != null && tx.getDescription().length() > 40) {
 				tx.setDescription(tx.getDescription().substring(0, 40));
 			}
-			if (tx.getExplanation() != null && tx.getExplanation().length() > 40) {
-				tx.setExplanation(tx.getExplanation().substring(0, 40));
+			if (tx.getExplanation() != null && tx.getExplanation().length() > 60) {
+				tx.setExplanation(tx.getExplanation().substring(0, 60));
 			}
 			if(tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
 				tx.setAmount(tx.getChildren().stream()
@@ -215,6 +216,7 @@ public class AccountTransactionService {
 	public List<AccountTransaction> save(List<AccountTransaction> transactions) {
 		AppUser appUser = appUserService.getCurrentUser();
 		transactions.forEach(tx -> tx.setAppUser(appUser));
+		logger.info("Saving {} transactions for user: {}", transactions.size(), appUser.getUsername());
 		return accountTransactionRepository.saveAll(transactions);
 	}
 
@@ -325,6 +327,26 @@ public class AccountTransactionService {
 				month, accountId, type, search, categoryId);
 
 		return accountTransactionRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "date"));
+	}
+
+	public List<AccountTransaction> getTransactionsByUploadedStatement(UploadedStatement statement) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (statement == null || statement.getId() == null) {
+			return List.of();
+		}
+		return accountTransactionRepository.findByAppUserAndUploadedStatement(appUser, statement);
+	}
+
+	public void deleteAll(List<AccountTransaction> transactions) {
+		if (transactions == null || transactions.isEmpty()) {
+			return; // Nothing to delete
+		}
+		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Deleting {} transactions for user: {}", transactions.size(), appUser.getUsername());
+		accountTransactionRepository.deleteAllByAppUserAndIdIn(appUser, transactions.stream()
+				.map(AccountTransaction::getId).toList());
+		logger.info("Deleted {} transactions successfully", transactions.size());
+		
 	}
 
 }

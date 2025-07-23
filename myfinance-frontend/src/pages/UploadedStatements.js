@@ -179,7 +179,6 @@ export default function StatementUploadPage() {
               <th className="px-4 py-2 border-b">Account</th>
               <th className="px-4 py-2 border-b">Uploaded At</th>
               <th className="px-4 py-2 border-b">Status</th>
-              <th className="px-4 py-2 border-b text-center">Transactions</th>
               <th className="px-4 py-2 border-b text-center">Actions</th>
             </tr>
           </thead>
@@ -190,7 +189,6 @@ export default function StatementUploadPage() {
                 <td className="px-4 py-2">{s.account?.name || "—"}</td>
                 <td className="px-4 py-2">{dayjs(s.uploadedAt).format("DD MMM YYYY, HH:mm")}</td>
                 <td className="px-4 py-2">{s.status}</td>
-                <td className="px-4 py-2 text-center">{s.transactionCount ?? 0}</td>
                 <td className="px-4 py-2 text-center space-x-2">
                   {s.status === "UPLOADED" && (
                     <button
@@ -205,15 +203,15 @@ export default function StatementUploadPage() {
                       className="text-red-600 hover:underline"
                       onClick={() => handleDeleteTransactions(s.id)}
                     >
-                      Delete Txns
+                      Remove Txns
                     </button>
-                  )}
+                  )} |
 				  {["UPLOADED", "PROCESSED"].includes(s.status) && (
 				    <button
 				      className="text-red-500 hover:underline"
 				      onClick={() => handleDeleteStatement(s.id)}
 				    >
-				      Delete
+				      Delete Stmt
 				    </button>
 				  )}
                 </td>

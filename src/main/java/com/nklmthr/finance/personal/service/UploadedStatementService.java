@@ -1,6 +1,8 @@
 package com.nklmthr.finance.personal.service;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -12,23 +14,29 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.nklmthr.finance.personal.model.Account;
+import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.UploadedStatement;
 import com.nklmthr.finance.personal.model.UploadedStatement.Status;
-import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 import com.nklmthr.finance.personal.repository.UploadedStatementRepository;
+import com.nklmthr.finance.personal.upload.parser.SBICsvParser;
+import com.nklmthr.finance.personal.upload.parser.StatementParser;
 
 import jakarta.transaction.Transactional;
 
 @Service
 public class UploadedStatementService {
+	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UploadedStatementService.class);
 
 	@Autowired
-	private UploadedStatementRepository statementRepository;
+	private UploadedStatementRepository uploadedStatementRepository;
 	@Autowired
-	private AccountTransactionRepository transactionRepository;
+	private AccountTransactionService accountTransactionService;
 	@Autowired
 	private AppUserService appUserService;
+	
+	@Autowired
+	private CategoryService categoryService;
 
 	@Autowired
 	private AccountService accountService;
@@ -52,61 +60,69 @@ public class UploadedStatementService {
 		statement.setUploadedAt(LocalDateTime.now());
 		statement.setStatus(Status.UPLOADED);
 
-		return statementRepository.save(statement);
+		return uploadedStatementRepository.save(statement);
 	}
 
 	public List<UploadedStatement> listStatements() {
 		AppUser appUser = appUserService.getCurrentUser();
-		return statementRepository.findAllByAppUser(appUser);
+		return uploadedStatementRepository.findAllByAppUser(appUser);
 	}
 
 	@Transactional
-	public void process(String id) throws Exception {
+	public void process(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
-		UploadedStatement statement = statementRepository.findByAppUserAndId(appUser, id)
+
+		UploadedStatement statement = uploadedStatementRepository.findByAppUserAndId(appUser, id)
 				.orElseThrow(() -> new IllegalArgumentException("Statement not found: " + id));
 
-		if (!"UPLOADED".equals(statement.getStatus())) {
+		if (!Status.UPLOADED.equals(statement.getStatus())) {
 			throw new IllegalStateException("Only uploaded statements can be processed.");
 		}
 
-		String[] lines = statement.getContent().split("\n");
-		for (String line : lines) {
-			if (line.trim().isEmpty())
-				continue;
+		StatementParser parser;
+		String accountName = statement.getAccount().getName().toLowerCase();
 
-			// Example: assuming CSV format: date,amount,description
-			String[] parts = line.split(",");
-			if (parts.length < 3)
-				continue;
-
+		if (accountName.contains("sbi")) {
+			parser = new SBICsvParser();
+		} else {
+			throw new UnsupportedOperationException("No parser implemented for account: " + accountName);
 		}
 
+		// ✅ Convert String to InputStream and parse
+		InputStream inputStream = new ByteArrayInputStream(statement.getContent().getBytes(StandardCharsets.UTF_8));
+		List<AccountTransaction> transactions = parser.parse(inputStream, statement);
+		for (AccountTransaction tx : transactions) {
+			tx.setAppUser(appUser); // Associate with current user
+			tx.setCategory(categoryService.getNonClassifiedCategory());
+		}
+		logger.info("Parsed {} transactions from statement {}", transactions.size(), id);
+		accountTransactionService.save(transactions);
+		logger.info("Saved {} transactions for statement {}", transactions.size(), id);
 		statement.setStatus(Status.PROCESSED);
-		statementRepository.save(statement);
+		uploadedStatementRepository.save(statement);
+		logger.info("Statement {} processed successfully", id);
 	}
 
 	@Transactional
 	public void deleteTransactions(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
-		UploadedStatement statement = statementRepository.findByAppUserAndId(appUser, id)
+		UploadedStatement statement = uploadedStatementRepository.findByAppUserAndId(appUser, id)
 				.orElseThrow(() -> new IllegalArgumentException("Statement not found: " + id));
 
-		// List<AccountTransaction> transactions =
-		// transactionRepository.findAllByUploadedStatementId(id);
-		// transactionRepository.deleteAll(transactions);
+		List<AccountTransaction> transactions = accountTransactionService.getTransactionsByUploadedStatement(statement);
+		accountTransactionService.deleteAll(transactions);
 
 		statement.setStatus(Status.UPLOADED); // Reset status after deletion");
-		statementRepository.save(statement);
+		uploadedStatementRepository.save(statement);
 	}
 
 	@Transactional
 	public void delete(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
-		if (!statementRepository.existsByAppUserAndId(appUser, id)) {
+		if (!uploadedStatementRepository.existsByAppUserAndId(appUser, id)) {
 			throw new IllegalArgumentException("Statement not found: " + id);
 		}
-		statementRepository.deleteByAppUserAndId(appUser, id);
+		uploadedStatementRepository.deleteByAppUserAndId(appUser, id);
 
 	}
 }
