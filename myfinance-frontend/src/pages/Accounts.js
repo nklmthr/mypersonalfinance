@@ -21,6 +21,23 @@ export default function Accounts() {
 		institutionId: "",
 		accountTypeId: "",
 	});
+	
+	useEffect(() => {
+		const fetchDropdownData = async () => {
+			try {
+				const [instRes, typeRes] = await Promise.all([
+					api.get("/institutions"),
+					api.get("/account-types")
+				]);
+				setInstitutions(instRes.data);
+				setAccountTypes(typeRes.data);
+			} catch (err) {
+				console.error("Failed to load dropdown data", err);
+			}
+		};
+		fetchDropdownData();
+	}, []);
+
 
 	const [editData, setEditData] = useState({
 		id: null,
