@@ -64,7 +64,7 @@ public class SBICsvParser extends StatementParser {
 
 			AccountTransaction tx = new AccountTransaction();
 			tx.setDate(date);
-			tx.setAmount(isCredit ? amount : amount.negate());
+			tx.setAmount(amount);
 			tx.setType(isCredit ? TransactionType.CREDIT : TransactionType.DEBIT);
 			tx.setDescription(description);
 			tx.setExplanation(explanation);
