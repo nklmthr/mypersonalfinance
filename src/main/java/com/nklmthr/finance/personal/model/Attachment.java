@@ -55,7 +55,7 @@ public class Attachment {
 
 	@Lob
 	@Column(columnDefinition = "MEDIUMBLOB")
-	private byte[] contentData;
+	private byte[] content;
 
 	@Lob
 	@Column(columnDefinition = "MEDIUMBLOB")
@@ -71,7 +71,7 @@ public class Attachment {
 	}
 
 	public String getBase64EncodedImage() {
-		return Base64.encodeBase64String(contentData);
+		return Base64.encodeBase64String(content);
 	}
 
 	public static byte[] generateThumbnail(String contentType, byte[] contentData) throws IOException {
