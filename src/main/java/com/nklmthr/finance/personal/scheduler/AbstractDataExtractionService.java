@@ -198,7 +198,7 @@ public abstract class AbstractDataExtractionService {
 	protected List<String> getGMailAPIQuery() {
 		List<String> queries = new java.util.ArrayList<>();
 		LocalDate today = LocalDate.now();
-		LocalDate twoMonthAgo = today.minusDays(6);
+		LocalDate twoMonthAgo = today.minusDays(15);
 		for (String query : getEmailSubject()) {
 			queries.add(String.format("subject:(%s) from:(%s) after:%s before:%s", query, getSender(),
 					formatDate(twoMonthAgo), formatDate(today.plusDays(1))));
