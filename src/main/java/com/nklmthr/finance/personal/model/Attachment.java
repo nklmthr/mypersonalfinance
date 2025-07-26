@@ -62,7 +62,7 @@ public class Attachment {
 	private byte[] thumbnailData;
 
 	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "transaction_id", referencedColumnName = "id", nullable = false)
+	@JoinColumn(name = "account_transaction_id", referencedColumnName = "id", nullable = false)
 	@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 	private AccountTransaction accountTransaction;
 
