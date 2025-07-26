@@ -35,7 +35,7 @@ public class Category {
     @JoinColumn(name = "parent_id")
     private Category parent;
 
-    @Column(name = "system_category", nullable = false)
+    @Column(name = "system_category", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
     private boolean systemCategory = false;
     
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
