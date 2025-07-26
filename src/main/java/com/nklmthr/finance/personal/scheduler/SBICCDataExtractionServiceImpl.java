@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -20,14 +21,21 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 
 	private static final Logger logger = LoggerFactory.getLogger(SBICCDataExtractionServiceImpl.class);
 
+	@Value("${scheduler.enabled}")
+	private boolean schedulerEnabled;
+
 	// Slash-based fallback pattern
-	private static final Pattern GENERIC_PATTERN = Pattern.compile(
-			"Rs\\.([\\d,]+\\.\\d{2})\\s+spent on your SBI Credit Card.*?at (.*?) on");
+	private static final Pattern GENERIC_PATTERN = Pattern
+			.compile("Rs\\.([\\d,]+\\.\\d{2})\\s+spent on your SBI Credit Card.*?at (.*?) on");
 
 	private static final Pattern REF_PATTERN = Pattern.compile("Ref No\\.\\s*(\\d+)");
 
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
+		if (!schedulerEnabled) {
+			logger.info("Scheduler is disabled, skipping Axis CC data extraction");
+			return;
+		}
 		super.run();
 	}
 
@@ -74,6 +82,5 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 		}
 		return tx;
 	}
-
 
 }

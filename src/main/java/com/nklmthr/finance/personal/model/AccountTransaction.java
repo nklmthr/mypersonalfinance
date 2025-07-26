@@ -100,4 +100,10 @@ public class AccountTransaction {
     @JoinColumn(name = "uploaded_statement_id")
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private UploadedStatement uploadedStatement;
+    
+    @OneToMany(mappedBy = "accountTransaction", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Builder.Default
+    private List<Attachment> attachments = new ArrayList<>();
+
 }

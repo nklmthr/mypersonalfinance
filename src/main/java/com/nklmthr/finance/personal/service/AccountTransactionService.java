@@ -26,9 +26,11 @@ import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.model.Attachment;
 import com.nklmthr.finance.personal.model.UploadedStatement;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 import com.nklmthr.finance.personal.repository.AccountTransactionSpecifications;
+import com.nklmthr.finance.personal.repository.AttachmentRepository;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -42,8 +44,15 @@ public class AccountTransactionService {
 	@Autowired
 	private AccountService accountService;
 
-	private final AccountTransactionRepository accountTransactionRepository;
-	private final CategoryService categoryService;
+	@Autowired
+	private AccountTransactionRepository accountTransactionRepository;
+
+	@Autowired
+	private CategoryService categoryService;
+
+	@Autowired
+	private AttachmentRepository attachmentRepository;
+
 	private static final Logger logger = LoggerFactory.getLogger(AccountTransactionService.class);
 
 	public Page<AccountTransaction> getFilteredTransactions(Pageable pageable, String month, String accountId,
@@ -52,7 +61,7 @@ public class AccountTransactionService {
 		Specification<AccountTransaction> spec = Specification.where(null);
 
 		if (StringUtils.isBlank(categoryId)) {
-		    spec = spec.and(AccountTransactionSpecifications.isRootTransaction());
+			spec = spec.and(AccountTransactionSpecifications.isRootTransaction());
 		}
 		if (StringUtils.isNotBlank(accountId)) {
 			spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
@@ -87,10 +96,9 @@ public class AccountTransactionService {
 			if (tx.getExplanation() != null && tx.getExplanation().length() > 60) {
 				tx.setExplanation(tx.getExplanation().substring(0, 60));
 			}
-			if(tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
-				tx.setAmount(tx.getChildren().stream()
-						.map(AccountTransaction::getAmount)
-						.reduce(BigDecimal.ZERO, BigDecimal::add));
+			if (tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
+				tx.setAmount(tx.getChildren().stream().map(AccountTransaction::getAmount).reduce(BigDecimal.ZERO,
+						BigDecimal::add));
 			}
 		});
 		return page;
@@ -259,7 +267,8 @@ public class AccountTransactionService {
 
 			boolean isMatch = isDateClose && isAmountEqual && isDescriptionEqual && isTypeEqual;
 
-			logger.debug("Checking against existing transaction: date: {}, amount: {}, description: {}, type: {}, match: {}",
+			logger.debug(
+					"Checking against existing transaction: date: {}, amount: {}, description: {}, type: {}, match: {}",
 					existingTxn.getDate(), existingTxn.getAmount(), existingTxn.getDescription(), existingTxn.getType(),
 					isMatch);
 
@@ -286,12 +295,13 @@ public class AccountTransactionService {
 		existingTxn.setDate(newTransaction.getDate());
 		accountTransactionRepository.save(existingTxn);
 	}
-	
+
 	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
 		AppUser appUser = appUserService.getCurrentUser();
 		return isTransactionAlreadyPresent(newTransaction, appUser);
 	}
+
 	@Transactional
 	public List<AccountTransaction> getFilteredTransactionsForExport(String month, String accountId, String type,
 			String categoryId, String search) {
@@ -343,10 +353,43 @@ public class AccountTransactionService {
 		}
 		AppUser appUser = appUserService.getCurrentUser();
 		logger.info("Deleting {} transactions for user: {}", transactions.size(), appUser.getUsername());
-		accountTransactionRepository.deleteAllByAppUserAndIdIn(appUser, transactions.stream()
-				.map(AccountTransaction::getId).toList());
+		accountTransactionRepository.deleteAllByAppUserAndIdIn(appUser,
+				transactions.stream().map(AccountTransaction::getId).toList());
 		logger.info("Deleted {} transactions successfully", transactions.size());
-		
+
+	}
+
+	public List<Attachment> getTransactionAttachments(String id) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (StringUtils.isBlank(id)) {
+			logger.warn("Transaction ID is blank, returning empty attachment list");
+			return List.of(); // Return empty list if ID is blank
+		}
+		return attachmentRepository.findByAccountTransaction_IdAndAccountTransaction_AppUser_Id(id,
+				appUser.getId());
+
+	}
+
+	@Transactional
+	public Attachment addTransactionAttachment(String id, Attachment attachment) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (StringUtils.isBlank(id)) {
+			logger.warn("Transaction ID is blank, cannot add attachment");
+			return null; // Cannot add attachment without a valid transaction ID
+		}
+		Optional<AccountTransaction> transactionOpt = getById(id);
+		if (transactionOpt.isEmpty()) {
+			logger.warn("Transaction with ID {} not found, cannot add attachment", id);
+			return null; // Transaction not found
+		}
+		AccountTransaction transaction = transactionOpt.get();
+		attachment.setAccountTransaction(transaction);
+		attachment.setAppUser(appUser);
+		transaction.getAttachments().add(attachment);
+		logger.info("Adding attachment to transaction ID: {}", id);
+		accountTransactionRepository.save(transaction);
+		return attachmentRepository.save(attachment);
+
 	}
 
 }

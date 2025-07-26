@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -26,8 +27,15 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	@Autowired
 	private AccountService accountService;
 
+	@Value("${scheduler.enabled}")
+	private boolean schedulerEnabled;
+	
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
+		if (!schedulerEnabled) {
+			logger.info("Scheduler is disabled, skipping Axis CC data extraction");
+			return;
+		}
 		super.run();
 	}
 	

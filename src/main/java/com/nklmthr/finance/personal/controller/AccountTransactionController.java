@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.nklmthr.finance.personal.dto.SplitTransactionRequest;
 import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.Attachment;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
 
 import lombok.RequiredArgsConstructor;
@@ -95,5 +96,15 @@ public class AccountTransactionController {
 	public ResponseEntity<Void> delete(@PathVariable String id) {
 		transactionService.delete(id);
 		return ResponseEntity.noContent().build();
+	}
+	
+	@GetMapping("{id}/attachments/")
+	public List<Attachment> getAttachments(@PathVariable String id) {
+		return transactionService.getTransactionAttachments(id);
+	}
+	
+	@PostMapping("/{id}/attachments")
+	public Attachment addAttachment(@PathVariable String id, @RequestBody Attachment attachment) {
+		return transactionService.addTransactionAttachment(id, attachment);
 	}
 }

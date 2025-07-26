@@ -27,9 +27,7 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 
 	@EntityGraph(attributePaths = { "category" })
 	@Query("SELECT t FROM AccountTransaction t WHERE t.appUser = :appUser AND FUNCTION('MONTH', t.date) = :month AND FUNCTION('YEAR', t.date) = :year")
-	List<AccountTransaction> findByAppUserAndMonthAndYear(
-			@Param("appUser") AppUser appUser,
-			@Param("month") int month,
+	List<AccountTransaction> findByAppUserAndMonthAndYear(@Param("appUser") AppUser appUser, @Param("month") int month,
 			@Param("year") int year);
 
 	@EntityGraph(attributePaths = { "category", "account", "account.accountType", "account.institution" })
@@ -47,4 +45,6 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 	List<AccountTransaction> findByAppUserAndUploadedStatement(AppUser appUser, UploadedStatement statement);
 
 	void deleteAllByAppUserAndIdIn(AppUser appUser, List<String> list);
+
+
 }
