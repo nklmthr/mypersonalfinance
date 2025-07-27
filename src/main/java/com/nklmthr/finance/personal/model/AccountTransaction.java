@@ -105,5 +105,8 @@ public class AccountTransaction {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @Builder.Default
     private List<Attachment> attachments = new ArrayList<>();
+    
+    @Column
+    private String dataVersionId;
 
 }
