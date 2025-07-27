@@ -253,18 +253,21 @@ public class AccountTransactionService {
 		logger.info("Found {} existing transactions for sourceThreadId: {}", existingAccTxnList.size(),
 				newTransaction.getSourceThreadId());
 		if (existingAccTxnList.isEmpty()) {
+			newTransaction.setDataVersionId("V2.0");
 			return false;
 		}
 		// Check if the new transaction matches any existing transaction
 
 		for (AccountTransaction existingTxn : existingAccTxnList) {
+			if (existingTxn.getSourceId() != null && existingTxn.getSourceId().equals(newTransaction.getSourceId())) {
+				return true; // Transaction already exists by sourceMessageId
+			}
 			boolean isDateClose = Math
 					.abs(ChronoUnit.MINUTES.between(existingTxn.getDate(), newTransaction.getDate())) <= 1;
 
 			boolean isAmountEqual = existingTxn.getAmount().compareTo(newTransaction.getAmount()) == 0;
 			boolean isDescriptionEqual = existingTxn.getDescription().equalsIgnoreCase(newTransaction.getDescription());
 			boolean isTypeEqual = existingTxn.getType().equals(newTransaction.getType());
-
 			boolean isMatch = isDateClose && isAmountEqual && isDescriptionEqual && isTypeEqual;
 
 			logger.debug(
@@ -274,16 +277,19 @@ public class AccountTransactionService {
 
 			if (isMatch) {
 				logger.info("Applied Dedupe logic: Found existing transaction matching new transaction");
-				updateTransactionWithSourceInfo(existingTxn, newTransaction);
+				if (existingTxn.getDataVersionId() == null && existingTxn.getDataVersionId().equals("V1.1")) {
+					logger.info("Values already updated for existing transaction, updating source info");
+				} else {
+					logger.info("Updating existing transaction with source info");
+					updateTransactionWithSourceInfo(existingTxn, newTransaction);
+				}
+
 				return true; // Transaction already exists (within 1-minute window)
+			} else {
+				newTransaction.setDataVersionId("V2.0");
 			}
 		}
 
-		for (AccountTransaction existingTxn : existingAccTxnList) {
-			if (existingTxn.getSourceId().equals(newTransaction.getSourceId())) {
-				return true; // Transaction already exists by sourceMessageId
-			}
-		}
 		return false; // No match found, transaction is new
 	}
 
@@ -366,8 +372,7 @@ public class AccountTransactionService {
 			logger.warn("Transaction ID is blank, returning empty attachment list");
 			return List.of(); // Return empty list if ID is blank
 		}
-		return attachmentRepository.findByAccountTransaction_IdAndAccountTransaction_AppUser_Id(id,
-				appUser.getId());
+		return attachmentRepository.findByAccountTransaction_IdAndAccountTransaction_AppUser_Id(id, appUser.getId());
 
 	}
 
