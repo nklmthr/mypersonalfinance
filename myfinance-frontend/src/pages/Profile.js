@@ -25,17 +25,9 @@ export default function ProfilePage() {
     }
   };
 
-  const handleConnectGmail = async () => {
-    try {
-      const res = await axios.get(window.location.origin + `/oauth/authorize?redirectOrigin`, {
-        withCredentials: true,
-      });
-      window.location.href = res.data.authUrl;
-    } catch (err) {
-      alert("Failed to connect Gmail");
-      console.error(err);
-    }
-  };
+  const handleConnectGmail = () => {
+	    window.location.href = `${process.env.REACT_APP_BACKEND_URL}/oauth/authorize`;
+  }
 
   const handleDisconnectGmail = async () => {
     try {

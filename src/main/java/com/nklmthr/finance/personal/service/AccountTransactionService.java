@@ -293,6 +293,7 @@ public class AccountTransactionService {
 		existingTxn.setSourceThreadId(newTransaction.getSourceThreadId());
 		existingTxn.setSourceTime(newTransaction.getSourceTime());
 		existingTxn.setDate(newTransaction.getDate());
+		existingTxn.setDataVersionId("V1.1");
 		accountTransactionRepository.save(existingTxn);
 	}
 
