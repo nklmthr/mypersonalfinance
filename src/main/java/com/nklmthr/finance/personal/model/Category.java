@@ -39,5 +39,6 @@ public class Category {
     private boolean systemCategory = false;
     
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "app_user_id", nullable = false)
     private AppUser appUser;
 }
