@@ -146,7 +146,7 @@ public class CategoryService {
 
 	public Category getSplitTrnsactionCategory() {
 		AppUser appUser = appUserService.getCurrentUser();
-		logger.info("Fetching SPLIT category for user: {}", appUser.getUsername());
+		logger.debug("Fetching SPLIT category for user: {}", appUser.getUsername());
 		return categoryRepository.findByAppUserAndName(appUser, "SPLIT")
 				.orElseThrow(() -> new RuntimeException("Default category not found"));
 	}

@@ -103,6 +103,7 @@ public class AccountTransactionService {
 				tx.setExplanation(tx.getExplanation().substring(0, 60));
 			}
 			if (tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
+				logger.info("Setting split transaction amount as sum of children for transaction ID: {}", tx.getId());
 				tx.setAmount(tx.getChildren().stream().map(AccountTransaction::getAmount).reduce(BigDecimal.ZERO,
 						BigDecimal::add));
 			}
