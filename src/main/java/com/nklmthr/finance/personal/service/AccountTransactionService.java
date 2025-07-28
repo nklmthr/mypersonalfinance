@@ -232,6 +232,23 @@ public class AccountTransactionService {
 
 	@Transactional
 	public AccountTransaction save(AccountTransaction transaction, AppUser appUser) {
+		Account account = accountService.getAccount(transaction.getAccount().getId());
+		if (account == null) {
+			logger.error("Account with ID {} not found, cannot save transaction", transaction.getAccount().getId());
+			throw new IllegalArgumentException("Account not found");
+		}
+		if (transaction.getType() == null) {
+			logger.error("Transaction type is null, cannot save transaction");
+			throw new IllegalArgumentException("Transaction type cannot be null");
+		}
+		else {
+			logger.info("Setting account balance for transaction type: {}", transaction.getType());
+			if (transaction.getType().equals(TransactionType.DEBIT)) {
+				account.setBalance(account.getBalance().subtract(transaction.getAmount()));
+			} else {
+				account.setBalance(account.getBalance().add(transaction.getAmount()));
+			}
+		}
 		transaction.setAppUser(appUser);
 		logger.info("Saving transaction for user: {}", appUser.getUsername());
 		return accountTransactionRepository.save(transaction);
@@ -240,9 +257,23 @@ public class AccountTransactionService {
 	@Transactional
 	public List<AccountTransaction> save(List<AccountTransaction> transactions) {
 		AppUser appUser = appUserService.getCurrentUser();
-		transactions.forEach(tx -> tx.setAppUser(appUser));
 		logger.info("Saving {} transactions for user: {}", transactions.size(), appUser.getUsername());
-		return accountTransactionRepository.saveAll(transactions);
+		if (transactions == null || transactions.isEmpty()) {
+			logger.warn("No transactions provided for saving");
+			return List.of(); // Return empty list if no transactions to save
+		} else {
+			for (AccountTransaction transaction : transactions) {
+				if (transaction.getAccount() == null || transaction.getAccount().getId() == null) {
+					logger.error("Transaction with ID {} has no associated account, cannot save", transaction.getId());
+					throw new IllegalArgumentException("Transaction must have an associated account");
+				}
+				save(transaction, appUser);
+			}
+			logger.info("All transactions saved successfully");
+			return transactions;
+			
+		}
+		
 	}
 
 	@Transactional
