@@ -61,12 +61,15 @@ public class AccountTransactionService {
 		Specification<AccountTransaction> spec = Specification.where(null);
 
 		if (StringUtils.isBlank(categoryId)) {
+			logger.info("No category filter applied, fetching all root transactions");
 			spec = spec.and(AccountTransactionSpecifications.isRootTransaction());
 		}
 		if (StringUtils.isNotBlank(accountId)) {
+			logger.info("Filtering transactions for account ID: {}", accountId);
 			spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
 		}
 		if (StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
+			logger.info("Filtering transactions for type: {}", type);
 			spec = spec.and(AccountTransactionSpecifications.hasTransactionType(TransactionType.valueOf(type)));
 		}
 		if (StringUtils.isNotBlank(month)) {
@@ -75,12 +78,15 @@ public class AccountTransactionService {
 			LocalDateTime start = ym.atDay(1).atStartOfDay(); // 1st of the month, 00:00
 			LocalDateTime end = ym.atEndOfMonth().atTime(LocalTime.MAX); // end of month, 23:59:59.999999999
 			logger.info("Filtering transactions between start: {} and end: {}", start, end);
+			logger.info("Applying date filter for transactions {} for month: {}", start, month);
 			spec = spec.and(AccountTransactionSpecifications.dateBetween(start, end));
 		}
 		if (StringUtils.isNotBlank(search)) {
+			logger.info("Applying search filter for transactions with search term: {}", search);
 			spec = spec.and(AccountTransactionSpecifications.matchesSearch(search));
 		}
 		if (StringUtils.isNotBlank(categoryId)) {
+			logger.info("Filtering transactions for category ID: {}", categoryId);
 			Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(categoryId);
 			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryIds));
 		}
@@ -126,7 +132,8 @@ public class AccountTransactionService {
 		credit.setExplanation(request.getExplanation());
 		credit.setType(TransactionType.CREDIT);
 		credit.setCategory(categoryService.getTransferCategory());
-
+		logger.info("Creating transfer transaction: {}", credit);
+		logger.info("Updating source transaction: {}", debit);
 		save(debit, appUser);
 		save(credit, appUser);
 	}
@@ -134,6 +141,7 @@ public class AccountTransactionService {
 	@Transactional
 	public ResponseEntity<String> splitTransaction(List<SplitTransactionRequest> splitTransactions) {
 		if (splitTransactions == null || splitTransactions.isEmpty()) {
+			logger.warn("No split transactions provided");
 			return ResponseEntity.badRequest().body("No split transactions provided");
 		}
 
@@ -142,6 +150,7 @@ public class AccountTransactionService {
 		String parentId = splitTransactions.get(0).getParentId();
 		Optional<AccountTransaction> parentOpt = getById(parentId);
 		if (parentOpt.isEmpty()) {
+			logger.warn("Parent transaction with ID {} not found", parentId);
 			return ResponseEntity.badRequest().body("Parent transaction not found");
 		}
 
@@ -167,15 +176,17 @@ public class AccountTransactionService {
 		}
 
 		if (totalSplitAmount.compareTo(parent.getAmount()) != 0) {
+			logger.warn("Parent transaction amount does not match split amounts");
 			return ResponseEntity.badRequest().body("Parent transaction amount does not match split amounts");
 		}
-
+		logger.info("Total split amount matches parent transaction amount: {}", totalSplitAmount);
 		accountTransactionRepository.save(parent);
 		return ResponseEntity.ok("Split successful");
 	}
 
 	@Transactional
 	public Optional<AccountTransaction> updateTransaction(String id, AccountTransaction tx) {
+		logger.info("Updating transaction with ID: {}", id);
 		return getById(id).map(existing -> {
 			AppUser appUser = appUserService.getCurrentUser();
 
@@ -195,28 +206,33 @@ public class AccountTransactionService {
 
 			// Update balance logic
 			if (tx.getType().equals(TransactionType.DEBIT)) {
+				logger.info("Updating transaction as DEBIT, deducting amount {} from account balance {}", tx.getAmount(), tx.getAccount().getBalance());
 				tx.getAccount().setBalance(tx.getAccount().getBalance().subtract(tx.getAmount()));
 			} else {
+				logger.info("Updating transaction as CREDIT, adding amount {} to account balance {}", tx.getAmount(), tx.getAccount().getBalance());
 				tx.getAccount().setBalance(tx.getAccount().getBalance().add(tx.getAmount()));
 			}
-
+			logger.info("Update Transaction: {}", tx);
 			return accountTransactionRepository.save(tx);
 		});
 	}
 
 	public Optional<AccountTransaction> getById(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Fetching transaction by ID: {}", id);
 		return accountTransactionRepository.findByAppUserAndId(appUser, id);
 	}
 
 	public List<AccountTransaction> getChildren(String parentId) {
 		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Fetching children transactions for parent ID: {}", parentId);
 		return accountTransactionRepository.findByAppUserAndParentId(appUser, parentId);
 	}
 
 	@Transactional
 	public AccountTransaction save(AccountTransaction transaction, AppUser appUser) {
 		transaction.setAppUser(appUser);
+		logger.info("Saving transaction for user: {}", appUser.getUsername());
 		return accountTransactionRepository.save(transaction);
 	}
 
@@ -231,29 +247,30 @@ public class AccountTransactionService {
 	@Transactional
 	public AccountTransaction save(AccountTransaction transaction) {
 		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Saving transaction for user: {}", appUser.getUsername());
 		return save(transaction, appUser);
 	}
 
 	@Transactional
 	public void delete(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Deleting transaction with ID: {} for user: {}", id, appUser.getUsername());
 		accountTransactionRepository.deleteByAppUserAndId(appUser, id);
 	}
 
 	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction, AppUser appUser) {
-
 		logger.info(
-			"New transaction date: {}, amount: {}, description: {}, type: {}, sourceId: {}, sourceThreadId: {}, sourceTime: {}",
-			newTransaction.getDate(), newTransaction.getAmount(), newTransaction.getDescription(),
-			newTransaction.getType(), newTransaction.getSourceId(), newTransaction.getSourceThreadId(),
-			newTransaction.getSourceTime());
+				"New transaction date: {}, amount: {}, description: {}, type: {}, sourceId: {}, sourceThreadId: {}, sourceTime: {}",
+				newTransaction.getDate(), newTransaction.getAmount(), newTransaction.getDescription(),
+				newTransaction.getType(), newTransaction.getSourceId(), newTransaction.getSourceThreadId(),
+				newTransaction.getSourceTime());
 
 		List<AccountTransaction> existingAccTxnList = accountTransactionRepository
-			.findByAppUserAndSourceThreadId(appUser, newTransaction.getSourceThreadId());
+				.findByAppUserAndSourceThreadId(appUser, newTransaction.getSourceThreadId());
 
 		logger.info("Found {} existing transactions for sourceThreadId: {}", existingAccTxnList.size(),
-			newTransaction.getSourceThreadId());
+				newTransaction.getSourceThreadId());
 
 		if (existingAccTxnList.isEmpty()) {
 			newTransaction.setDataVersionId("V2.0");
@@ -268,8 +285,8 @@ public class AccountTransactionService {
 		}
 
 		for (AccountTransaction existingTxn : existingAccTxnList) {
-			boolean isDateClose = Math.abs(
-				ChronoUnit.MINUTES.between(existingTxn.getDate(), newTransaction.getDate())) <= 1;
+			boolean isDateClose = Math
+					.abs(ChronoUnit.SECONDS.between(existingTxn.getDate(), newTransaction.getDate())) <= 30;
 
 			boolean isAmountEqual = existingTxn.getAmount().compareTo(newTransaction.getAmount()) == 0;
 			boolean isDescriptionEqual = existingTxn.getDescription().equalsIgnoreCase(newTransaction.getDescription());
@@ -278,8 +295,8 @@ public class AccountTransactionService {
 			boolean isMatch = isDateClose && isAmountEqual && isDescriptionEqual && isTypeEqual;
 
 			logger.info("Checking existing transaction: date: {}, amount: {}, description: {}, type: {}, match: {}",
-				existingTxn.getDate(), existingTxn.getAmount(), existingTxn.getDescription(),
-				existingTxn.getType(), isMatch);
+					existingTxn.getDate(), existingTxn.getAmount(), existingTxn.getDescription(), existingTxn.getType(),
+					isMatch);
 
 			if (isMatch) {
 				logger.info("Applied Dedupe logic: Found existing transaction matching new transaction");
@@ -293,12 +310,13 @@ public class AccountTransactionService {
 			}
 		}
 		newTransaction.setDataVersionId("V2.0");
+		logger.info("No matching transaction found, treating as new transaction");
 		return false;
 	}
 
-
 	@Transactional
 	private void updateTransactionWithSourceInfo(AccountTransaction existingTxn, AccountTransaction newTransaction) {
+		logger.info("Updating existing transaction with new source info");
 		existingTxn.setSourceId(newTransaction.getSourceId());
 		existingTxn.setSourceThreadId(newTransaction.getSourceThreadId());
 		existingTxn.setSourceTime(newTransaction.getSourceTime());
@@ -310,6 +328,7 @@ public class AccountTransactionService {
 	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
 		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Checking if transaction is already present for user: {}", appUser.getUsername());
 		return isTransactionAlreadyPresent(newTransaction, appUser);
 	}
 
@@ -353,13 +372,16 @@ public class AccountTransactionService {
 	public List<AccountTransaction> getTransactionsByUploadedStatement(UploadedStatement statement) {
 		AppUser appUser = appUserService.getCurrentUser();
 		if (statement == null || statement.getId() == null) {
+			logger.warn("UploadedStatement is null or has no ID, returning empty transaction list");
 			return List.of();
 		}
+		logger.info("Fetching transactions for UploadedStatement ID: {}", statement.getId());
 		return accountTransactionRepository.findByAppUserAndUploadedStatement(appUser, statement);
 	}
 
 	public void deleteAll(List<AccountTransaction> transactions) {
 		if (transactions == null || transactions.isEmpty()) {
+			logger.warn("No transactions provided for deletion");
 			return; // Nothing to delete
 		}
 		AppUser appUser = appUserService.getCurrentUser();
@@ -376,6 +398,7 @@ public class AccountTransactionService {
 			logger.warn("Transaction ID is blank, returning empty attachment list");
 			return List.of(); // Return empty list if ID is blank
 		}
+		logger.info("Fetching attachments for transaction ID: {}", id);
 		return attachmentRepository.findByAccountTransaction_IdAndAccountTransaction_AppUser_Id(id, appUser.getId());
 
 	}

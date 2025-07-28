@@ -18,37 +18,39 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class AccountSnapshotService {
-	private final AccountRepository accountRepository;
-	private final AccountBalanceSnapshotRepository snapshotRepository;
 	@Autowired
-	private AppUserService appUserService;
+	AccountRepository accountRepository;
+	@Autowired
+	AccountBalanceSnapshotRepository snapshotRepository;
+	@Autowired
+	AppUserService appUserService;
+	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AccountSnapshotService.class);
 
 	public void createSnapshotsForDate(LocalDateTime snapshotDate) {
+		logger.info("Creating snapshots for date: " + snapshotDate);
 		AppUser appUser = appUserService.getCurrentUser();
 		LocalDateTime twoWeeksAgo = snapshotDate.minusDays(14);
 		List<Account> accounts = accountRepository.findAll();
 
 		// 🔍 Get all recent snapshot records for this user in one DB call
-		List<AccountBalanceSnapshot> recentSnapshots = snapshotRepository
-				.findByAppUserAndSnapshotDateAfter(appUser, twoWeeksAgo);
+		List<AccountBalanceSnapshot> recentSnapshots = snapshotRepository.findByAppUserAndSnapshotDateAfter(appUser,
+				twoWeeksAgo);
 
 		if (!recentSnapshots.isEmpty()) {
+			logger.warn("Snapshots already exist for some accounts in the last 2 weeks.");
 			throw new IllegalStateException("Snapshots already exist for some accounts in the last 2 weeks.");
 		}
 
 		List<AccountBalanceSnapshot> snapshots = new ArrayList<>();
 		for (Account account : accounts) {
-			AccountBalanceSnapshot snapshot = AccountBalanceSnapshot.builder()
-					.account(account)
-					.balance(account.getBalance())
-					.snapshotDate(snapshotDate)
-					.appUser(appUser)
-					.build();
+			logger.info("Creating snapshot for account: " + account.getName() + " with balance: "
+					+ account.getBalance());
+			AccountBalanceSnapshot snapshot = AccountBalanceSnapshot.builder().account(account)
+					.balance(account.getBalance()).snapshotDate(snapshotDate).appUser(appUser).build();
 			snapshots.add(snapshot);
 		}
-
+		logger.info("Saving " + snapshots.size() + " snapshots to the database.");
 		snapshotRepository.saveAll(snapshots);
 	}
-
 
 }

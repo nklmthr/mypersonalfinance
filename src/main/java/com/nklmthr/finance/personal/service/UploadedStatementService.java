@@ -45,13 +45,18 @@ public class UploadedStatementService {
 	public UploadedStatement upload(MultipartFile file, String accountId) throws Exception {
 		AppUser appUser = appUserService.getCurrentUser(); // Ensure user context
 		Account account = accountService.getAccount(accountId);
-
+		if (account == null) {
+			throw new IllegalArgumentException("Account not found: " + accountId);
+		}
+		if (file.isEmpty()) {
+			throw new IllegalArgumentException("File is empty");
+		}
 		String content;
 		try (BufferedReader reader = new BufferedReader(
 				new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
 			content = reader.lines().collect(Collectors.joining("\n"));
 		}
-
+		
 		UploadedStatement statement = new UploadedStatement();
 		statement.setAppUser(appUser); // associate with current user
 		statement.setFilename(file.getOriginalFilename());
@@ -59,32 +64,36 @@ public class UploadedStatementService {
 		statement.setAccount(account);
 		statement.setUploadedAt(LocalDateTime.now());
 		statement.setStatus(Status.UPLOADED);
-
+		logger.info("Uploading statement for account: {} by user: {}", account.getName(), appUser.getUsername());
 		return uploadedStatementRepository.save(statement);
 	}
 
 	public List<UploadedStatement> listStatements() {
 		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Listing all uploaded statements for user: {}", appUser.getUsername());
 		return uploadedStatementRepository.findAllByAppUser(appUser);
 	}
 
 	@Transactional
 	public void process(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
-
+		
 		UploadedStatement statement = uploadedStatementRepository.findByAppUserAndId(appUser, id)
 				.orElseThrow(() -> new IllegalArgumentException("Statement not found: " + id));
-
+		logger.info("Processing statement with id: {} for user: {}", id, appUser.getUsername());
 		if (!Status.UPLOADED.equals(statement.getStatus())) {
+			logger.error("Statement with id: {} is not in UPLOADED status", id);
 			throw new IllegalStateException("Only uploaded statements can be processed.");
 		}
 
 		StatementParser parser;
 		String accountName = statement.getAccount().getName().toLowerCase();
-
+		logger.info("Determining parser for account: {}", accountName);
 		if (accountName.contains("sbi")) {
+			logger.info("Using SBICsvParser for account: {}", accountName);
 			parser = new SBICsvParser();
 		} else {
+			logger.error("No parser implemented for account: {}", accountName);
 			throw new UnsupportedOperationException("No parser implemented for account: " + accountName);
 		}
 
@@ -108,11 +117,13 @@ public class UploadedStatementService {
 		AppUser appUser = appUserService.getCurrentUser();
 		UploadedStatement statement = uploadedStatementRepository.findByAppUserAndId(appUser, id)
 				.orElseThrow(() -> new IllegalArgumentException("Statement not found: " + id));
-
+		logger.info("Deleting transactions for statement with id: {} for user: {}", id, appUser.getUsername());
 		List<AccountTransaction> transactions = accountTransactionService.getTransactionsByUploadedStatement(statement);
+		logger.info("Found {} transactions to delete for statement {}", transactions.size(), id);
 		accountTransactionService.deleteAll(transactions);
-
+		logger.info("Deleted {} transactions for statement {}", transactions.size(), id);
 		statement.setStatus(Status.UPLOADED); // Reset status after deletion");
+		logger.info("Resetting status of statement {} to UPLOADED", id);
 		uploadedStatementRepository.save(statement);
 	}
 
@@ -120,8 +131,10 @@ public class UploadedStatementService {
 	public void delete(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
 		if (!uploadedStatementRepository.existsByAppUserAndId(appUser, id)) {
+			logger.error("Statement not found with id: {}", id);
 			throw new IllegalArgumentException("Statement not found: " + id);
 		}
+		logger.info("Deleting statement with id: {} for user: {}", id, appUser.getUsername());
 		uploadedStatementRepository.deleteByAppUserAndId(appUser, id);
 
 	}

@@ -19,6 +19,8 @@ import com.nklmthr.finance.personal.service.AppUserService;
 @Component
 public class GmailAuthHelper {
 
+	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(GmailAuthHelper.class);
+	
 	@Value("${gmail.oauth.redirect-uri}")
 	private String redirectUri;
 
@@ -45,6 +47,7 @@ public class GmailAuthHelper {
 	    TokenResponse tokenResponse = flow.newTokenRequest(code)
 	        .setRedirectUri(redirectUri)
 	        .execute();
+	    logger.info("Exchanging code for tokens for user: {}", user.getUsername());
 	    flow.createAndStoreCredential(tokenResponse, "user");
 	}
 

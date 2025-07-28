@@ -17,23 +17,27 @@ public class InstitutionService {
 	@Autowired
     private InstitutionRepository institutionRepository;
 
-    
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(InstitutionService.class);
     public List<Institution> getAllInstitutions() {
     	AppUser appUser = appUserService.getCurrentUser();
+    			logger.info("Fetching all institutions for user: {}", appUser.getUsername());
         return institutionRepository.findAllByAppUser(appUser);
     }
 
     public Optional<Institution> getInstitutionById(String id) {
     	AppUser appUser = appUserService.getCurrentUser();
+    			logger.info("Fetching institution by id: {} for user: {}", id, appUser.getUsername());
         return institutionRepository.findByAppUserAndId(appUser, id);
     }
 
     public Institution createInstitution(Institution institution) {
     	AppUser appUser = appUserService.getCurrentUser();
         if (institutionRepository.existsByAppUserAndName(appUser, institution.getName())) {
+        				logger.error("Institution with name already exists: {}", institution.getName());
             throw new IllegalArgumentException("Institution with name already exists");
         }
         institution.setAppUser(appUser); // Set the current user as the owner of the institution
+        logger.info("Creating institution for user: {} with name: {}", appUser.getUsername(), institution.getName());
         return institutionRepository.save(institution);
     }
 
@@ -43,6 +47,7 @@ public class InstitutionService {
             institution.setName(updatedInstitution.getName());
             institution.setDescription(updatedInstitution.getDescription());
             institution.setAppUser(appUser); 
+            logger.info("Updating institution with id: {} for user: {}", id, appUser.getUsername());
             return institutionRepository.save(institution);
         }).orElseThrow(() -> new IllegalArgumentException("Institution not found with id " + id));
     }
@@ -50,8 +55,10 @@ public class InstitutionService {
     public void deleteInstitution(String id) {
     	AppUser appUser = appUserService.getCurrentUser();
         if (institutionRepository.findByAppUserAndId(appUser, id).isEmpty()) {
+			logger.error("Institution not found with id: {}", id);
             throw new IllegalArgumentException("Institution not found with id " + id);
         }
+        logger.info("Deleting institution with id: {} for user: {}", id, appUser.getUsername());
         institutionRepository.deleteByAppUserAndId(appUser, id);
     }
 }

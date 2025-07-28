@@ -19,49 +19,59 @@ import lombok.RequiredArgsConstructor;
 public class AccountTypeService {
 	@Autowired
 	private AppUserService appUserService;
-    private final AccountTypeRepository accountTypeRepository;
+	@Autowired
+	private AccountTypeRepository accountTypeRepository;
+	
+	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AccountTypeService.class);
 
-    public AccountType create(AccountType accountType) {
-    	AppUser appUser = appUserService.getCurrentUser();
-        if (accountTypeRepository.existsByAppUserAndName(appUser, accountType.getName())) {
-            throw new IllegalArgumentException("Account type with name already exists: " + accountType.getName());
-        }
-        accountType.setAppUser(appUser);
-        return accountTypeRepository.save(accountType);
-    }
+	public AccountType create(AccountType accountType) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (accountTypeRepository.existsByAppUserAndName(appUser, accountType.getName())) {
+			throw new IllegalArgumentException("Account type with name already exists: " + accountType.getName());
+		}
+		accountType.setAppUser(appUser);
+		logger.info(
+				"Creating account type for user: " + appUser.getUsername() + " with name: " + accountType.getName());
+		return accountTypeRepository.save(accountType);
+	}
 
-    public List<AccountType> getAll() {
-    	AppUser appUser = appUserService.getCurrentUser();
-        return accountTypeRepository.findByAppUser(appUser);
-    }
+	public List<AccountType> getAll() {
+		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Fetching all account types for user: " + appUser.getUsername());
+		return accountTypeRepository.findByAppUser(appUser);
+	}
 
-    public Optional<AccountType> getById(String id) {
-    	AppUser appUser = appUserService.getCurrentUser();
-        return accountTypeRepository.findByAppUserAndId(appUser, id);
-    }
+	public Optional<AccountType> getById(String id) {
+		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Fetching account type with id: " + id + " for user: " + appUser.getUsername());
+		return accountTypeRepository.findByAppUserAndId(appUser, id);
+	}
 
-    public Optional<AccountType> getByName(String name) {
-    	AppUser appUser = appUserService.getCurrentUser();
-        return accountTypeRepository.findByAppUserAndName(appUser, name);
-    }
+	public Optional<AccountType> getByName(String name) {
+		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Fetching account type with name: " + name + " for user: " + appUser.getUsername());
+		return accountTypeRepository.findByAppUserAndName(appUser, name);
+	}
 
-    public AccountType update(String id, AccountType updated) {
-    	AppUser appUser = appUserService.getCurrentUser();
-        AccountType existing = accountTypeRepository.findByAppUserAndId(appUser, id)
-                .orElseThrow(() -> new IllegalArgumentException("AccountType not found: " + id));
-        existing.setName(updated.getName());
-        existing.setDescription(updated.getDescription());
-        existing.setClassification(updated.getClassification());
-        existing.setAccountTypeBalance(updated.getAccountTypeBalance());
-        existing.setAppUser(appUser); // Ensure the user is set
-        return accountTypeRepository.save(existing);
-    }
+	public AccountType update(String id, AccountType updated) {
+		AppUser appUser = appUserService.getCurrentUser();
+		AccountType existing = accountTypeRepository.findByAppUserAndId(appUser, id)
+				.orElseThrow(() -> new IllegalArgumentException("AccountType not found: " + id));
+		existing.setName(updated.getName());
+		existing.setDescription(updated.getDescription());
+		existing.setClassification(updated.getClassification());
+		existing.setAccountTypeBalance(updated.getAccountTypeBalance());
+		existing.setAppUser(appUser); 
+		logger.info("Updating account type with id: " + id + " for user: " + appUser.getUsername());
+		return accountTypeRepository.save(existing);
+	}
 
-    public void delete(String id) {
-    	AppUser appUser = appUserService.getCurrentUser();
-        if (!accountTypeRepository.existsByAppUserAndId(appUser, id)) {
-            throw new IllegalArgumentException("AccountType not found: " + id);
-        }
-        accountTypeRepository.deleteByAppUserAndId(appUser, id);
-    }
+	public void delete(String id) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (!accountTypeRepository.existsByAppUserAndId(appUser, id)) {
+			throw new IllegalArgumentException("AccountType not found: " + id);
+		}
+		logger.info("Deleting account type with id: " + id + " for user: " + appUser.getUsername());
+		accountTypeRepository.deleteByAppUserAndId(appUser, id);
+	}
 }

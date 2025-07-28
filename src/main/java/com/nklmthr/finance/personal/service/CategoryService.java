@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
@@ -23,46 +24,59 @@ public class CategoryService {
 
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CategoryService.class);
 
-	private final AppUserService appUserService;
-	private final CategoryRepository categoryRepository;
+	@Autowired
+	private  AppUserService appUserService;
+	
+	@Autowired
+	private  CategoryRepository categoryRepository;
 
 	// ----------------- Public Web Accessors -------------------
 
 	public List<CategoryDTO> getAllCategories() {
+		logger.info("Fetching all categories for user: {}", appUserService.getCurrentUser().getUsername());
 		return getAllCategories(appUserService.getCurrentUser());
 	}
 
 	public Category getCategoryById(String id) {
+		logger.info("Fetching category by id: {} for user: {}", id, appUserService.getCurrentUser().getUsername());
 		return getCategoryById(appUserService.getCurrentUser(), id);
 	}
 
 	public Category saveCategory(Category category) {
+		
 		AppUser user = appUserService.getCurrentUser();
 		category.setAppUser(user);
+		logger.info("Saving category: {} for user: {}", category.getName(), user.getUsername());
 		return categoryRepository.save(category);
 	}
 
 	public void deleteCategory(String id) {
+		logger.info("Deleting category with id: {} for user: {}", id, appUserService.getCurrentUser().getUsername());
 		deleteCategory(appUserService.getCurrentUser(), id);
 	}
 
 	public List<Category> getChildren(String parentId) {
+		logger.info("Fetching children categories for parentId: {} for user: {}", parentId, appUserService.getCurrentUser().getUsername());
 		return getChildren(appUserService.getCurrentUser(), parentId);
 	}
 
 	public Category getNonClassifiedCategory() {
+		logger.info("Fetching non-classified category for user: {}", appUserService.getCurrentUser().getUsername());
 		return getNonClassifiedCategory(appUserService.getCurrentUser());
 	}
 
 	public List<Category> getFlatCategories() {
+		logger.info("Fetching flat categories for user: {}", appUserService.getCurrentUser().getUsername());
 		return getFlatCategories(appUserService.getCurrentUser());
 	}
 
 	public Set<String> getAllDescendantCategoryIds(String categoryId) {
+		logger.info("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId, appUserService.getCurrentUser().getUsername());
 		return getAllDescendantCategoryIds(appUserService.getCurrentUser(), categoryId);
 	}
 
 	public Category getTransferCategory() {
+		logger.info("Fetching TRANSFERS category for user: {}", appUserService.getCurrentUser().getUsername());
 		return categoryRepository.findByAppUserAndName(appUserService.getCurrentUser(), "TRANSFERS")
 				.orElseThrow(() -> new RuntimeException("TRANSFERS category not found"));
 	}
@@ -70,6 +84,7 @@ public class CategoryService {
 	// ----------------- Background Job / Explicit AppUser -------------------
 
 	public List<CategoryDTO> getAllCategories(AppUser appUser) {
+		logger.info("Fetching all categories for user: {}", appUser.getUsername());
 		List<Category> allCategories = categoryRepository.findByAppUser(appUser, Sort.by("name").ascending());
 
 		Map<String, CategoryDTO> dtoMap = new HashMap<>();
@@ -89,27 +104,33 @@ public class CategoryService {
 	}
 
 	public Category getCategoryById(AppUser appUser, String id) {
+		logger.info("Fetching category by id: {} for user: {}", id, appUser.getUsername());
 		return categoryRepository.findByAppUserAndId(appUser, id).orElse(null);
 	}
 
 	public void deleteCategory(AppUser appUser, String id) {
+		logger.info("Deleting category with id: {} for user: {}", id, appUser.getUsername());
 		categoryRepository.deleteByAppUserAndId(appUser, id);
 	}
 
 	public List<Category> getChildren(AppUser appUser, String parentId) {
+		logger.info("Fetching children categories for parentId: {} for user: {}", parentId, appUser.getUsername());
 		return categoryRepository.findByAppUserAndParentId(appUser, parentId);
 	}
 
 	public Category getNonClassifiedCategory(AppUser appUser) {
+		logger.info("Fetching non-classified category for user: {}", appUser.getUsername());
 		return categoryRepository.findByAppUserAndName(appUser, "Not Classified")
 				.orElseThrow(() -> new RuntimeException("Default category not found"));
 	}
 
 	public List<Category> getFlatCategories(AppUser appUser) {
+		logger.info("Fetching flat categories for user: {}", appUser.getUsername());
 		return categoryRepository.findByAppUser(appUser, Sort.by("name").ascending());
 	}
 
 	public Set<String> getAllDescendantCategoryIds(AppUser appUser, String categoryId) {
+		logger.info("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId, appUser.getUsername());
 		Set<String> descendantIds = new HashSet<>();
 		collectChildCategoryIds(appUser, categoryId, descendantIds);
 		return descendantIds;
@@ -125,6 +146,7 @@ public class CategoryService {
 
 	public Category getSplitTrnsactionCategory() {
 		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Fetching SPLIT category for user: {}", appUser.getUsername());
 		return categoryRepository.findByAppUserAndName(appUser, "SPLIT")
 				.orElseThrow(() -> new RuntimeException("Default category not found"));
 	}
