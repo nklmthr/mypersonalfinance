@@ -243,8 +243,8 @@ function TransactionSplit({ transaction, setTransaction, onCancel, onSubmit, cat
 	const submit = () => {
 		const total = children.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
 		const parentAmt = parseFloat(transaction.amount);
-		if (isNaN(parentAmt) || total !== parentAmt) {
-			alert(`Child transaction amounts must sum up to ₹${isNaN(parentAmt) ? 0 : parentAmt}`);
+		if (isNaN(parentAmt) || Math.abs(total - parentAmt) > 1) {
+			alert(`Child transaction amounts must sum up to ₹${isNaN(parentAmt) ? 0 : parentAmt}`+total);
 			return;
 		}
 		const enrichedChildren = children.map(c => ({

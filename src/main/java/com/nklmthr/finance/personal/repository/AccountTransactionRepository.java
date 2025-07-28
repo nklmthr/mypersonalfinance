@@ -1,5 +1,7 @@
 package com.nklmthr.finance.personal.repository;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +15,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.UploadedStatement;
@@ -46,5 +49,10 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 
 	void deleteAllByAppUserAndIdIn(AppUser appUser, List<String> list);
 
+	@Query("SELECT t FROM AccountTransaction t " + "WHERE t.appUser = :user " + "AND t.description = :description "
+			+ "AND t.type = :type " + "AND t.amount = :amount " + "AND ABS(TIMESTAMPDIFF(SECOND, t.date, :date)) <= 60")
+	List<AccountTransaction> findSimilarTransactionWithinOneMinute(@Param("user") AppUser user,
+			@Param("description") String description, @Param("type") TransactionType type,
+			@Param("amount") BigDecimal amount, @Param("date") LocalDateTime date);
 
 }
