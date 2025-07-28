@@ -244,54 +244,58 @@ public class AccountTransactionService {
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction, AppUser appUser) {
 
 		logger.info(
-				"New transaction date: {}, amount: {}, description: {}, type: {}, sourceId: {}, sourceThreadId: {}, sourceTime: {}",
-				newTransaction.getDate(), newTransaction.getAmount(), newTransaction.getDescription(),
-				newTransaction.getType(), newTransaction.getSourceId(), newTransaction.getSourceThreadId(),
-				newTransaction.getSourceTime());
+			"New transaction date: {}, amount: {}, description: {}, type: {}, sourceId: {}, sourceThreadId: {}, sourceTime: {}",
+			newTransaction.getDate(), newTransaction.getAmount(), newTransaction.getDescription(),
+			newTransaction.getType(), newTransaction.getSourceId(), newTransaction.getSourceThreadId(),
+			newTransaction.getSourceTime());
+
 		List<AccountTransaction> existingAccTxnList = accountTransactionRepository
-				.findByAppUserAndSourceThreadId(appUser, newTransaction.getSourceThreadId());
+			.findByAppUserAndSourceThreadId(appUser, newTransaction.getSourceThreadId());
+
 		logger.info("Found {} existing transactions for sourceThreadId: {}", existingAccTxnList.size(),
-				newTransaction.getSourceThreadId());
+			newTransaction.getSourceThreadId());
+
 		if (existingAccTxnList.isEmpty()) {
 			newTransaction.setDataVersionId("V2.0");
 			return false;
 		}
-		// Check if the new transaction matches any existing transaction
 
 		for (AccountTransaction existingTxn : existingAccTxnList) {
 			if (existingTxn.getSourceId() != null && existingTxn.getSourceId().equals(newTransaction.getSourceId())) {
-				return true; // Transaction already exists by sourceMessageId
+				logger.info("Found existing transaction with same sourceId: dedupe match");
+				return true;
 			}
-			boolean isDateClose = Math
-					.abs(ChronoUnit.MINUTES.between(existingTxn.getDate(), newTransaction.getDate())) <= 1;
+		}
+
+		for (AccountTransaction existingTxn : existingAccTxnList) {
+			boolean isDateClose = Math.abs(
+				ChronoUnit.MINUTES.between(existingTxn.getDate(), newTransaction.getDate())) <= 1;
 
 			boolean isAmountEqual = existingTxn.getAmount().compareTo(newTransaction.getAmount()) == 0;
 			boolean isDescriptionEqual = existingTxn.getDescription().equalsIgnoreCase(newTransaction.getDescription());
 			boolean isTypeEqual = existingTxn.getType().equals(newTransaction.getType());
+
 			boolean isMatch = isDateClose && isAmountEqual && isDescriptionEqual && isTypeEqual;
 
-			logger.debug(
-					"Checking against existing transaction: date: {}, amount: {}, description: {}, type: {}, match: {}",
-					existingTxn.getDate(), existingTxn.getAmount(), existingTxn.getDescription(), existingTxn.getType(),
-					isMatch);
+			logger.info("Checking existing transaction: date: {}, amount: {}, description: {}, type: {}, match: {}",
+				existingTxn.getDate(), existingTxn.getAmount(), existingTxn.getDescription(),
+				existingTxn.getType(), isMatch);
 
 			if (isMatch) {
 				logger.info("Applied Dedupe logic: Found existing transaction matching new transaction");
-				if (existingTxn.getDataVersionId() == null && existingTxn.getDataVersionId().equals("V1.1")) {
-					logger.info("Values already updated for existing transaction, updating source info");
-				} else {
+				if (existingTxn.getDataVersionId() == null || !existingTxn.getDataVersionId().equals("V1.1")) {
 					logger.info("Updating existing transaction with source info");
 					updateTransactionWithSourceInfo(existingTxn, newTransaction);
+				} else {
+					logger.info("Values already updated for existing transaction, skipping update");
 				}
-
-				return true; // Transaction already exists (within 1-minute window)
-			} else {
-				newTransaction.setDataVersionId("V2.0");
+				return true;
 			}
 		}
-
-		return false; // No match found, transaction is new
+		newTransaction.setDataVersionId("V2.0");
+		return false;
 	}
+
 
 	@Transactional
 	private void updateTransactionWithSourceInfo(AccountTransaction existingTxn, AccountTransaction newTransaction) {
