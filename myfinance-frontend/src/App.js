@@ -138,7 +138,7 @@ export default function App() {
 						}
 					/>
 					{/* Fallback */}
-					<Route path="*" element={<Navigate to="/" />} />
+					<Route path="*" element={<Navigate to="/transactions" />} />
 				</Routes>
 			</Router>
 		</ErrorModalProvider>

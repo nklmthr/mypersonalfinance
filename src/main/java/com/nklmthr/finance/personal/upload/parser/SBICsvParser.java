@@ -15,7 +15,7 @@ import com.nklmthr.finance.personal.model.UploadedStatement;
 
 public class SBICsvParser extends StatementParser {
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SBICsvParser.class);
-	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy");
+	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MMM-yy");
 
 	@Override
 	protected List<AccountTransaction> mapTransactions(List<String[]> rows, UploadedStatement statement) {
@@ -28,10 +28,6 @@ public class SBICsvParser extends StatementParser {
 	
 			LocalDateTime date = null;
 			try {
-				if (row[0].length() < 11) {
-					logger.warn("Invalid date format in row: {}", row[0]);
-					continue; // skip invalid date rows
-				}
 				LocalDate datePart = LocalDate.parse(row[0].trim(), DATE_FORMATTER);
 				date = datePart.atStartOfDay();
 			} catch (Exception e) {
@@ -40,12 +36,12 @@ public class SBICsvParser extends StatementParser {
 			}
 			
 
-			String transSplit[] = splitTransferDescription(row[1].trim());
-			if(transSplit[0] == null || transSplit[0].isBlank()) {
-				logger.warn("Transaction with empty description: {}", row[1]);
-			}
-			String description = transSplit[0];
-			String explanation = transSplit[1] != null ? transSplit[1] : "";
+//			String transSplit[] = splitTransferDescription(row[1].trim());
+//			if(transSplit[0] == null || transSplit[0].isBlank()) {
+//				logger.warn("Transaction with empty description: {}", row[1]);
+//			}
+			String description = row[2].trim();
+			String explanation = row[3].trim();
 			String debitStr = row[4].replace(",", "").trim();
 			String creditStr = row[5].replace(",", "").trim();
 
