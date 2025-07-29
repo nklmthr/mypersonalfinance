@@ -44,7 +44,7 @@ public class UploadedStatementService {
 	@Transactional
 	public UploadedStatement upload(MultipartFile file, String accountId) throws Exception {
 		AppUser appUser = appUserService.getCurrentUser(); // Ensure user context
-		Account account = accountService.getAccount(accountId);
+		Account account = accountService.findById(accountId);
 		if (account == null) {
 			throw new IllegalArgumentException("Account not found: " + accountId);
 		}

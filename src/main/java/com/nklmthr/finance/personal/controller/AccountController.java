@@ -37,7 +37,7 @@ public class AccountController {
 
 	@GetMapping("/{id}")
 	public ResponseEntity<Account> getAccount(@PathVariable String id) {
-		return ResponseEntity.ok(accountService.getAccount(id));
+		return ResponseEntity.ok(accountService.findById(id));
 	}
 
 	@PostMapping

@@ -120,7 +120,7 @@ public class AccountTransactionService {
 		AccountTransaction debit = getById(request.getSourceTransactionId())
 				.orElseThrow(() -> new Exception("Source transaction not found"));
 
-		Account toAccount = accountService.getAccount(request.getDestinationAccountId());
+		Account toAccount = accountService.findById(request.getDestinationAccountId());
 
 		// Set category to Transfer
 		debit.setCategory(categoryService.getTransferCategory());
@@ -178,7 +178,7 @@ public class AccountTransactionService {
 			child.setAmount(st.getAmount());
 			child.setDate(st.getDate());
 			child.setType(st.getType());
-			child.setAccount(accountService.getAccount(st.getAccount().getId()));
+			child.setAccount(accountService.findById(st.getAccount().getId()));
 			child.setCategory(
 					st.getCategory() != null ? categoryService.getCategoryById(st.getCategory().getId()) : null);
 			child.setParent(parent);
@@ -205,7 +205,7 @@ public class AccountTransactionService {
 
 			tx.setId(id);
 			tx.setAppUser(appUser);
-			tx.setAccount(accountService.getAccount(tx.getAccount().getId()));
+			tx.setAccount(accountService.findById(tx.getAccount().getId()));
 			tx.setCategory(categoryService.getCategoryById(tx.getCategory().getId()));
 			// Preserve immutable fields
 			tx.setParent(existing.getParent());
@@ -244,7 +244,7 @@ public class AccountTransactionService {
 
 	@Transactional
 	public AccountTransaction save(AccountTransaction transaction, AppUser appUser) {
-		Account account = accountService.getAccount(transaction.getAccount().getId());
+		Account account = accountService.findByAppUserAndId(transaction.getAccount().getId(), appUser);
 		if (account == null) {
 			logger.error("Account with ID {} not found, cannot save transaction", transaction.getAccount().getId());
 			throw new IllegalArgumentException("Account not found");

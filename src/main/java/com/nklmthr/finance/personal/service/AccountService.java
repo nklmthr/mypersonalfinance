@@ -38,11 +38,18 @@ public class AccountService {
 		return accountRepository.findAllByAppUser(appUser, Sort.by("name").ascending());
 	}
 
-	public Account getAccount(String id) {
+	public Account findById(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Finding account by id: " + id + " for user: " + appUser.getUsername());
+		return findByAppUserAndId(id, appUser);
+		
+	}
+	
+	public Account findByAppUserAndId(String id, AppUser appUser) {
 		logger.info("Fetching account with id: " + id + " for user: " + appUser.getUsername());
 		return accountRepository.findByAppUserAndId(appUser, id).orElseThrow(
 				() -> new RuntimeException("No access to this account or Account not found with id: " + id));
+		
 	}
 
 	public Account createAccount(Account account) {
@@ -62,7 +69,7 @@ public class AccountService {
 
 	public Account updateAccount(String id, Account updatedAccount) {
 		AppUser appUser = appUserService.getCurrentUser();
-		Account account = getAccount(id);
+		Account account = findById(id);
 
 		account.setName(updatedAccount.getName());
 		account.setBalance(updatedAccount.getBalance());
