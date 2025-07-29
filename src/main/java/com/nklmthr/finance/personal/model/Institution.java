@@ -2,6 +2,8 @@ package com.nklmthr.finance.personal.model;
 
 import org.hibernate.annotations.UuidGenerator;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -33,6 +35,7 @@ public class Institution {
     private String description;
     
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JsonIgnore
     private AppUser appUser;
 
 }

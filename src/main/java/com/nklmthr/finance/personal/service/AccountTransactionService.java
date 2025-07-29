@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -154,12 +155,21 @@ public class AccountTransactionService {
 			logger.warn("Parent transaction with ID {} not found", parentId);
 			return ResponseEntity.badRequest().body("Parent transaction not found");
 		}
-
+		
 		AccountTransaction parent = parentOpt.get();
+		
+		List<AccountTransaction> children = getChildren(parentId);
+		for (AccountTransaction child : children) {
+			logger.info("Deleting existing child transaction: {}", child);
+			parent.setAmount(parent.getAmount().add(child.getAmount()));
+			child.setParent(null);
+			parent.getChildren().remove(child);
+			accountTransactionRepository.delete(child);
+		}
+		BigDecimal parentAmount = parent.getAmount();
+		accountTransactionRepository.save(parent);
 		parent.setCategory(categoryService.getSplitTrnsactionCategory());
-
 		BigDecimal totalSplitAmount = BigDecimal.ZERO;
-
 		for (SplitTransactionRequest st : splitTransactions) {
 			logger.info("Processing split transaction: {}", st);
 			AccountTransaction child = new AccountTransaction();
@@ -172,11 +182,12 @@ public class AccountTransactionService {
 					st.getCategory() != null ? categoryService.getCategoryById(st.getCategory().getId()) : null);
 			child.setParent(parent);
 			child.setAppUser(appUser);
+			parent.setAmount(parent.getAmount().subtract(st.getAmount()));
 			totalSplitAmount = totalSplitAmount.add(child.getAmount());
 			accountTransactionRepository.save(child);
 		}
 
-		if (totalSplitAmount.compareTo(parent.getAmount()) != 0) {
+		if (totalSplitAmount.compareTo(parentAmount) != 0) {
 			logger.warn("Parent transaction amount does not match split amounts");
 			return ResponseEntity.badRequest().body("Parent transaction amount does not match split amounts");
 		}

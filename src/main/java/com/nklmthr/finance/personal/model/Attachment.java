@@ -16,6 +16,7 @@ import org.hibernate.annotations.UuidGenerator;
 import org.imgscalr.Scalr;
 import org.springframework.format.annotation.DateTimeFormat;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.Column;
@@ -95,6 +96,7 @@ public class Attachment {
 	}
 	
 	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@JsonIgnore
     private AppUser appUser;
 
 }

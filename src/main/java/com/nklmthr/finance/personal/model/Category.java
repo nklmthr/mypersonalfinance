@@ -2,6 +2,7 @@ package com.nklmthr.finance.personal.model;
 
 import org.hibernate.annotations.UuidGenerator;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import jakarta.persistence.Column;
@@ -40,5 +41,6 @@ public class Category {
     
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "app_user_id", nullable = false)
+    @JsonIgnore
     private AppUser appUser;
 }

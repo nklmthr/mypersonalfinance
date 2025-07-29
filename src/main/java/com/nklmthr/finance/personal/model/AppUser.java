@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 import org.hibernate.annotations.UuidGenerator;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -27,12 +29,15 @@ public class AppUser {
 	@Column(unique = true, nullable = false)
 	private String username;
 
+	@JsonIgnore
 	@Column(nullable = false)
 	private String password; // BCrypt hashed
 
 	@Column(nullable = false)
+	@JsonIgnore
 	private String role; // e.g., USER, ADMIN
 	
+	@JsonIgnore
 	@Column(nullable = false)
 	private String email;
 	
@@ -40,14 +45,19 @@ public class AppUser {
 	private boolean enabled = true;
 	
 	@Column(length = 4096)
+	@JsonIgnore
 	private String gmailAccessToken;
 
 	@Column(length = 4096)
+	@JsonIgnore
 	private String gmailRefreshToken;
 
+	@JsonIgnore
+	@Column
 	private Long gmailTokenExpiry; 
 
-	// Optional: audit fields
+	@JsonIgnore
+	@Column
 	private LocalDateTime createdAt;
 
 }

@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 
 import org.hibernate.annotations.UuidGenerator;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -43,6 +45,7 @@ public class Account {
     
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "app_user_id", nullable = false)
+    @JsonIgnore
     private AppUser appUser;
     
 }

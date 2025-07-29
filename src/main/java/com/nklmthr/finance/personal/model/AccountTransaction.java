@@ -8,6 +8,7 @@ import java.util.List;
 import org.hibernate.annotations.UuidGenerator;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.nklmthr.finance.personal.enums.TransactionType;
@@ -27,6 +28,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Entity
 @Table(name = "account_transactions")
@@ -38,6 +40,7 @@ import lombok.NoArgsConstructor;
 	    generator = ObjectIdGenerators.PropertyGenerator.class,
 	    property = "id"
 	)
+@ToString(exclude = {"category", "uploadedStatement", "account", "parent", "children", "attachments", "appUser"})
 public class AccountTransaction {
 
 	@Id
@@ -66,12 +69,15 @@ public class AccountTransaction {
 	private String hrefText;
 	
 	@Column
+	@JsonIgnore
 	private String sourceId;
 
 	@Column
+	@JsonIgnore
 	private String sourceThreadId;
 	
 	@Column
+	@JsonIgnore
 	private LocalDateTime sourceTime;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -94,6 +100,7 @@ public class AccountTransaction {
     private List<AccountTransaction> children = new ArrayList<>();
     
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JsonIgnore
     private AppUser appUser;
     
     @ManyToOne(fetch = FetchType.LAZY)

@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 import org.hibernate.annotations.UuidGenerator;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -52,6 +54,7 @@ public class UploadedStatement {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "app_user_id")
+    @JsonIgnore
     private AppUser appUser;
 
 
