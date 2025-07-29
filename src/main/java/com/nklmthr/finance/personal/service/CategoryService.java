@@ -8,7 +8,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
@@ -26,10 +28,10 @@ public class CategoryService {
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CategoryService.class);
 
 	@Autowired
-	private  AppUserService appUserService;
-	
+	private AppUserService appUserService;
+
 	@Autowired
-	private  CategoryRepository categoryRepository;
+	private CategoryRepository categoryRepository;
 
 	// ----------------- Public Web Accessors -------------------
 
@@ -45,23 +47,40 @@ public class CategoryService {
 		return getCategoryById(appUserService.getCurrentUser(), id);
 	}
 
+	@Caching(evict = { @CacheEvict(value = "allCategories", allEntries = true),
+			@CacheEvict(value = "categoryById", key = "#id"),
+			@CacheEvict(value = "categoryChildrenById", allEntries = true),
+			@CacheEvict(value = "categoryDescendentsById", allEntries = true),
+			@CacheEvict(value = "categoryNonClassified", allEntries = true),
+			@CacheEvict(value = "categoryTransfer", allEntries = true),
+			@CacheEvict(value = "categorySplitTransaction", allEntries = true) })
 	public Category saveCategory(Category category) {
-		
+
 		AppUser user = appUserService.getCurrentUser();
 		category.setAppUser(user);
 		logger.info("Saving category: {} for user: {}", category.getName(), user.getUsername());
 		return categoryRepository.save(category);
 	}
 
+	@Caching(evict = { @CacheEvict(value = "allCategories", allEntries = true),
+			@CacheEvict(value = "categoryById", key = "#id"),
+			@CacheEvict(value = "categoryChildrenById", allEntries = true),
+			@CacheEvict(value = "categoryDescendentsById", allEntries = true),
+			@CacheEvict(value = "categoryNonClassified", allEntries = true),
+			@CacheEvict(value = "categoryTransfer", allEntries = true),
+			@CacheEvict(value = "categorySplitTransaction", allEntries = true) })
 	public void deleteCategory(String id) {
 		logger.info("Deleting category with id: {} for user: {}", id, appUserService.getCurrentUser().getUsername());
 		deleteCategory(appUserService.getCurrentUser(), id);
 	}
+
 	@Cacheable(value = "categoryChildrenById", key = "#id")
 	public List<Category> getChildren(String parentId) {
-		logger.info("Fetching children categories for parentId: {} for user: {}", parentId, appUserService.getCurrentUser().getUsername());
+		logger.info("Fetching children categories for parentId: {} for user: {}", parentId,
+				appUserService.getCurrentUser().getUsername());
 		return getChildren(appUserService.getCurrentUser(), parentId);
 	}
+
 	@Cacheable(value = "categoryNonClassified")
 	public Category getNonClassifiedCategory() {
 		logger.info("Fetching non-classified category for user: {}", appUserService.getCurrentUser().getUsername());
@@ -70,18 +89,19 @@ public class CategoryService {
 
 	@Cacheable(value = "categoryDescendentsById", key = "#categoryId")
 	public Set<String> getAllDescendantCategoryIds(String categoryId) {
-		logger.info("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId, appUserService.getCurrentUser().getUsername());
+		logger.info("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId,
+				appUserService.getCurrentUser().getUsername());
 		return getAllDescendantCategoryIds(appUserService.getCurrentUser(), categoryId);
 	}
-	@Cacheable(value="categoryTransfer")
+
+	@Cacheable(value = "categoryTransfer")
 	public Category getTransferCategory() {
 		logger.info("Fetching TRANSFERS category for user: {}", appUserService.getCurrentUser().getUsername());
 		return categoryRepository.findByAppUserAndName(appUserService.getCurrentUser(), "TRANSFERS")
 				.orElseThrow(() -> new RuntimeException("TRANSFERS category not found"));
 	}
 
-
-	public List<CategoryDTO> getAllCategories(AppUser appUser) {
+	private List<CategoryDTO> getAllCategories(AppUser appUser) {
 		logger.info("Fetching all categories for user: {}", appUser.getUsername());
 		List<Category> allCategories = categoryRepository.findByAppUser(appUser, Sort.by("name").ascending());
 
@@ -123,7 +143,8 @@ public class CategoryService {
 	}
 
 	private Set<String> getAllDescendantCategoryIds(AppUser appUser, String categoryId) {
-		logger.info("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId, appUser.getUsername());
+		logger.info("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId,
+				appUser.getUsername());
 		Set<String> descendantIds = new HashSet<>();
 		collectChildCategoryIds(appUser, categoryId, descendantIds);
 		return descendantIds;
@@ -136,6 +157,7 @@ public class CategoryService {
 			collectChildCategoryIds(appUser, child.getId(), descendantIds);
 		}
 	}
+
 	@Cacheable(value = "categorySplitTransaction")
 	public Category getSplitTrnsactionCategory() {
 		AppUser appUser = appUserService.getCurrentUser();
