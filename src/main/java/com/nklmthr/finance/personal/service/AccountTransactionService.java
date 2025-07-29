@@ -297,6 +297,17 @@ public class AccountTransactionService {
 	@Transactional
 	public void delete(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
+		AccountTransaction existingTransaction = accountTransactionRepository.findByAppUserAndId(appUser, id)
+				.orElseThrow(() -> new IllegalArgumentException("Transaction not found for user: " + appUser.getUsername()));
+		if(existingTransaction.getParent() != null) {
+			logger.info("Removing transaction ID: {} from parent transaction ID: {}", id, existingTransaction.getParent().getId());
+			AccountTransaction parent = existingTransaction.getParent();
+			parent.setAmount(parent.getAmount().add(existingTransaction.getAmount()));
+			parent.setDescription(parent.getDescription() + " | delete child:" + existingTransaction.getDescription());
+			logger.info("Updating parent transaction with new amount: {}", parent.getAmount());
+			accountTransactionRepository.save(parent);
+		}
+		
 		logger.info("Deleting transaction with ID: {} for user: {}", id, appUser.getUsername());
 		accountTransactionRepository.deleteByAppUserAndId(appUser, id);
 	}

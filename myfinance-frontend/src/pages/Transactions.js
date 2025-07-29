@@ -15,6 +15,16 @@ function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, acco
 		document.addEventListener("keydown", handler);
 		return () => document.removeEventListener("keydown", handler);
 	}, [onCancel]);
+	const flattenCategories = (categories, prefix = "") => {
+			let flat = [];
+			for (const c of categories) {
+				flat.push({ id: c.id, name: prefix + c.name });
+				if (c.children?.length > 0) {
+					flat = flat.concat(flattenCategories(c.children, prefix + "— "));
+				}
+			}
+			return flat;
+		};
 
 	const submit = () => {
 		onSubmit({
