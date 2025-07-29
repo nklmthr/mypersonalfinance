@@ -1,11 +1,11 @@
 package com.nklmthr.finance.personal.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -105,8 +105,9 @@ public class AccountTransactionService {
 			}
 			if (tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
 				logger.info("Setting split transaction amount as sum of children for transaction ID: {}", tx.getId());
-				tx.setAmount(tx.getChildren().stream().map(AccountTransaction::getAmount).reduce(BigDecimal.ZERO,
-						BigDecimal::add));
+				BigDecimal totalChildrenAmount = tx.getChildren().stream().map(AccountTransaction::getAmount)
+						.reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+				tx.setAmount(tx.getAmount().add(totalChildrenAmount).setScale(2, RoundingMode.HALF_UP));
 			}
 		});
 		return page;
@@ -155,9 +156,9 @@ public class AccountTransactionService {
 			logger.warn("Parent transaction with ID {} not found", parentId);
 			return ResponseEntity.badRequest().body("Parent transaction not found");
 		}
-		
+
 		AccountTransaction parent = parentOpt.get();
-		
+
 		List<AccountTransaction> children = getChildren(parentId);
 		for (AccountTransaction child : children) {
 			logger.info("Deleting existing child transaction: {}", child);
@@ -206,7 +207,6 @@ public class AccountTransactionService {
 			tx.setAppUser(appUser);
 			tx.setAccount(accountService.getAccount(tx.getAccount().getId()));
 			tx.setCategory(categoryService.getCategoryById(tx.getCategory().getId()));
-
 			// Preserve immutable fields
 			tx.setParent(existing.getParent());
 			tx.setChildren(existing.getChildren());
@@ -215,13 +215,14 @@ public class AccountTransactionService {
 			tx.setHref(existing.getHref());
 			tx.setHrefText(existing.getHrefText());
 			tx.setSourceTime(existing.getSourceTime());
-
 			// Update balance logic
 			if (tx.getType().equals(TransactionType.DEBIT)) {
-				logger.info("Updating transaction as DEBIT, deducting amount {} from account balance {}", tx.getAmount(), tx.getAccount().getBalance());
+				logger.info("Updating transaction as DEBIT, deducting amount {} from account balance {}",
+						tx.getAmount(), tx.getAccount().getBalance());
 				tx.getAccount().setBalance(tx.getAccount().getBalance().subtract(tx.getAmount()));
 			} else {
-				logger.info("Updating transaction as CREDIT, adding amount {} to account balance {}", tx.getAmount(), tx.getAccount().getBalance());
+				logger.info("Updating transaction as CREDIT, adding amount {} to account balance {}", tx.getAmount(),
+						tx.getAccount().getBalance());
 				tx.getAccount().setBalance(tx.getAccount().getBalance().add(tx.getAmount()));
 			}
 			logger.info("Update Transaction: {}", tx);
@@ -251,8 +252,7 @@ public class AccountTransactionService {
 		if (transaction.getType() == null) {
 			logger.error("Transaction type is null, cannot save transaction");
 			throw new IllegalArgumentException("Transaction type cannot be null");
-		}
-		else {
+		} else {
 			logger.info("Setting account balance for transaction type: {}", transaction.getType());
 			if (transaction.getType().equals(TransactionType.DEBIT)) {
 				account.setBalance(account.getBalance().subtract(transaction.getAmount()));
@@ -282,9 +282,9 @@ public class AccountTransactionService {
 			}
 			logger.info("All transactions saved successfully");
 			return transactions;
-			
+
 		}
-		
+
 	}
 
 	@Transactional
@@ -298,16 +298,18 @@ public class AccountTransactionService {
 	public void delete(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
 		AccountTransaction existingTransaction = accountTransactionRepository.findByAppUserAndId(appUser, id)
-				.orElseThrow(() -> new IllegalArgumentException("Transaction not found for user: " + appUser.getUsername()));
-		if(existingTransaction.getParent() != null) {
-			logger.info("Removing transaction ID: {} from parent transaction ID: {}", id, existingTransaction.getParent().getId());
+				.orElseThrow(
+						() -> new IllegalArgumentException("Transaction not found for user: " + appUser.getUsername()));
+		if (existingTransaction.getParent() != null) {
+			logger.info("Removing transaction ID: {} from parent transaction ID: {}", id,
+					existingTransaction.getParent().getId());
 			AccountTransaction parent = existingTransaction.getParent();
 			parent.setAmount(parent.getAmount().add(existingTransaction.getAmount()));
 			parent.setDescription(parent.getDescription() + " | delete child:" + existingTransaction.getDescription());
 			logger.info("Updating parent transaction with new amount: {}", parent.getAmount());
 			accountTransactionRepository.save(parent);
 		}
-		
+
 		logger.info("Deleting transaction with ID: {} for user: {}", id, appUser.getUsername());
 		accountTransactionRepository.deleteByAppUserAndId(appUser, id);
 	}
