@@ -97,20 +97,36 @@ public class AccountTransactionService {
 				month, accountId, type, search, categoryId);
 		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
 		page.getContent().forEach(tx -> {
-			if (tx.getDescription() != null && tx.getDescription().length() > 40) {
-				tx.setDescription(tx.getDescription().substring(0, 40));
-			}
-			if (tx.getExplanation() != null && tx.getExplanation().length() > 60) {
-				tx.setExplanation(tx.getExplanation().substring(0, 60));
-			}
+			trimDescriptionAndExplaination(tx);
 			if (tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
-				logger.info("Setting split transaction amount as sum of children for transaction ID: {}", tx.getId());
-				BigDecimal totalChildrenAmount = tx.getChildren().stream().map(AccountTransaction::getAmount)
-						.reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
-				tx.setAmount(tx.getAmount().add(totalChildrenAmount).setScale(2, RoundingMode.HALF_UP));
+				makeChangesForSplitTransactions(tx);
 			}
 		});
 		return page;
+	}
+
+	private void makeChangesForSplitTransactions(AccountTransaction tx) {
+		logger.info("Setting split transaction amount as sum of children for transaction ID: {}", tx.getId());
+		BigDecimal totalChildrenAmount = tx.getChildren().stream().map(AccountTransaction::getAmount)
+				.reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+		tx.setAmount(tx.getAmount().add(totalChildrenAmount).setScale(2, RoundingMode.HALF_UP));
+		tx.getChildren().forEach(child -> {
+			if(child.getDescription() != null && child.getDescription().length() > 40) {
+				child.setDescription(child.getDescription().substring(0, 40));
+			}
+			if(child.getExplanation() != null && child.getExplanation().length() > 60) {
+				child.setExplanation(child.getExplanation().substring(0, 60));
+			}
+		});
+	}
+
+	private void trimDescriptionAndExplaination(AccountTransaction tx) {
+		if (tx.getDescription() != null && tx.getDescription().length() > 40) {
+			tx.setDescription(tx.getDescription().substring(0, 40));
+		}
+		if (tx.getExplanation() != null && tx.getExplanation().length() > 60) {
+			tx.setExplanation(tx.getExplanation().substring(0, 60));
+		}
 	}
 
 	@Transactional
