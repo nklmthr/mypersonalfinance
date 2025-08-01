@@ -37,7 +37,7 @@ public class BalanceSheetService {
 
 		if (year == currentYear) {
 			// Rolling last 12 months including current month
-			logger.info("Generating balance sheet for the last 12 months including current month");
+			logger.debug("Generating balance sheet for the last 12 months including current month");
 			for (int i = 0; i <= 11; i++) {
 				LocalDate targetMonth = LocalDate.now().minusMonths(i).withDayOfMonth(1);
 				BalanceSheetDTO dto = generateMonthlyBalanceSheet(targetMonth);
@@ -45,7 +45,7 @@ public class BalanceSheetService {
 			}
 		} else {
 			// All 12 months of given year
-			logger.info("Generating balance sheet for all 12 months of year: " + year);
+			logger.debug("Generating balance sheet for all 12 months of year: " + year);
 			for (int month = 12; month > 0; month--) {
 				LocalDate targetMonth = LocalDate.of(year, month, 1);
 				BalanceSheetDTO dto = generateMonthlyBalanceSheet(targetMonth);
@@ -90,7 +90,7 @@ public class BalanceSheetService {
 				.collect(Collectors.toList());
 
 		Map<String, BigDecimal> summaryRow = Map.of(monthLabel, total);
-		logger.info("Generated balance sheet for month: " + monthLabel + " with total: " + total);
+		logger.debug("Generated balance sheet for month: " + monthLabel + " with total: " + total);
 		return new BalanceSheetDTO(rows, summaryRow);
 	}
 
