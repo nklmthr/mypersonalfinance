@@ -3,6 +3,7 @@ package com.nklmthr.finance.personal.scheduler;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -25,10 +26,10 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 
 	@Autowired
 	private AccountService accountService;
-	
+
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
-	
+
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
 		if (!schedulerEnabled) {
@@ -37,7 +38,6 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 		}
 		super.run();
 	}
-	
 
 	public static void main(String[] args) {
 		AxisSavingCreditDataExtractionService service = new AxisSavingCreditDataExtractionService();
@@ -46,7 +46,7 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 
 	@Override
 	protected List<String> getEmailSubject() {
-		return Arrays.asList("Credit transaction alert for Axis Bank A/c");
+		return Arrays.asList("Credit transaction alert for Axis Bank A/c", "was credited to your A/c.");
 	}
 
 	@Override
@@ -57,34 +57,62 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 	@Override
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 		try {
+			logger.info("Parsing Axis Bank credit transaction email content:\n" + emailContent);
+			tx.setType(TransactionType.CREDIT);
+			tx.setAccount(accountService.getAccountByName("Axis Salary Acc", appUser));
 
-	        // Extract amount
-	        Pattern amountPattern = Pattern.compile("credited with INR ([\\d,]+\\.\\d{2})");
-	        Matcher amountMatcher = amountPattern.matcher(emailContent);
-	        if (amountMatcher.find()) {
-	            String amountStr = amountMatcher.group(1).replace(",", "");
-	            tx.setAmount(new BigDecimal(amountStr));
-	        }
+			Map<String, BigDecimal> valuesFromPattern = getTransactionDetails(emailContent,
+					"Amount Credited: INR ([\\d,]+\\.\\d{2}).*?Account Number: (.*?)\\s+Date & Time: ([\\d\\-]+), "
+							+ "([\\d:]+) IST.*?Transaction Info: ([^\r\n]+)",
+					5);
 
-	        // Type
-	        tx.setType(TransactionType.CREDIT);
+			if (valuesFromPattern == null) {
+				valuesFromPattern = getTransactionDetails(emailContent,
+						"has been credited with INR ([\\d,]+\\.\\d{2}) on ([\\d\\-]+) at ([\\d:]+) IST by (.+?)\\s", 4);
+			}
 
-	        // Description: use part after "by"
-	        Pattern descPattern = Pattern.compile("by ([\\w\\s.\\d]+)\\.");
-	        Matcher descMatcher = descPattern.matcher(emailContent);
-	        if (descMatcher.find()) {
-	            tx.setDescription(descMatcher.group(1).trim());
-	        } else {
-	            tx.setDescription("Axis Bank Credit");
-	        }
+			if (valuesFromPattern != null && !valuesFromPattern.isEmpty()) {
+				Map.Entry<String, BigDecimal> entry = valuesFromPattern.entrySet().iterator().next();
+				tx.setDescription(entry.getKey());
+				tx.setAmount(entry.getValue());
+			} else {
+				throw new IllegalArgumentException("No transaction data found in email content");
+			}
 
-	        tx.setAccount(accountService.getAccountByName("Axis Salary Acc", appUser));
-	    } catch (Exception e) {
-	        logger.error("Failed to parse Axis credit transaction", e);
-	    }
+		} catch (Exception e) {
+			logger.error("Failed to parse Axis credit transaction", e);
+		}
 
-	    return tx;
+		return tx;
 	}
 
-	
+	private Map<String, BigDecimal> getTransactionDetails(String emailContent, String pattern,
+			int descriptionGroupIndex) {
+		Pattern regex = Pattern.compile(pattern);
+		Matcher matcher = regex.matcher(emailContent);
+		if (matcher.find()) {
+			String amountStr = matcher.group(1).replaceAll(",", "");
+			BigDecimal amount = new BigDecimal(amountStr);
+
+			String rawDescription = matcher.group(descriptionGroupIndex);
+			// Trim and clean up description line
+			String description = rawDescription.split("[\\r\\n]")[0].trim();
+
+			// Additional safeguard to truncate at known footer starts
+			for (String stopWord : List.of("Regards,", "Call us at", "Always open", "***", "Reach us at")) {
+				int index = description.indexOf(stopWord);
+				if (index != -1) {
+					description = description.substring(0, index).trim();
+					break;
+				}
+			}
+
+			logger.info("Extracted transaction description: {}", description);
+			return Map.of(description, amount);
+		}
+
+		logger.error("No match found for pattern: {}", pattern);
+		return null;
+	}
+
 }

@@ -316,7 +316,7 @@ public class AccountTransactionService {
 
 	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction, AppUser appUser) {
-		logger.info(
+		logger.debug(
 				"New transaction date: {}, amount: {}, description: {}, type: {}, sourceId: {}, sourceThreadId: {}, sourceTime: {}",
 				newTransaction.getDate(), newTransaction.getAmount(), newTransaction.getDescription(),
 				newTransaction.getType(), newTransaction.getSourceId(), newTransaction.getSourceThreadId(),
@@ -325,10 +325,11 @@ public class AccountTransactionService {
 		List<AccountTransaction> existingAccTxnList = accountTransactionRepository
 				.findByAppUserAndSourceThreadId(appUser, newTransaction.getSourceThreadId());
 
-		logger.info("Found {} existing transactions for sourceThreadId: {}", existingAccTxnList.size(),
+		logger.debug("Found {} existing transactions for sourceThreadId: {}", existingAccTxnList.size(),
 				newTransaction.getSourceThreadId());
 
 		if (existingAccTxnList.isEmpty()) {
+			logger.info("No existing transactions found for sourceThreadId: {}, treating as new transaction");
 			newTransaction.setDataVersionId("V2.0");
 			return false;
 		}
@@ -350,17 +351,17 @@ public class AccountTransactionService {
 
 			boolean isMatch = isDateClose && isAmountEqual && isDescriptionEqual && isTypeEqual;
 
-			logger.info("Checking existing transaction: date: {}, amount: {}, description: {}, type: {}, match: {}",
+			logger.debug("Checking existing transaction: date: {}, amount: {}, description: {}, type: {}, match: {}",
 					existingTxn.getDate(), existingTxn.getAmount(), existingTxn.getDescription(), existingTxn.getType(),
 					isMatch);
 
 			if (isMatch) {
 				logger.info("Applied Dedupe logic: Found existing transaction matching new transaction");
 				if (existingTxn.getDataVersionId() == null || !existingTxn.getDataVersionId().equals("V1.1")) {
-					logger.info("Updating existing transaction with source info");
+					logger.debug("Updating existing transaction with source info");
 					updateTransactionWithSourceInfo(existingTxn, newTransaction);
 				} else {
-					logger.info("Values already updated for existing transaction, skipping update");
+					logger.debug("Values already updated for existing transaction, skipping update");
 				}
 				return true;
 			}
@@ -372,7 +373,7 @@ public class AccountTransactionService {
 
 	@Transactional
 	private void updateTransactionWithSourceInfo(AccountTransaction existingTxn, AccountTransaction newTransaction) {
-		logger.info("Updating existing transaction with new source info");
+		logger.debug("Updating existing transaction with new source info");
 		existingTxn.setSourceId(newTransaction.getSourceId());
 		existingTxn.setSourceThreadId(newTransaction.getSourceThreadId());
 		existingTxn.setSourceTime(newTransaction.getSourceTime());
@@ -384,7 +385,7 @@ public class AccountTransactionService {
 	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
 		AppUser appUser = appUserService.getCurrentUser();
-		logger.info("Checking if transaction is already present for user: {}", appUser.getUsername());
+		logger.debug("Checking if transaction is already present for user: {}", appUser.getUsername());
 		return isTransactionAlreadyPresent(newTransaction, appUser);
 	}
 
