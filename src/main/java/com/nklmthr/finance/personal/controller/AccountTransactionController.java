@@ -34,30 +34,23 @@ public class AccountTransactionController {
 
 	@GetMapping
 	public Page<AccountTransaction> getTransactions(@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "10") int size,
-			@RequestParam(required = false) String month,
-			@RequestParam(required = false) String accountId,
-			@RequestParam(required = false) String type,
-			@RequestParam(required = false) String categoryId,
-			@RequestParam(required = false) String search) {
+			@RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String month,
+			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
+			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
 		return transactionService.getFilteredTransactions(PageRequest.of(page, size, Sort.by("date").descending()),
 				month, accountId, type, search, categoryId);
 	}
 
 	@GetMapping("/export")
 	public List<AccountTransaction> exportTransactions(@RequestParam(required = false) String month,
-			@RequestParam(required = false) String accountId,
-			@RequestParam(required = false) String type,
-			@RequestParam(required = false) String categoryId,
-			@RequestParam(required = false) String search) {
+			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
+			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
 		return transactionService.getFilteredTransactionsForExport(month, accountId, type, categoryId, search);
 	}
 
 	@GetMapping("/{id}")
 	public ResponseEntity<AccountTransaction> getById(@PathVariable String id) {
-		return transactionService.getById(id)
-				.map(ResponseEntity::ok)
-				.orElse(ResponseEntity.notFound().build());
+		return transactionService.getById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
 	}
 
 	@GetMapping("/{id}/children")
@@ -72,8 +65,7 @@ public class AccountTransactionController {
 
 	@PutMapping("/{id}")
 	public ResponseEntity<AccountTransaction> update(@PathVariable String id, @RequestBody AccountTransaction tx) {
-		return transactionService.updateTransaction(id, tx)
-				.map(ResponseEntity::ok)
+		return transactionService.updateTransaction(id, tx).map(ResponseEntity::ok)
 				.orElse(ResponseEntity.notFound().build());
 	}
 
@@ -97,12 +89,12 @@ public class AccountTransactionController {
 		transactionService.delete(id);
 		return ResponseEntity.noContent().build();
 	}
-	
+
 	@GetMapping("{id}/attachments/")
 	public List<Attachment> getAttachments(@PathVariable String id) {
 		return transactionService.getTransactionAttachments(id);
 	}
-	
+
 	@PostMapping("/{id}/attachments")
 	public Attachment addAttachment(@PathVariable String id, @RequestBody Attachment attachment) {
 		return transactionService.addTransactionAttachment(id, attachment);

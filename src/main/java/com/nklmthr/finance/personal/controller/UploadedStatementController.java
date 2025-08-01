@@ -57,40 +57,38 @@ public class UploadedStatementController {
 
 	@DeleteMapping("/{id}")
 	public ResponseEntity<?> deleteStatement(@PathVariable String id) {
-	    logger.info("Attempting to delete statement with id: {}", id);
+		logger.info("Attempting to delete statement with id: {}", id);
 
-	    try {
-	        // Step 1: Delete associated transactions
-	        statementService.deleteTransactions(id);
-	        logger.info("Deleted transactions for statement id: {}", id);
+		try {
+			// Step 1: Delete associated transactions
+			statementService.deleteTransactions(id);
+			logger.info("Deleted transactions for statement id: {}", id);
 
-	        // Step 2: Delete the statement itself
-	        statementService.delete(id);
-	        logger.info("Deleted statement with id: {}", id);
+			// Step 2: Delete the statement itself
+			statementService.delete(id);
+			logger.info("Deleted statement with id: {}", id);
 
-	        return ResponseEntity.noContent().build();
+			return ResponseEntity.noContent().build();
 
-	    } catch (Exception e) {
-	        logger.error("Failed to delete statement or its transactions for id: {}", id, e);
-	        return ResponseEntity.internalServerError()
-	                .body("Failed to delete statement or transactions: " + e.getMessage());
-	    }
+		} catch (Exception e) {
+			logger.error("Failed to delete statement or its transactions for id: {}", id, e);
+			return ResponseEntity.internalServerError()
+					.body("Failed to delete statement or transactions: " + e.getMessage());
+		}
 	}
-
 
 	@DeleteMapping("/{id}/transactions")
 	public ResponseEntity<?> deleteTransactions(@PathVariable String id) {
-	    logger.info("Attempting to delete transactions for statement id: {}", id);
+		logger.info("Attempting to delete transactions for statement id: {}", id);
 
-	    try {
-	        statementService.deleteTransactions(id);
-	        logger.info("Successfully deleted transactions for statement id: {}", id);
-	        return ResponseEntity.ok("Transactions deleted successfully");
-	    } catch (Exception e) {
-	        logger.error("Error deleting transactions for statement id: {}", id, e);
-	        return ResponseEntity.internalServerError()
-	                .body("Failed to delete transactions: " + e.getMessage());
-	    }
+		try {
+			statementService.deleteTransactions(id);
+			logger.info("Successfully deleted transactions for statement id: {}", id);
+			return ResponseEntity.ok("Transactions deleted successfully");
+		} catch (Exception e) {
+			logger.error("Error deleting transactions for statement id: {}", id, e);
+			return ResponseEntity.internalServerError().body("Failed to delete transactions: " + e.getMessage());
+		}
 	}
 
 }

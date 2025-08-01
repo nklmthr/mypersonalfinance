@@ -111,10 +111,10 @@ public class AccountTransactionService {
 				.reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
 		tx.setAmount(tx.getAmount().add(totalChildrenAmount).setScale(2, RoundingMode.HALF_UP));
 		tx.getChildren().forEach(child -> {
-			if(child.getDescription() != null && child.getDescription().length() > 40) {
+			if (child.getDescription() != null && child.getDescription().length() > 40) {
 				child.setDescription(child.getDescription().substring(0, 40));
 			}
-			if(child.getExplanation() != null && child.getExplanation().length() > 60) {
+			if (child.getExplanation() != null && child.getExplanation().length() > 60) {
 				child.setExplanation(child.getExplanation().substring(0, 60));
 			}
 		});

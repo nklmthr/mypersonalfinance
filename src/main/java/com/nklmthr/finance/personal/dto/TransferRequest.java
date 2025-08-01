@@ -12,5 +12,5 @@ import lombok.NoArgsConstructor;
 public class TransferRequest {
 	private String sourceTransactionId;
 	private String destinationAccountId;
-    private String explanation;
+	private String explanation;
 }

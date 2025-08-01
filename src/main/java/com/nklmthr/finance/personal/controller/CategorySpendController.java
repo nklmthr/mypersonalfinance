@@ -16,15 +16,13 @@ import com.nklmthr.finance.personal.service.CategorySpendService;
 @RequestMapping("/api/category-spends")
 public class CategorySpendController {
 
-    @Autowired
-    private CategorySpendService categorySpendService;
+	@Autowired
+	private CategorySpendService categorySpendService;
 
-    @GetMapping
-    public ResponseEntity<List<CategorySpendDTO>> getCategorySpendForMonth(
-            @RequestParam("month") Integer month,
-            @RequestParam("year") Integer year
-    ) {
-        List<CategorySpendDTO> spends = categorySpendService.getMonthlyCategorySpendHierarchy(month, year);
-        return ResponseEntity.ok(spends);
-    }
+	@GetMapping
+	public ResponseEntity<List<CategorySpendDTO>> getCategorySpendForMonth(@RequestParam("month") Integer month,
+			@RequestParam("year") Integer year) {
+		List<CategorySpendDTO> spends = categorySpendService.getMonthlyCategorySpendHierarchy(month, year);
+		return ResponseEntity.ok(spends);
+	}
 }

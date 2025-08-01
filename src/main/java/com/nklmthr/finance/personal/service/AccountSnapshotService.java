@@ -43,8 +43,8 @@ public class AccountSnapshotService {
 
 		List<AccountBalanceSnapshot> snapshots = new ArrayList<>();
 		for (Account account : accounts) {
-			logger.info("Creating snapshot for account: " + account.getName() + " with balance: "
-					+ account.getBalance());
+			logger.info(
+					"Creating snapshot for account: " + account.getName() + " with balance: " + account.getBalance());
 			AccountBalanceSnapshot snapshot = AccountBalanceSnapshot.builder().account(account)
 					.balance(account.getBalance()).snapshotDate(snapshotDate).appUser(appUser).build();
 			snapshots.add(snapshot);

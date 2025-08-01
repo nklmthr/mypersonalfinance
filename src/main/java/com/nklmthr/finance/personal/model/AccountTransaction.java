@@ -36,38 +36,35 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonIdentityInfo(
-	    generator = ObjectIdGenerators.PropertyGenerator.class,
-	    property = "id"
-	)
-@ToString(exclude = {"category", "uploadedStatement", "account", "parent", "children", "attachments", "appUser"})
+@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
+@ToString(exclude = { "category", "uploadedStatement", "account", "parent", "children", "attachments", "appUser" })
 public class AccountTransaction {
 
 	@Id
 	@UuidGenerator
 	@Column
-    private String id;
+	private String id;
 
-    private LocalDateTime date;
+	private LocalDateTime date;
 
-    private BigDecimal amount;
+	private BigDecimal amount;
 
-    @Column(nullable = false, length =1000)
-    private String description;
-    
-    @Column(length = 2000)
+	@Column(nullable = false, length = 1000)
+	private String description;
+
+	@Column(length = 2000)
 	private String explanation;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private TransactionType type;
-    
-    @Column
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private TransactionType type;
+
+	@Column
 	private String href;
 
 	@Column
 	private String hrefText;
-	
+
 	@Column
 	@JsonIgnore
 	private String sourceId;
@@ -75,45 +72,45 @@ public class AccountTransaction {
 	@Column
 	@JsonIgnore
 	private String sourceThreadId;
-	
+
 	@Column
 	@JsonIgnore
 	private LocalDateTime sourceTime;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    private Account account;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+	private Account account;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    private Category category;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "category_id")
+	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+	private Category category;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    private AccountTransaction parent;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "parent_id")
+	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+	private AccountTransaction parent;
 
-    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    @Builder.Default
-    private List<AccountTransaction> children = new ArrayList<>();
-    
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JsonIgnore
-    private AppUser appUser;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "uploaded_statement_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    private UploadedStatement uploadedStatement;
-    
-    @OneToMany(mappedBy = "accountTransaction", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
-    @Builder.Default
-    private List<Attachment> attachments = new ArrayList<>();
-    
-    @Column
-    private String dataVersionId;
+	@OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+	@Builder.Default
+	private List<AccountTransaction> children = new ArrayList<>();
+
+	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@JsonIgnore
+	private AppUser appUser;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "uploaded_statement_id")
+	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+	private UploadedStatement uploadedStatement;
+
+	@OneToMany(mappedBy = "accountTransaction", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+	@Builder.Default
+	private List<Attachment> attachments = new ArrayList<>();
+
+	@Column
+	private String dataVersionId;
 
 }

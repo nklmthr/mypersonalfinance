@@ -11,17 +11,16 @@ import com.nklmthr.finance.personal.model.Category;
 
 public interface CategoryRepository extends JpaRepository<Category, String> {
 
-    List<Category> findByAppUserAndParentId(AppUser appUser, String parentId);
+	List<Category> findByAppUserAndParentId(AppUser appUser, String parentId);
 
-    Optional<Category> findByAppUserAndName(AppUser appUser, String name);
+	Optional<Category> findByAppUserAndName(AppUser appUser, String name);
 
-    List<Category> findByAppUser(AppUser appUser, Sort sort);
+	List<Category> findByAppUser(AppUser appUser, Sort sort);
 
-    List<Category> findByAppUser(AppUser appUser);
+	List<Category> findByAppUser(AppUser appUser);
 
-    void deleteByAppUserAndId(AppUser appUser, String id);
+	void deleteByAppUserAndId(AppUser appUser, String id);
 
-    Optional<Category> findByAppUserAndId(AppUser appUser, String id);
-    
+	Optional<Category> findByAppUserAndId(AppUser appUser, String id);
 
 }

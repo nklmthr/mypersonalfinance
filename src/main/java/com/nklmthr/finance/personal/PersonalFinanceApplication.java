@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableCaching
 public class PersonalFinanceApplication {
 
-    public static void main(String[] args) {
-        SpringApplication.run(PersonalFinanceApplication.class, args);
-    }
+	public static void main(String[] args) {
+		SpringApplication.run(PersonalFinanceApplication.class, args);
+	}
 }

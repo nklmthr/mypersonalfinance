@@ -28,7 +28,7 @@ public class BalanceSheetService {
 
 	@Autowired
 	private AccountBalanceSnapshotRepository accountBalanceSnapshotRepository;
-	
+
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BalanceSheetService.class);
 
 	public List<BalanceSheetDTO> generateBalanceSheet(int year) {

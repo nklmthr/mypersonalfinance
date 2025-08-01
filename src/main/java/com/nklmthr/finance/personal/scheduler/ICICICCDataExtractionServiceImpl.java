@@ -22,7 +22,7 @@ public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionServ
 
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
-	
+
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
 		if (!schedulerEnabled) {
@@ -31,13 +31,11 @@ public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionServ
 		}
 		super.run();
 	}
-	
+
 	public static void main(String[] args) {
 		ICICICCDataExtractionServiceImpl impl = new ICICICCDataExtractionServiceImpl();
 		impl.run();
 	}
-
-	
 
 	@Override
 	protected List<String> getEmailSubject() {

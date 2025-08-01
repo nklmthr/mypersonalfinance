@@ -30,39 +30,35 @@ public class UploadedStatement {
 	@UuidGenerator
 	@Column
 	private String id;
-	
+
 	@Column(nullable = false, length = 255)
 	private String filename;
 
-    @Column(length = 100)
-    private String uploadedBy;
+	@Column(length = 100)
+	private String uploadedBy;
 
-    @Column
-    private LocalDateTime uploadedAt;
+	@Column
+	private LocalDateTime uploadedAt;
 
-    @Column
-    @Enumerated(EnumType.STRING)
-    private Status status;
+	@Column
+	@Enumerated(EnumType.STRING)
+	private Status status;
 
-    @Lob
-    @Column(columnDefinition = "TEXT")
-    private String content;
+	@Lob
+	@Column(columnDefinition = "TEXT")
+	private String content;
 
-    @ManyToOne
-    @JoinColumn(name = "account_id")
-    private Account account;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "app_user_id")
-    @JsonIgnore
-    private AppUser appUser;
+	@ManyToOne
+	@JoinColumn(name = "account_id")
+	private Account account;
 
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "app_user_id")
+	@JsonIgnore
+	private AppUser appUser;
 
-    public enum Status {
-        UPLOADED,
-        PROCESSED,
-        FAILED
-    }
-
+	public enum Status {
+		UPLOADED, PROCESSED, FAILED
+	}
 
 }

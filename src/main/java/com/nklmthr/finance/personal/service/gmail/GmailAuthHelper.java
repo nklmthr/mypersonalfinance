@@ -20,7 +20,7 @@ import com.nklmthr.finance.personal.service.AppUserService;
 public class GmailAuthHelper {
 
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(GmailAuthHelper.class);
-	
+
 	@Value("${gmail.oauth.redirect-uri}")
 	private String redirectUri;
 
@@ -35,48 +35,35 @@ public class GmailAuthHelper {
 	private static final List<String> SCOPES = List.of(GmailScopes.GMAIL_READONLY);
 
 	public String getAuthorizationUrl(AppUser user) throws Exception {
-	    GoogleAuthorizationCodeFlow flow = buildFlow(user);
-	    return flow.newAuthorizationUrl()
-	        .setRedirectUri(redirectUri)
-	        .setState(user.getUsername())
-	        .build();
+		GoogleAuthorizationCodeFlow flow = buildFlow(user);
+		return flow.newAuthorizationUrl().setRedirectUri(redirectUri).setState(user.getUsername()).build();
 	}
 
 	public void exchangeCodeForTokens(AppUser user, String code) throws Exception {
-	    GoogleAuthorizationCodeFlow flow = buildFlow(user);
-	    TokenResponse tokenResponse = flow.newTokenRequest(code)
-	        .setRedirectUri(redirectUri)
-	        .execute();
-	    logger.info("Exchanging code for tokens for user: {}", user.getUsername());
-	    flow.createAndStoreCredential(tokenResponse, "user");
+		GoogleAuthorizationCodeFlow flow = buildFlow(user);
+		TokenResponse tokenResponse = flow.newTokenRequest(code).setRedirectUri(redirectUri).execute();
+		logger.info("Exchanging code for tokens for user: {}", user.getUsername());
+		flow.createAndStoreCredential(tokenResponse, "user");
 	}
 
 	public GoogleAuthorizationCodeFlow buildFlow(AppUser appUser) throws Exception {
-	    var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
-	            new InputStreamReader(getClass().getResourceAsStream(CREDENTIALS_FILE_PATH)));
+		var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
+				new InputStreamReader(getClass().getResourceAsStream(CREDENTIALS_FILE_PATH)));
 
-	    return new GoogleAuthorizationCodeFlow.Builder(
-	            GoogleNetHttpTransport.newTrustedTransport(),
-	            JSON_FACTORY,
-	            clientSecrets,
-	            SCOPES
-	    )
-	    .setDataStoreFactory(new AppUserDataStoreFactory(appUser, appUserService.getRepository()))
-	    .setAccessType("offline")
-	    .build();
+		return new GoogleAuthorizationCodeFlow.Builder(GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY,
+				clientSecrets, SCOPES)
+				.setDataStoreFactory(new AppUserDataStoreFactory(appUser, appUserService.getRepository()))
+				.setAccessType("offline").build();
 	}
-	
+
 	public boolean isUserConnected(String username) {
 		try {
 			AppUser user = appUserService.findByUsername(username);
-			return user.getGmailAccessToken() != null
-					&& user.getGmailRefreshToken() != null
+			return user.getGmailAccessToken() != null && user.getGmailRefreshToken() != null
 					&& (user.getGmailTokenExpiry() == null || user.getGmailTokenExpiry() > System.currentTimeMillis());
 		} catch (Exception e) {
 			return false;
 		}
 	}
-
-
 
 }

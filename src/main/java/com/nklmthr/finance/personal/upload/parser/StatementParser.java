@@ -12,32 +12,32 @@ import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
 
 public abstract class StatementParser {
-	
-	 public List<AccountTransaction> parse(InputStream csvInputStream, UploadedStatement statement) {
-	        List<String[]> rows = readCsv(csvInputStream);
-	        return mapTransactions(rows, statement);
-	    }
 
-	    // Reads the CSV file into a list of string arrays using OpenCSV
-	    protected List<String[]> readCsv(InputStream inputStream) {
-	        List<String[]> rows = new ArrayList<>();
-	        try (CSVReader csvReader = new CSVReader(new InputStreamReader(inputStream))) {
-	            String[] row;
-	            while ((row = csvReader.readNext()) != null) {
-	                if (isValidRow(row)) {
-	                    rows.add(row);
-	                }
-	            }
-	        } catch (IOException | CsvValidationException e) {
-	            throw new RuntimeException("Failed to read CSV file", e);
-	        }
-	        return rows;
-	    }
+	public List<AccountTransaction> parse(InputStream csvInputStream, UploadedStatement statement) {
+		List<String[]> rows = readCsv(csvInputStream);
+		return mapTransactions(rows, statement);
+	}
 
-	    protected boolean isValidRow(String[] row) {
-	        return row.length > 1 && !row[0].isBlank(); 
-	    }
+	// Reads the CSV file into a list of string arrays using OpenCSV
+	protected List<String[]> readCsv(InputStream inputStream) {
+		List<String[]> rows = new ArrayList<>();
+		try (CSVReader csvReader = new CSVReader(new InputStreamReader(inputStream))) {
+			String[] row;
+			while ((row = csvReader.readNext()) != null) {
+				if (isValidRow(row)) {
+					rows.add(row);
+				}
+			}
+		} catch (IOException | CsvValidationException e) {
+			throw new RuntimeException("Failed to read CSV file", e);
+		}
+		return rows;
+	}
 
-	    // Must be implemented by subclasses to map rows to domain objects
-	    protected abstract List<AccountTransaction> mapTransactions(List<String[]> rows, UploadedStatement statement);
+	protected boolean isValidRow(String[] row) {
+		return row.length > 1 && !row[0].isBlank();
+	}
+
+	// Must be implemented by subclasses to map rows to domain objects
+	protected abstract List<AccountTransaction> mapTransactions(List<String[]> rows, UploadedStatement statement);
 }

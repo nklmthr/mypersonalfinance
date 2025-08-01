@@ -14,15 +14,16 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CategoryDTO {
 	public CategoryDTO(Category category) {
-        this.id = category.getId();
-        this.name = category.getName();
-        this.parentId = category.getParent() != null ? category.getParent().getId() : null;
-        this.systemCategory = category.isSystemCategory();
-    }
+		this.id = category.getId();
+		this.name = category.getName();
+		this.parentId = category.getParent() != null ? category.getParent().getId() : null;
+		this.systemCategory = category.isSystemCategory();
+	}
+
 	private String id;
-    private String name;
-    private String parentId;
-    private boolean systemCategory;
-    private List<CategoryDTO> children = new ArrayList<>();
+	private String name;
+	private String parentId;
+	private boolean systemCategory;
+	private List<CategoryDTO> children = new ArrayList<>();
 
 }

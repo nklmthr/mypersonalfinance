@@ -25,30 +25,24 @@ public class SecurityConfig {
 
 	@Bean
 	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-		http
-			.cors(Customizer.withDefaults())
-			.csrf(csrf -> csrf.disable())
-			.authorizeHttpRequests(auth -> auth
-				.requestMatchers("/api/public/**", "/oauth/authorize", "/oauth/callback", "/signup").permitAll()
-				.anyRequest().authenticated()
-			)
-			.exceptionHandling(exception -> exception
-				.authenticationEntryPoint((request, response, authException) -> {
-					response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
-				})
-			)
-			.formLogin(login -> login
-				.loginProcessingUrl("/login")
-				.successHandler((request, response, authentication) -> response.setStatus(HttpServletResponse.SC_OK))
-				.failureHandler((request, response, exception) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED))
-				.permitAll()
-			)
-			.logout(logout -> logout.logoutUrl("/logout").permitAll())
-			.httpBasic(withDefaults());
+		http.cors(Customizer.withDefaults()).csrf(csrf -> csrf.disable())
+				.authorizeHttpRequests(
+						auth -> auth.requestMatchers("/api/public/**", "/oauth/authorize", "/oauth/callback", "/signup")
+								.permitAll().anyRequest().authenticated())
+				.exceptionHandling(
+						exception -> exception.authenticationEntryPoint((request, response, authException) -> {
+							response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+						}))
+				.formLogin(login -> login.loginProcessingUrl("/login")
+						.successHandler(
+								(request, response, authentication) -> response.setStatus(HttpServletResponse.SC_OK))
+						.failureHandler((request, response, exception) -> response
+								.sendError(HttpServletResponse.SC_UNAUTHORIZED))
+						.permitAll())
+				.logout(logout -> logout.logoutUrl("/logout").permitAll()).httpBasic(withDefaults());
 
 		return http.build();
 	}
-
 
 	@Bean
 	public AuthenticationManager authManager(HttpSecurity http) throws Exception {

@@ -25,7 +25,7 @@ public class SBICsvParser extends StatementParser {
 			if (row[0].isBlank()) {
 				continue;
 			}
-	
+
 			LocalDateTime date = null;
 			try {
 				LocalDate datePart = LocalDate.parse(row[0].trim(), DATE_FORMATTER);
@@ -34,7 +34,6 @@ public class SBICsvParser extends StatementParser {
 				logger.error("Error parsing date from row: {}", row[0], e);
 				continue; // skip rows with date parsing errors
 			}
-			
 
 //			String transSplit[] = splitTransferDescription(row[1].trim());
 //			if(transSplit[0] == null || transSplit[0].isBlank()) {

@@ -34,7 +34,7 @@ public class UploadedStatementService {
 	private AccountTransactionService accountTransactionService;
 	@Autowired
 	private AppUserService appUserService;
-	
+
 	@Autowired
 	private CategoryService categoryService;
 
@@ -56,7 +56,7 @@ public class UploadedStatementService {
 				new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
 			content = reader.lines().collect(Collectors.joining("\n"));
 		}
-		
+
 		UploadedStatement statement = new UploadedStatement();
 		statement.setAppUser(appUser); // associate with current user
 		statement.setFilename(file.getOriginalFilename());
@@ -77,7 +77,7 @@ public class UploadedStatementService {
 	@Transactional
 	public void process(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
-		
+
 		UploadedStatement statement = uploadedStatementRepository.findByAppUserAndId(appUser, id)
 				.orElseThrow(() -> new IllegalArgumentException("Statement not found: " + id));
 		logger.info("Processing statement with id: {} for user: {}", id, appUser.getUsername());

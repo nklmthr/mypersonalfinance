@@ -64,7 +64,7 @@ public class Attachment {
 
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "account_transaction_id", referencedColumnName = "id", nullable = false)
-	@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	private AccountTransaction accountTransaction;
 
 	public String getFileType() {
@@ -94,9 +94,9 @@ public class Attachment {
 		}
 		return null;
 	}
-	
+
 	@ManyToOne(optional = false, fetch = FetchType.LAZY)
 	@JsonIgnore
-    private AppUser appUser;
+	private AppUser appUser;
 
 }

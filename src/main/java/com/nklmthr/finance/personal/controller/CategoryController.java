@@ -23,44 +23,42 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CategoryController {
 
-    private final CategoryService categoryService;
+	private final CategoryService categoryService;
 
-    @GetMapping
-    public List<CategoryDTO> getAll() {
-        return categoryService.getAllCategories();
-    }
-    
+	@GetMapping
+	public List<CategoryDTO> getAll() {
+		return categoryService.getAllCategories();
+	}
 
-    @GetMapping("/{id}")
-    public ResponseEntity<Category> getById(@PathVariable String id) {
-        Category category =  categoryService.getCategoryById(id);
-        if (category != null) {
+	@GetMapping("/{id}")
+	public ResponseEntity<Category> getById(@PathVariable String id) {
+		Category category = categoryService.getCategoryById(id);
+		if (category != null) {
 			return ResponseEntity.ok(category);
 		} else {
 			return ResponseEntity.notFound().build();
 		}
-    }
+	}
 
-    @GetMapping("/{id}/children")
-    public List<Category> getChildren(@PathVariable String id) {
-        return categoryService.getChildren(id);
-    }
+	@GetMapping("/{id}/children")
+	public List<Category> getChildren(@PathVariable String id) {
+		return categoryService.getChildren(id);
+	}
 
-    @PostMapping
-    public Category create(@RequestBody Category category) {
-        return categoryService.saveCategory(category);
-    }
+	@PostMapping
+	public Category create(@RequestBody Category category) {
+		return categoryService.saveCategory(category);
+	}
 
-    @PutMapping("/{id}")
-    public ResponseEntity<Category> update(@PathVariable String id, @RequestBody Category updated) {
-        return categoryService.getCategoryById(id) != null
-				? ResponseEntity.ok(categoryService.saveCategory(updated))
+	@PutMapping("/{id}")
+	public ResponseEntity<Category> update(@PathVariable String id, @RequestBody Category updated) {
+		return categoryService.getCategoryById(id) != null ? ResponseEntity.ok(categoryService.saveCategory(updated))
 				: ResponseEntity.notFound().build();
-    }
+	}
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable String id) {
-        categoryService.deleteCategory(id);
-        return ResponseEntity.noContent().build();
-    }
+	@DeleteMapping("/{id}")
+	public ResponseEntity<Void> delete(@PathVariable String id) {
+		categoryService.deleteCategory(id);
+		return ResponseEntity.noContent().build();
+	}
 }

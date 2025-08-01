@@ -11,29 +11,22 @@ import com.nklmthr.finance.personal.model.AccountBalanceSnapshot;
 import com.nklmthr.finance.personal.model.AppUser;
 
 public interface AccountBalanceSnapshotRepository extends JpaRepository<AccountBalanceSnapshot, String> {
-	
+
 	@Query("""
-			SELECT abs FROM AccountBalanceSnapshot abs
-			LEFT JOIN FETCH abs.account acc
-			LEFT JOIN FETCH acc.accountType
-			LEFT JOIN FETCH acc.institution
-			WHERE abs.appUser = :appUser AND abs.snapshotDate >= :fromDate AND abs.snapshotDate < :toDate
-		""")
-		List<AccountBalanceSnapshot> findByAppUserAndSnapshotRange(
-			@Param("appUser") AppUser appUser,
-			@Param("fromDate") LocalDateTime fromDate,
-			@Param("toDate") LocalDateTime toDate
-		);
+				SELECT abs FROM AccountBalanceSnapshot abs
+				LEFT JOIN FETCH abs.account acc
+				LEFT JOIN FETCH acc.accountType
+				LEFT JOIN FETCH acc.institution
+				WHERE abs.appUser = :appUser AND abs.snapshotDate >= :fromDate AND abs.snapshotDate < :toDate
+			""")
+	List<AccountBalanceSnapshot> findByAppUserAndSnapshotRange(@Param("appUser") AppUser appUser,
+			@Param("fromDate") LocalDateTime fromDate, @Param("toDate") LocalDateTime toDate);
 
-
-	boolean existsByAppUserAndAccountIdAndSnapshotDateAfter(
-	    AppUser appUser,
-	    String accountId,
-	    LocalDateTime snapshotDate
-	);
+	boolean existsByAppUserAndAccountIdAndSnapshotDateAfter(AppUser appUser, String accountId,
+			LocalDateTime snapshotDate);
 
 	List<AccountBalanceSnapshot> findAllByAppUser(AppUser appUser);
-	
+
 	List<AccountBalanceSnapshot> findByAppUserAndSnapshotDateAfter(AppUser appUser, LocalDateTime date);
 
 }

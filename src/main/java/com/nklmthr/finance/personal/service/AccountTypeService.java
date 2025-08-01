@@ -21,7 +21,7 @@ public class AccountTypeService {
 	private AppUserService appUserService;
 	@Autowired
 	private AccountTypeRepository accountTypeRepository;
-	
+
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AccountTypeService.class);
 
 	public AccountType create(AccountType accountType) {
@@ -61,7 +61,7 @@ public class AccountTypeService {
 		existing.setDescription(updated.getDescription());
 		existing.setClassification(updated.getClassification());
 		existing.setAccountTypeBalance(updated.getAccountTypeBalance());
-		existing.setAppUser(appUser); 
+		existing.setAppUser(appUser);
 		logger.info("Updating account type with id: " + id + " for user: " + appUser.getUsername());
 		return accountTypeRepository.save(existing);
 	}

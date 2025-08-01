@@ -36,14 +36,14 @@ public class AppUser {
 	@Column(nullable = false)
 	@JsonIgnore
 	private String role; // e.g., USER, ADMIN
-	
+
 	@JsonIgnore
 	@Column(nullable = false)
 	private String email;
-	
+
 	@Builder.Default
 	private boolean enabled = true;
-	
+
 	@Column(length = 4096)
 	@JsonIgnore
 	private String gmailAccessToken;
@@ -54,7 +54,7 @@ public class AppUser {
 
 	@JsonIgnore
 	@Column
-	private Long gmailTokenExpiry; 
+	private Long gmailTokenExpiry;
 
 	@JsonIgnore
 	@Column

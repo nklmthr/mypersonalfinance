@@ -29,7 +29,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
-	
+
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
 		if (!schedulerEnabled) {
@@ -38,30 +38,23 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		}
 		super.run();
 	}
-	
+
 	// Matches typical debit messages, including ATM debits
 	private static final Pattern AMOUNT_PATTERN = Pattern.compile(
-			"Amount Debited: INR\\s+([\\d,]+(?:\\.\\d+)?)"
-			+ "|INR\\s+([\\d,]+(?:\\.\\d+)?)\\s+has been debited"
-			+ "|debited from your A/c no\\. .*? on .*? for INR ([\\d,]+(?:\\.\\d+)?)"
-			+ "|debited with INR\\s+([\\d,]+(?:\\.\\d+)?)",
+			"Amount Debited: INR\\s+([\\d,]+(?:\\.\\d+)?)" + "|INR\\s+([\\d,]+(?:\\.\\d+)?)\\s+has been debited"
+					+ "|debited from your A/c no\\. .*? on .*? for INR ([\\d,]+(?:\\.\\d+)?)"
+					+ "|debited with INR\\s+([\\d,]+(?:\\.\\d+)?)",
 			Pattern.CASE_INSENSITIVE);
 
 	private static final String[] DESCRIPTION_REGEXES = {
 			"Transaction Info:\\s*([\\p{L}0-9/\\- ]+?)(?=(?: If | by | at |\\.|$))",
-			"by ([\\p{L}0-9 \\-]+?)(?=(?:\\.| If | at |$))",
-			"at ([\\p{L}0-9 \\-/]+?)(?=(?:\\.| If |$))",
+			"by ([\\p{L}0-9 \\-]+?)(?=(?:\\.| If | at |$))", "at ([\\p{L}0-9 \\-/]+?)(?=(?:\\.| If |$))",
 			"at ([\\p{L}0-9 \\-/]+?)(?= on \\d{2}-\\d{2}-\\d{4})" // for ATM formats
 	};
 
-
-	
-
 	@Override
 	protected List<String> getEmailSubject() {
-		return Arrays.asList(
-				"Debit transaction alert for Axis Bank A/c",
-				"was debited from your A/c no. XX2804.",
+		return Arrays.asList("Debit transaction alert for Axis Bank A/c", "was debited from your A/c no. XX2804.",
 				"Notification from Axis Bank");
 	}
 

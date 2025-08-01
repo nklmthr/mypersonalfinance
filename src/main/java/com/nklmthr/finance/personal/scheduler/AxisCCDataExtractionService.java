@@ -22,7 +22,7 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
-	
+
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
 		if (!schedulerEnabled) {

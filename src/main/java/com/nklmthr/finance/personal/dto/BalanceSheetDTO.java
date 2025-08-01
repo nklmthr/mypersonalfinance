@@ -12,6 +12,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class BalanceSheetDTO {
-    private List<BalanceSheetMonthlyDTO> rows;
-    private Map<String, BigDecimal> summaryByMonth; // Totals for each month
+	private List<BalanceSheetMonthlyDTO> rows;
+	private Map<String, BigDecimal> summaryByMonth; // Totals for each month
 }

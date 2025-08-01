@@ -29,7 +29,7 @@ public class AccountService {
 
 	@Autowired
 	private AccountTransactionRepository acountTransactionRepository;
-	
+
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AccountService.class);
 
 	public List<Account> getAllAccounts() {
@@ -42,14 +42,14 @@ public class AccountService {
 		AppUser appUser = appUserService.getCurrentUser();
 		logger.info("Finding account by id: " + id + " for user: " + appUser.getUsername());
 		return findByAppUserAndId(id, appUser);
-		
+
 	}
-	
+
 	public Account findByAppUserAndId(String id, AppUser appUser) {
 		logger.info("Fetching account with id: " + id + " for user: " + appUser.getUsername());
 		return accountRepository.findByAppUserAndId(appUser, id).orElseThrow(
 				() -> new RuntimeException("No access to this account or Account not found with id: " + id));
-		
+
 	}
 
 	public Account createAccount(Account account) {
@@ -98,13 +98,17 @@ public class AccountService {
 	public List<Account> getFilteredAccounts(String accountTypeId, String institutionId) {
 		AppUser appUser = appUserService.getCurrentUser();
 		if (accountTypeId != null && institutionId != null) {
-			logger.info("Fetching accounts for user: " + appUser.getUsername() + " with accountTypeId: " + accountTypeId + " and institutionId: " + institutionId);
-			return accountRepository.findByAppUserAndAccountTypeIdAndInstitutionId(appUser, accountTypeId, institutionId);
+			logger.info("Fetching accounts for user: " + appUser.getUsername() + " with accountTypeId: " + accountTypeId
+					+ " and institutionId: " + institutionId);
+			return accountRepository.findByAppUserAndAccountTypeIdAndInstitutionId(appUser, accountTypeId,
+					institutionId);
 		} else if (accountTypeId != null) {
-			logger.info("Fetching accounts for user: " + appUser.getUsername() + " with accountTypeId: " + accountTypeId);
+			logger.info(
+					"Fetching accounts for user: " + appUser.getUsername() + " with accountTypeId: " + accountTypeId);
 			return accountRepository.findByAppUserAndAccountTypeId(appUser, accountTypeId);
 		} else if (institutionId != null) {
-			logger.info("Fetching accounts for user: " + appUser.getUsername() + " with institutionId: " + institutionId);
+			logger.info(
+					"Fetching accounts for user: " + appUser.getUsername() + " with institutionId: " + institutionId);
 			return accountRepository.findByAppUserAndInstitutionId(appUser, institutionId);
 		} else {
 			logger.info("Fetching all accounts for user: " + appUser.getUsername());
@@ -117,7 +121,7 @@ public class AccountService {
 		logger.info("Fetching account by name: " + accountName + " for user: " + appUser.getUsername());
 		return getAccountByName(accountName, appUser);
 	}
-	
+
 	public Account getAccountByName(String accountName, AppUser appUser) {
 		logger.info("Fetching account by name: " + accountName + " for user: " + appUser.getUsername());
 		return accountRepository.findByAppUserAndName(appUser, accountName)

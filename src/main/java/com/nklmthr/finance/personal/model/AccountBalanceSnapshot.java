@@ -30,20 +30,20 @@ public class AccountBalanceSnapshot {
 	@Id
 	@UuidGenerator
 	@Column
-    private String id;
+	private String id;
 
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "account_id", nullable = false)
-    private Account account;
+	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@JoinColumn(name = "account_id", nullable = false)
+	private Account account;
 
-    @Column(nullable = false)
-    private LocalDateTime snapshotDate;
+	@Column(nullable = false)
+	private LocalDateTime snapshotDate;
 
-    @Column(nullable = false)
-    private BigDecimal balance;
-    
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JsonIgnore
-    private AppUser appUser;
+	@Column(nullable = false)
+	private BigDecimal balance;
+
+	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@JsonIgnore
+	private AppUser appUser;
 
 }

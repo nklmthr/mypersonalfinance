@@ -21,26 +21,26 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 public class Category {
 
 	@Id
 	@UuidGenerator
 	@Column
-    private String id;
+	private String id;
 
-    @Column(nullable = false)
-    private String name;
+	@Column(nullable = false)
+	private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    private Category parent;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "parent_id")
+	private Category parent;
 
-    @Column(name = "system_category", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
-    private boolean systemCategory = false;
-    
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "app_user_id", nullable = false)
-    @JsonIgnore
-    private AppUser appUser;
+	@Column(name = "system_category", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+	private boolean systemCategory = false;
+
+	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@JoinColumn(name = "app_user_id", nullable = false)
+	@JsonIgnore
+	private AppUser appUser;
 }

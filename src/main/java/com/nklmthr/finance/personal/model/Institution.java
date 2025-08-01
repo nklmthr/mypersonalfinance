@@ -22,20 +22,20 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class Institution {
-	
+
 	@Id
 	@UuidGenerator
 	@Column
-    private String id;
+	private String id;
 
-    @Column(nullable = false, unique = true)
-    private String name;
+	@Column(nullable = false, unique = true)
+	private String name;
 
-    @Column(length = 1000)
-    private String description;
-    
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JsonIgnore
-    private AppUser appUser;
+	@Column(length = 1000)
+	private String description;
+
+	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@JsonIgnore
+	private AppUser appUser;
 
 }

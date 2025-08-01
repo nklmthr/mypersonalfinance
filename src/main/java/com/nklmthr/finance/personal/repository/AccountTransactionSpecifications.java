@@ -65,8 +65,6 @@ public class AccountTransactionSpecifications {
 		};
 	}
 
-
-
 	public static Specification<AccountTransaction> belongsToUser(AppUser appUser) {
 		return (root, query, cb) -> cb.equal(root.get("appUser"), appUser);
 	}

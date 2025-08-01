@@ -38,7 +38,7 @@ public class GmailAuthorizationController {
 
 	@Autowired
 	private SecurityConfig securityConfig;
-	
+
 	@Value("${app.frontend.base-url}")
 	private String frontendBaseUrl;
 
@@ -67,7 +67,6 @@ public class GmailAuthorizationController {
 		return Map.of("connected", connected);
 	}
 
-
 	@GetMapping("/api/auth/status")
 	public ResponseEntity<?> status() {
 		AppUser user = appUserService.getCurrentUser();
@@ -92,27 +91,23 @@ public class GmailAuthorizationController {
 
 		return ResponseEntity.ok("Signup successful");
 	}
-	
+
 	@PostMapping("/api/gmail/disconnect")
 	public ResponseEntity<?> disconnectGmail(Principal principal) {
-	    AppUser user = appUserService.findByUsername(principal.getName());
-	    user.setGmailAccessToken(null);
-	    user.setGmailRefreshToken(null);
-	    user.setGmailTokenExpiry(null);
-	    appUserService.save(user);
-	    return ResponseEntity.ok(Map.of("disconnected", true));
+		AppUser user = appUserService.findByUsername(principal.getName());
+		user.setGmailAccessToken(null);
+		user.setGmailRefreshToken(null);
+		user.setGmailTokenExpiry(null);
+		appUserService.save(user);
+		return ResponseEntity.ok(Map.of("disconnected", true));
 	}
-	
-	@GetMapping("/api/user/profile")
-    public Map<String, Object> getProfile(Principal principal) {
-        String username = principal.getName();
-        AppUser user = appUserService.findByUsername(username);
 
-        return Map.of(
-            "username", user.getUsername(),
-            "email", user.getEmail(),
-            "roles", user.getRole().split("\\,")
-        );
-    }
+	@GetMapping("/api/user/profile")
+	public Map<String, Object> getProfile(Principal principal) {
+		String username = principal.getName();
+		AppUser user = appUserService.findByUsername(username);
+
+		return Map.of("username", user.getUsername(), "email", user.getEmail(), "roles", user.getRole().split("\\,"));
+	}
 
 }

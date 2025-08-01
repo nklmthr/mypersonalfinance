@@ -17,7 +17,8 @@ public interface AccountRepository extends JpaRepository<Account, String> {
 
 	List<Account> findByAppUserAndInstitutionId(AppUser user, String institutionId);
 
-	List<Account> findByAppUserAndAccountTypeIdAndInstitutionId(AppUser user, String accountTypeId, String institutionId);
+	List<Account> findByAppUserAndAccountTypeIdAndInstitutionId(AppUser user, String accountTypeId,
+			String institutionId);
 
 	Optional<Account> findByAppUserAndName(AppUser appUser, String string);
 
