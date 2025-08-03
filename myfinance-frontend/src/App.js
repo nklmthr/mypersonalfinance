@@ -31,7 +31,7 @@ export default function App() {
 						element={
 							<RequireAuth>
 								<DashboardLayout pageTitle="🏠 Home">
-									<Overview />
+									<Transactions />
 								</DashboardLayout>
 							</RequireAuth>
 						}
