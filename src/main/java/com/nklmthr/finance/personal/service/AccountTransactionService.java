@@ -153,6 +153,8 @@ public class AccountTransactionService {
 		credit.setCategory(categoryService.getTransferCategory());
 		logger.info("Creating transfer transaction: {}", credit);
 		logger.info("Updating source transaction: {}", debit);
+		debit.getAccount().setBalance(debit.getAccount().getBalance().subtract(debit.getAmount()));
+		credit.getAccount().setBalance(credit.getAccount().getBalance().add(credit.getAmount()));
 		save(debit, appUser);
 		save(credit, appUser);
 	}
