@@ -168,7 +168,12 @@ function TransferForm({ transaction, setTransaction, onCancel, onSubmit, account
 						{accounts.find(a => a.id === transaction.accountId)?.name || "Unknown"}
 					</div>
 				</div>
-
+				<div>
+				  <span className="text-sm">Amount</span>
+				  <div className="mt-1 block w-full border rounded px-2 py-1 bg-gray-100">
+				    ₹{transaction.amount}
+				  </div>
+				</div>
 				<label className="block">
 					<span className="text-sm">To Account</span>
 					<select

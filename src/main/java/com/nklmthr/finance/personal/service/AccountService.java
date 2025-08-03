@@ -127,5 +127,12 @@ public class AccountService {
 		return accountRepository.findByAppUserAndName(appUser, accountName)
 				.orElseThrow(() -> new RuntimeException("Account not found with name: " + accountName));
 	}
+	
+	public void save(Account account) {
+		AppUser appUser = appUserService.getCurrentUser();
+		account.setAppUser(appUser);
+		logger.info("Saving account for user: " + appUser.getUsername() + " with name: " + account.getName());
+		accountRepository.save(account);
+	}
 
 }

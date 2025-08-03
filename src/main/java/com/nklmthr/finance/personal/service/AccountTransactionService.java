@@ -132,31 +132,37 @@ public class AccountTransactionService {
 	@Transactional
 	public void createTransfer(TransferRequest request) throws Exception {
 		AppUser appUser = appUserService.getCurrentUser();
-
+		logger.info("Creating transfer from transaction ID: {} to account ID: {}", request.getSourceTransactionId(),
+				request.getDestinationAccountId());
 		AccountTransaction debit = getById(request.getSourceTransactionId())
 				.orElseThrow(() -> new Exception("Source transaction not found"));
-
+		logger.info("Found source transaction: {}", debit);
+		Account fromAccount = debit.getAccount();
+		logger.info("Source account: {}", fromAccount);
 		Account toAccount = accountService.findById(request.getDestinationAccountId());
-
+		logger.info("Destination account: {}", toAccount);
+		fromAccount.setBalance(fromAccount.getBalance().subtract(debit.getAmount()));
+		toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
+		logger.info("Updating balances - From Account: {}, To Account: {}", fromAccount.getBalance(),
+				toAccount.getBalance());
 		// Set category to Transfer
 		debit.setCategory(categoryService.getTransferCategory());
-
+		debit.setAppUser(appUser);
 		// Create CREDIT transaction
 		AccountTransaction credit = new AccountTransaction();
 		credit.setAccount(toAccount);
-		toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
 		credit.setAmount(debit.getAmount());
 		credit.setDate(debit.getDate());
 		credit.setDescription(debit.getDescription());
 		credit.setExplanation(request.getExplanation());
 		credit.setType(TransactionType.CREDIT);
 		credit.setCategory(categoryService.getTransferCategory());
+		credit.setAppUser(appUser);
 		logger.info("Creating transfer transaction: {}", credit);
 		logger.info("Updating source transaction: {}", debit);
-		debit.getAccount().setBalance(debit.getAccount().getBalance().subtract(debit.getAmount()));
-		credit.getAccount().setBalance(credit.getAccount().getBalance().add(credit.getAmount()));
-		save(debit, appUser);
-		save(credit, appUser);
+		accountTransactionRepository.save(debit);
+		accountTransactionRepository.save(credit);
+		logger.info("Transfer created successfully from {} to {}", fromAccount.getName(), toAccount.getName());
 	}
 
 	@Transactional
