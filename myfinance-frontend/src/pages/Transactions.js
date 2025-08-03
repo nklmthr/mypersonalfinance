@@ -453,16 +453,19 @@ export default function Transactions() {
 
 	const flattenCategories = (categories, prefix = "") => {
 	    let flat = [];
-	    // Handle the case where categories is an array with a single object
-	    const categoryList = Array.isArray(categories) && categories.length === 1 && categories[0].children ? categories[0].children : categories;
+	    // Always treat categories as an array
+	    const categoryList = Array.isArray(categories) ? categories : [categories];
+	    
 	    for (const c of categoryList) {
 	        flat.push({ id: c.id, name: prefix + c.name });
+	        console.log(prefix + c.name);
 	        if (c.children && c.children.length > 0) {
 	            flat = flat.concat(flattenCategories(c.children, prefix + "— "));
 	        }
 	    }
 	    return flat;
 	};
+
 
 	const renderRow = (tx, isChild = false, index = 0) => {
 		const baseColor = isChild ? "bg-gray-50 border-dashed" :
