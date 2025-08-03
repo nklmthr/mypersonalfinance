@@ -16,15 +16,15 @@ function TransactionForm({ transaction, setTransaction, onCancel, onSubmit, acco
 		return () => document.removeEventListener("keydown", handler);
 	}, [onCancel]);
 	const flattenCategories = (categories, prefix = "") => {
-			let flat = [];
-			for (const c of categories) {
-				flat.push({ id: c.id, name: prefix + c.name });
-				if (c.children?.length > 0) {
-					flat = flat.concat(flattenCategories(c.children, prefix + "— "));
-				}
+		let flat = [];
+		for (const c of categories) {
+			flat.push({ id: c.id, name: prefix + c.name });
+			if (c.children?.length > 0) {
+				flat = flat.concat(flattenCategories(c.children, prefix + "— "));
 			}
-			return flat;
-		};
+		}
+		return flat;
+	};
 
 	const submit = () => {
 		onSubmit({
@@ -169,10 +169,10 @@ function TransferForm({ transaction, setTransaction, onCancel, onSubmit, account
 					</div>
 				</div>
 				<div>
-				  <span className="text-sm">Amount</span>
-				  <div className="mt-1 block w-full border rounded px-2 py-1 bg-gray-100">
-				    ₹{transaction.amount}
-				  </div>
+					<span className="text-sm">Amount</span>
+					<div className="mt-1 block w-full border rounded px-2 py-1 bg-gray-100">
+						₹{transaction.amount}
+					</div>
 				</div>
 				<label className="block">
 					<span className="text-sm">To Account</span>
@@ -210,158 +210,158 @@ function TransferForm({ transaction, setTransaction, onCancel, onSubmit, account
 	);
 }
 function TransactionSplit({ transaction, setTransaction, onCancel, onSubmit, categories }) {
-  const [children, setChildren] = useState(() =>
-    (transaction?.children || []).map(c => ({
-      ...c,
-      categoryId: c.category?.id || "",
-    }))
-  );
+	const [children, setChildren] = useState(() =>
+		(transaction?.children || []).map(c => ({
+			...c,
+			categoryId: c.category?.id || "",
+		}))
+	);
 
-  // Update children if transaction changes
-  useEffect(() => {
-    if (transaction?.children) {
-      setChildren(
-        transaction.children.map(c => ({
-          ...c,
-          categoryId: c.category?.id || "",
-        }))
-      );
-    }
-  }, [transaction]);
+	// Update children if transaction changes
+	useEffect(() => {
+		if (transaction?.children) {
+			setChildren(
+				transaction.children.map(c => ({
+					...c,
+					categoryId: c.category?.id || "",
+				}))
+			);
+		}
+	}, [transaction]);
 
-  // Escape key handler
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.key === "Escape") {
-        onCancel();
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onCancel]);
+	// Escape key handler
+	useEffect(() => {
+		const handler = (e) => {
+			if (e.key === "Escape") {
+				onCancel();
+			}
+		};
+		document.addEventListener("keydown", handler);
+		return () => document.removeEventListener("keydown", handler);
+	}, [onCancel]);
 
-  const addChild = () => {
-    setChildren([
-      ...children,
-      {
-        description: "",
-        amount: "",
-        categoryId: ""
-      }
-    ]);
-  };
+	const addChild = () => {
+		setChildren([
+			...children,
+			{
+				description: "",
+				amount: "",
+				categoryId: ""
+			}
+		]);
+	};
 
-  const flattenCategories = (categories, prefix = "") => {
-    let flat = [];
-    const categoryList = Array.isArray(categories) && categories.length === 1 && categories[0].children
-      ? categories[0].children
-      : categories;
+	const flattenCategories = (categories, prefix = "") => {
+		let flat = [];
+		const categoryList = Array.isArray(categories) && categories.length === 1 && categories[0].children
+			? categories[0].children
+			: categories;
 
-    for (const c of categoryList) {
-      flat.push({ id: c.id, name: prefix + c.name });
-      if (c.children && c.children.length > 0) {
-        flat = flat.concat(flattenCategories(c.children, prefix + "— "));
-      }
-    }
-    return flat;
-  };
+		for (const c of categoryList) {
+			flat.push({ id: c.id, name: prefix + c.name });
+			if (c.children && c.children.length > 0) {
+				flat = flat.concat(flattenCategories(c.children, prefix + "— "));
+			}
+		}
+		return flat;
+	};
 
-  const updateChild = (index, key, value) => {
-    const updated = [...children];
-    updated[index][key] = value;
-    setChildren(updated);
-  };
+	const updateChild = (index, key, value) => {
+		const updated = [...children];
+		updated[index][key] = value;
+		setChildren(updated);
+	};
 
-  const submit = () => {
-    const total = children.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
-    const parentAmt = parseFloat(transaction.amount);
-    if (isNaN(parentAmt) || Math.abs(total - parentAmt) > 1) {
-      alert(`Child transaction amounts must sum up to ₹${isNaN(parentAmt) ? 0 : parentAmt}. Entered total: ₹${total}`);
-      return;
-    }
-    const enrichedChildren = children.map(c => ({
-      ...c,
-      date: transaction.date,
-      type: transaction.type,
-      accountId: transaction.accountId
-    }));
-    onSubmit({
-      ...transaction,
-      children: enrichedChildren
-    });
-  };
+	const submit = () => {
+		const total = children.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+		const parentAmt = parseFloat(transaction.amount);
+		if (isNaN(parentAmt) || Math.abs(total - parentAmt) > 1) {
+			alert(`Child transaction amounts must sum up to ₹${isNaN(parentAmt) ? 0 : parentAmt}. Entered total: ₹${total}`);
+			return;
+		}
+		const enrichedChildren = children.map(c => ({
+			...c,
+			date: transaction.date,
+			type: transaction.type,
+			accountId: transaction.accountId
+		}));
+		onSubmit({
+			...transaction,
+			children: enrichedChildren
+		});
+	};
 
-  const flattenedCategories = flattenCategories(categories);
+	const flattenedCategories = flattenCategories(categories);
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-      <form
-        onSubmit={e => { e.preventDefault(); submit(); }}
-        className="bg-white p-6 rounded shadow-lg w-full max-w-2xl space-y-4"
-      >
-        <h3 className="text-lg font-semibold">Split Transaction</h3>
+	return (
+		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+			<form
+				onSubmit={e => { e.preventDefault(); submit(); }}
+				className="bg-white p-6 rounded shadow-lg w-full max-w-2xl space-y-4"
+			>
+				<h3 className="text-lg font-semibold">Split Transaction</h3>
 
-        <div className="grid grid-cols-3 gap-2 font-bold text-sm">
-          <span>Description</span>
-          <span>Amount</span>
-          <span>Category</span>
-        </div>
+				<div className="grid grid-cols-3 gap-2 font-bold text-sm">
+					<span>Description</span>
+					<span>Amount</span>
+					<span>Category</span>
+				</div>
 
-        {children.map((child, idx) => (
-          <div key={idx} className="grid grid-cols-3 gap-2">
-            <input
-              type="text"
-              value={child.description}
-              onChange={e => updateChild(idx, "description", e.target.value)}
-              className="border rounded px-2 py-1"
-            />
-            <input
-              type="number"
-              value={child.amount}
-              onChange={e => updateChild(idx, "amount", e.target.value)}
-              className="border rounded px-2 py-1"
-            />
-            <select
-              className="border rounded px-2 py-1"
-              value={child.categoryId || ""}
-              onChange={(e) => updateChild(idx, "categoryId", e.target.value)}
-            >
-              <option value="">— None —</option>
-              {flattenedCategories.map(category => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ))}
+				{children.map((child, idx) => (
+					<div key={idx} className="grid grid-cols-3 gap-2">
+						<input
+							type="text"
+							value={child.description}
+							onChange={e => updateChild(idx, "description", e.target.value)}
+							className="border rounded px-2 py-1"
+						/>
+						<input
+							type="number"
+							value={child.amount}
+							onChange={e => updateChild(idx, "amount", e.target.value)}
+							className="border rounded px-2 py-1"
+						/>
+						<select
+							className="border rounded px-2 py-1"
+							value={child.categoryId || ""}
+							onChange={(e) => updateChild(idx, "categoryId", e.target.value)}
+						>
+							<option value="">— None —</option>
+							{flattenedCategories.map(category => (
+								<option key={category.id} value={category.id}>
+									{category.name}
+								</option>
+							))}
+						</select>
+					</div>
+				))}
 
-        <button
-          type="button"
-          onClick={addChild}
-          className="bg-gray-200 px-4 py-1 rounded text-sm"
-        >
-          + Add Child
-        </button>
+				<button
+					type="button"
+					onClick={addChild}
+					className="bg-gray-200 px-4 py-1 rounded text-sm"
+				>
+					+ Add Child
+				</button>
 
-        <div className="flex justify-end space-x-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-1"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="bg-blue-600 text-white px-4 py-1 rounded"
-          >
-            Split
-          </button>
-        </div>
-      </form>
-    </div>
-  );
+				<div className="flex justify-end space-x-2">
+					<button
+						type="button"
+						onClick={onCancel}
+						className="px-4 py-1"
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						className="bg-blue-600 text-white px-4 py-1 rounded"
+					>
+						Split
+					</button>
+				</div>
+			</form>
+		</div>
+	);
 }
 export default function Transactions() {
 	const [transactions, setTransactions] = useState([]);
@@ -376,7 +376,7 @@ export default function Transactions() {
 	const [totalPages, setTotalPages] = useState(0);
 	const [pageSize, setPageSize] = useState(10);
 	const [totalCount, setTotalCount] = useState(0);
-
+	const [modalContent, setModalContent] = useState(null);
 	const [searchParams] = useSearchParams();
 	const [filterMonth, setFilterMonth] = useState(searchParams.get("month") || "");
 	const [filterAccount, setFilterAccount] = useState(searchParams.get("accountId") || '');
@@ -457,18 +457,18 @@ export default function Transactions() {
 	};
 
 	const flattenCategories = (categories, prefix = "") => {
-	    let flat = [];
-	    // Always treat categories as an array
-	    const categoryList = Array.isArray(categories) ? categories : [categories];
-	    
-	    for (const c of categoryList) {
-	        flat.push({ id: c.id, name: prefix + c.name });
-	        console.log(prefix + c.name);
-	        if (c.children && c.children.length > 0) {
-	            flat = flat.concat(flattenCategories(c.children, prefix + "— "));
-	        }
-	    }
-	    return flat;
+		let flat = [];
+		// Always treat categories as an array
+		const categoryList = Array.isArray(categories) ? categories : [categories];
+
+		for (const c of categoryList) {
+			flat.push({ id: c.id, name: prefix + c.name });
+			console.log(prefix + c.name);
+			if (c.children && c.children.length > 0) {
+				flat = flat.concat(flattenCategories(c.children, prefix + "— "));
+			}
+		}
+		return flat;
 	};
 
 
@@ -490,8 +490,24 @@ export default function Transactions() {
 				</div>
 
 				<div className="flex flex-col">
-					<div className="truncate font-medium text-gray-800">{tx.description}</div>
-					<div className="text-xs text-gray-500 break-words">{tx.explanation}</div>
+					<div className="flex items-center gap-1 truncate font-medium text-gray-800">
+						<span className="truncate">{tx.shortDescription}</span>
+						{(tx.shortDescription !== tx.description || tx.shortExplanation !== tx.explanation) && (
+							<button
+								title="View full description"
+								onClick={() => setModalContent({
+									title: 'Details',
+									content: (<>
+										<p><strong>Description:</strong> {tx.description}</p>
+										<p><strong>Explanation:</strong> {tx.explanation || '(None)'}</p>
+									</>),
+								})}
+							>
+								🔍
+							</button>
+						)}
+					</div>
+					<div className="text-xs text-gray-500 break-words">{tx.shortExplanation}</div>
 				</div>
 
 				<div className="text-gray-700">
@@ -601,39 +617,39 @@ export default function Transactions() {
 					Export XLSX
 				</button>
 				<button
-				  onClick={async () => {
-				    const params = new URLSearchParams({
-				      month: filterMonth,
-				      accountId: filterAccount,
-				      type: filterType,
-				      search,
-				    });
-				    if (filterCategory) params.append("categoryId", filterCategory);
+					onClick={async () => {
+						const params = new URLSearchParams({
+							month: filterMonth,
+							accountId: filterAccount,
+							type: filterType,
+							search,
+						});
+						if (filterCategory) params.append("categoryId", filterCategory);
 
-				    const res = await api.get(`/transactions/export?${params}`);
+						const res = await api.get(`/transactions/export?${params}`);
 
-				    // Create a PDF using jsPDF
-				    const { jsPDF } = await import("jspdf");
-				    const doc = new jsPDF();
+						// Create a PDF using jsPDF
+						const { jsPDF } = await import("jspdf");
+						const doc = new jsPDF();
 
-				    // Optional: AutoTable plugin for tables
-				    const autoTable = (await import("jspdf-autotable")).default;
+						// Optional: AutoTable plugin for tables
+						const autoTable = (await import("jspdf-autotable")).default;
 
-				    const headers = Object.keys(res.data[0] || {});
-				    const rows = res.data.map(row => headers.map(key => row[key]));
+						const headers = Object.keys(res.data[0] || {});
+						const rows = res.data.map(row => headers.map(key => row[key]));
 
-				    autoTable(doc, {
-				      head: [headers],
-				      body: rows,
-				      styles: { fontSize: 8 },
-				      margin: { top: 20 },
-				    });
+						autoTable(doc, {
+							head: [headers],
+							body: rows,
+							styles: { fontSize: 8 },
+							margin: { top: 20 },
+						});
 
-				    doc.save("transactions.pdf");
-				  }}
-				  className="bg-red-600 text-white px-3 py-1 rounded text-sm ml-2"
+						doc.save("transactions.pdf");
+					}}
+					className="bg-red-600 text-white px-3 py-1 rounded text-sm ml-2"
 				>
-				  Export PDF
+					Export PDF
 				</button>
 
 			</div>
@@ -751,10 +767,10 @@ export default function Transactions() {
 
 			{/* Rows */}
 			{transactions.flatMap((tx, idx) => [
-			  renderRow(tx, false, idx),
-			  ...(expandedParents[tx.id] && tx.children
-			    ? tx.children.map(child => renderRow(child, true))
-			    : [])
+				renderRow(tx, false, idx),
+				...(expandedParents[tx.id] && tx.children
+					? tx.children.map(child => renderRow(child, true))
+					: [])
 			])}
 
 			{renderPagination()}
@@ -786,7 +802,15 @@ export default function Transactions() {
 					setTransferTx(null); await fetchData(); NProgress.done(); setLoading(false);
 				}} accounts={accounts} />
 			)}
-
+			{modalContent && (
+				<div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg shadow-lg max-w-md w-full p-4">
+						<h2 className="text-lg font-semibold mb-2">{modalContent.title}</h2>
+						<div className="text-sm text-gray-700 mb-4">{modalContent.content}</div>
+						<button onClick={() => setModalContent(null)} className="text-blue-600 hover:underline text-sm">Close</button>
+					</div>
+				</div>
+			)}
 			{editTx && accounts.length > 0 && categories.length > 0 && (
 				<TransactionForm
 					transaction={editTx}

@@ -24,6 +24,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -52,8 +53,15 @@ public class AccountTransaction {
 	@Column(nullable = false, length = 1000)
 	private String description;
 
+	@Transient
+	private String shortDescription;
+	
+	
 	@Column(length = 2000)
 	private String explanation;
+	
+	@Transient
+	private String shortExplanation;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)

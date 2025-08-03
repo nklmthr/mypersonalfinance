@@ -97,7 +97,14 @@ public class AccountTransactionService {
 				month, accountId, type, search, categoryId);
 		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
 		page.getContent().forEach(tx -> {
-			trimDescriptionAndExplaination(tx);
+			if (tx.getDescription() != null) {
+				tx.setShortDescription(
+						tx.getDescription().length() > 40 ? tx.getDescription().substring(0, 40) : tx.getDescription());
+			}
+			if (tx.getExplanation() != null) {
+				tx.setShortExplanation(
+						tx.getExplanation().length() > 60 ? tx.getExplanation().substring(0, 60) : tx.getExplanation());
+			}
 			if (tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
 				makeChangesForSplitTransactions(tx);
 			}
@@ -111,22 +118,17 @@ public class AccountTransactionService {
 				.reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
 		tx.setAmount(tx.getAmount().add(totalChildrenAmount).setScale(2, RoundingMode.HALF_UP));
 		tx.getChildren().forEach(child -> {
-			if (child.getDescription() != null && child.getDescription().length() > 40) {
-				child.setDescription(child.getDescription().substring(0, 40));
-			}
-			if (child.getExplanation() != null && child.getExplanation().length() > 60) {
-				child.setExplanation(child.getExplanation().substring(0, 60));
+			if (child.getDescription() != null) {
+				child.setShortDescription(
+						child.getDescription().length() > 40 ? child.getDescription().substring(0, 40)
+								: child.getDescription());
+			} 
+			if (child.getExplanation() != null) {
+				child.setShortExplanation(
+						child.getExplanation().length() > 60 ? child.getExplanation().substring(0, 60)
+								: child.getExplanation());
 			}
 		});
-	}
-
-	private void trimDescriptionAndExplaination(AccountTransaction tx) {
-		if (tx.getDescription() != null && tx.getDescription().length() > 40) {
-			tx.setDescription(tx.getDescription().substring(0, 40));
-		}
-		if (tx.getExplanation() != null && tx.getExplanation().length() > 60) {
-			tx.setExplanation(tx.getExplanation().substring(0, 60));
-		}
 	}
 
 	@Transactional
