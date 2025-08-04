@@ -143,7 +143,6 @@ public class AccountTransactionService {
 		logger.info("Source account: {}", fromAccount);
 		Account toAccount = accountService.findById(request.getDestinationAccountId());
 		logger.info("Destination account: {}", toAccount);
-		fromAccount.setBalance(fromAccount.getBalance().subtract(debit.getAmount()));
 		toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
 		logger.info("Updating balances - From Account: {}, To Account: {}", fromAccount.getBalance(),
 				toAccount.getBalance());
