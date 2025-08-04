@@ -13,7 +13,9 @@ api.interceptors.response.use(
 		if (error.response?.status === 401) {
 			localStorage.removeItem('authToken');
 			showModal('Session expired. Please log in again.');
-			window.location.href = '/login';
+			setTimeout(() => {
+					window.location.href = '/login';
+				}, 1000); 
 			return;
 		}
 

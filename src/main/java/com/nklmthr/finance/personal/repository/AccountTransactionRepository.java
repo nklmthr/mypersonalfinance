@@ -1,6 +1,7 @@
 package com.nklmthr.finance.personal.repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -54,5 +55,24 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 	List<AccountTransaction> findSimilarTransactionWithinOneMinute(@Param("user") AppUser user,
 			@Param("description") String description, @Param("type") TransactionType type,
 			@Param("amount") BigDecimal amount, @Param("date") LocalDateTime date);
+
+	@Query(value = """
+			SELECT
+			    c.id AS categoryId,
+			    c.name AS categoryName,
+			    c.parent_id AS parentId,
+			    DATE_FORMAT(t.date, '%Y-%m') AS month,
+			    COALESCE(SUM(t.amount), 0) AS total
+			FROM categories c
+			LEFT JOIN account_transactions t
+			    ON c.id = t.category_id
+			    AND t.app_user_id = :userId
+			    AND t.date >= :startDate
+			WHERE c.id NOT IN (:excludedCategoryIds)
+			GROUP BY c.id, DATE_FORMAT(t.date, '%Y-%m')
+			ORDER BY c.name, month
+			""", nativeQuery = true)
+	List<CategoryMonthlyProjection> getCategoryMonthlySpend(@Param("userId") String userId,
+			@Param("startDate") LocalDate startDate, @Param("excludedCategoryIds") List<String> excludedCategoryIds);
 
 }

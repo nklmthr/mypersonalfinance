@@ -1,24 +1,22 @@
 package com.nklmthr.finance.personal.service;
 
-import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.nklmthr.finance.personal.dto.CategoryDTO;
 import com.nklmthr.finance.personal.dto.CategorySpendDTO;
-import com.nklmthr.finance.personal.enums.TransactionType;
-import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.dto.MonthlySpend;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
+import com.nklmthr.finance.personal.repository.CategoryMonthlyProjection;
 
 @Service
 public class CategorySpendService {
@@ -34,96 +32,66 @@ public class CategorySpendService {
 	@Autowired
 	private AccountTransactionRepository accountTransactionRepository;
 
-	public List<CategorySpendDTO> getMonthlyCategorySpendHierarchy(int month, int year) {
-		AppUser appUser = appUserService.getCurrentUser();
-		List<AccountTransaction> transactions = accountTransactionRepository.findByAppUserAndMonthAndYear(appUser,
-				month, year);
-		logger.info("Fetched {} transactions for {}/{}", transactions.size(), month, year);
-
-		Map<String, BigDecimal> categorySums = new HashMap<>();
-		int uncategorized = 0;
-
-		for (AccountTransaction tx : transactions) {
-			String categoryId = tx.getCategory().getId();
-			BigDecimal current = categorySums.getOrDefault(categoryId, BigDecimal.ZERO);
-			if (tx.getType().equals(TransactionType.CREDIT)) {
-				categorySums.put(categoryId, current.add(tx.getAmount()));
-			} else {
-				categorySums.put(categoryId, current.subtract(tx.getAmount()));
-			}
-			logger.info("Processing Category {} with Transaction {} of type {} with Amount {} making categorySum {}",
-					tx.getCategory().getName(), tx.getDescription(), tx.getType(), tx.getAmount(),
-					categorySums.get(tx.getCategory().getId()));
-		}
-		logger.info("Transactions with no category: {}", uncategorized);
-		logger.info("Category sums built for {} categories", categorySums.size());
-
-		List<CategoryDTO> rootCategories = categoryService.getAllCategories();
-		List<CategoryDTO> allCategories = flattenCategoryTree(rootCategories);
-		logger.info("Fetched {} categories", allCategories.size());
-
-		allCategories.sort(Comparator.comparingInt(this::countDescendants).reversed());
+	public List<CategorySpendDTO> getCategorySpendingLast6Months() {
+		AppUser user = appUserService.getCurrentUser();
+		logger.info("Fetching category spending for user: {}", user.getUsername());
+		LocalDate sixMonthsAgo = LocalDate.now().withDayOfMonth(1).minusMonths(5);
+		List<CategoryMonthlyProjection> projections = accountTransactionRepository.getCategoryMonthlySpend(user.getId(),
+				sixMonthsAgo,
+				List.of(categoryService.getNonClassifiedCategory().getId(),
+						categoryService.getTransferCategory().getId(),
+						categoryService.getSplitTrnsactionCategory().getId()));
+		logger.info("Found {} category monthly projections for user: {}", projections.size(), user.getUsername());
 		Map<String, CategorySpendDTO> dtoMap = new HashMap<>();
-		for (CategoryDTO category : allCategories) {
-			CategorySpendDTO dto = new CategorySpendDTO();
-			dto.setCategoryId(category.getId());
-			dto.setCategoryName(category.getName());
-			dto.setAmount(categorySums.getOrDefault(category.getId(), BigDecimal.ZERO));
-			dto.setChildren(new ArrayList<>());
-			dtoMap.put(category.getId(), dto);
+
+		for (CategoryMonthlyProjection p : projections) {
+			Double total = p.getTotal() != null ? p.getTotal() : 0.0;
+
+			dtoMap.computeIfAbsent(p.getCategoryId(), id -> {
+				CategorySpendDTO dto = new CategorySpendDTO();
+				dto.setId(id);
+				dto.setName(p.getCategoryName());
+				dto.setParentId(p.getParentId());
+				return dto;
+			}).getMonthlySpends().add(new MonthlySpend(p.getMonth(), total));
 		}
 
-		Map<String, CategorySpendDTO> rootMap = new LinkedHashMap<>();
-		for (CategoryDTO category : allCategories) {
-			CategorySpendDTO current = dtoMap.get(category.getId());
-			if (category.getParentId() != null && dtoMap.containsKey(category.getParentId())) {
-				CategorySpendDTO parent = dtoMap.get(category.getParentId());
-				parent.getChildren().add(current);
+		List<CategorySpendDTO> roots = new ArrayList<>();
+		for (CategorySpendDTO dto : dtoMap.values()) {
+			if (dto.getParentId() != null && dtoMap.containsKey(dto.getParentId())) {
+				dtoMap.get(dto.getParentId()).getChildren().add(dto);
 			} else {
-				rootMap.put(category.getId(), current);
+				roots.add(dto);
 			}
 		}
 
-		for (CategorySpendDTO root : rootMap.values()) {
-			rollupAmount(root);
+		for (CategorySpendDTO root : roots) {
+			foldUpSpending(root);
 		}
-
-		logger.info("Returning {} root categories", rootMap.size());
-		return new ArrayList<>(rootMap.values());
+		logger.info("Returning {} root categories with spending data for user: {}", roots.size(), user.getUsername());
+		return roots;
 	}
 
-	private BigDecimal rollupAmount(CategorySpendDTO dto) {
-		BigDecimal total = dto.getAmount() != null ? dto.getAmount() : BigDecimal.ZERO;
-
-		for (CategorySpendDTO child : dto.getChildren()) {
-			total = total.add(rollupAmount(child));
+	private void foldUpSpending(CategorySpendDTO node) {
+		for (CategorySpendDTO child : node.getChildren()) {
+			foldUpSpending(child);
+			mergeMonthlySpends(node, child);
 		}
-
-		dto.setAmount(total);
-		return total;
 	}
 
-	private int countDescendants(CategoryDTO node) {
-		int count = node.getChildren().size();
-		for (CategoryDTO child : node.getChildren()) {
-			count += countDescendants(child);
-		}
-		return count;
-	}
+	private void mergeMonthlySpends(CategorySpendDTO parent, CategorySpendDTO child) {
+		Map<String, MonthlySpend> parentMap = parent.getMonthlySpends().stream()
+				.collect(Collectors.toMap(MonthlySpend::getMonth, ms -> ms, (a, b) -> a));
 
-	private List<CategoryDTO> flattenCategoryTree(List<CategoryDTO> roots) {
-		List<CategoryDTO> flatList = new ArrayList<>();
-		for (CategoryDTO root : roots) {
-			collectCategories(root, flatList);
+		for (MonthlySpend childSpend : child.getMonthlySpends()) {
+			parentMap.merge(childSpend.getMonth(), new MonthlySpend(childSpend.getMonth(), childSpend.getAmount()),
+					(existing, incoming) -> {
+						existing.setAmount(existing.getAmount() + incoming.getAmount());
+						return existing;
+					});
 		}
-		return flatList;
-	}
 
-	private void collectCategories(CategoryDTO node, List<CategoryDTO> flatList) {
-		flatList.add(node);
-		for (CategoryDTO child : node.getChildren()) {
-			collectCategories(child, flatList);
-		}
+		parent.setMonthlySpends(new ArrayList<>(parentMap.values()));
 	}
 
 }
