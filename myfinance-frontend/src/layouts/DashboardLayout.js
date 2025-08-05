@@ -44,7 +44,7 @@ export default function DashboardLayout({ children }) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-blue-50 text-gray-800 relative">
+    <div className="flex h-screen bg-blue-50 text-gray-800 relative">
       {/* Sidebar */}
       {sidebarOpen && (
         <div
@@ -149,7 +149,9 @@ export default function DashboardLayout({ children }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto px-4 py-4 md:px-6 bg-blue-50">{children}</main>
+		<main className="flex-1 overflow-auto px-4 py-4 md:px-6 bg-blue-50">
+		  {children}
+		</main>
 
         {/* Footer */}
         <footer className="text-center text-xs py-2 text-gray-500 bg-blue-100 border-t">

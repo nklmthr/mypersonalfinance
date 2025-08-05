@@ -15,7 +15,7 @@ api.interceptors.response.use(
 			showModal('Session expired. Please log in again.');
 			setTimeout(() => {
 					window.location.href = '/login';
-				}, 1000); 
+				}, 1); 
 			return;
 		}
 

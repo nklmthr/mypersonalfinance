@@ -62,14 +62,12 @@ export default function CategorySpendSummary() {
 					</td>
 					{last6Months.map((month) => (
 						<td className="text-right px-2 py-1">
-							<td className="text-right px-2 py-1">
-								<Link
-									to={`/transactions?month=${month}&categoryId=${item.id}`}
-									className="text-blue-600 hover:underline"
-								>
-									{formatINR(getAmountForMonth(item.monthlySpends, month))}
-								</Link>
-							</td>
+							<Link
+								to={`/transactions?month=${month}&categoryId=${item.id}`}
+								className="text-blue-600 hover:underline"
+							>
+								{formatINR(getAmountForMonth(item.monthlySpends, month))}
+							</Link>
 						</td>
 					))}
 					<td className="text-right px-2 py-1 font-bold">
@@ -82,19 +80,27 @@ export default function CategorySpendSummary() {
 	};
 
 	return (
-		<table className="w-full text-sm border mt-4 border-gray-300">
-			<thead className="bg-gray-100">
-				<tr>
-					<th className="text-left py-2 px-2">Category</th>
-					{last6Months.map((month) => (
-						<th key={month} className="text-right py-2 px-2">
-							{dayjs(month).format("MMM YY")}
-						</th>
-					))}
-					<th className="text-right py-2 px-2">Total</th>
-				</tr>
-			</thead>
-			<tbody>{renderRows(data)}</tbody>
-		</table>
+	  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+	    <div style={{ minWidth: '800px', width: 'max-content' }}>
+	      <table className="min-w-full text-sm border mt-4 border-gray-300">
+	        <thead className="bg-gray-100">
+	          <tr>
+	            <th className="text-left py-2 px-2">Category</th>
+	            {last6Months.map((month) => (
+	              <th key={month} className="text-right py-2 px-2 whitespace-nowrap">
+	                {dayjs(month).format("MMM YY")}
+	              </th>
+	            ))}
+	            <th className="text-right py-2 px-2">Total</th>
+	          </tr>
+	        </thead>
+	        <tbody>{renderRows(data)}</tbody>
+	      </table>
+	    </div>
+	  </div>
 	);
+
+
+
+
 }
