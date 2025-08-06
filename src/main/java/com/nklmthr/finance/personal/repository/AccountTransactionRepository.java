@@ -62,7 +62,11 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 			    c.name AS categoryName,
 			    c.parent_id AS parentId,
 			    DATE_FORMAT(t.date, '%Y-%m') AS month,
-			    COALESCE(SUM(t.amount), 0) AS total
+			    COALESCE(SUM(CASE 
+			        WHEN t.type = 'CREDIT' THEN t.amount
+			        WHEN t.type = 'DEBIT' THEN -t.amount
+			        ELSE 0
+			    END), 0) AS total
 			FROM categories c
 			LEFT JOIN account_transactions t
 			    ON c.id = t.category_id
@@ -72,7 +76,9 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 			GROUP BY c.id, DATE_FORMAT(t.date, '%Y-%m')
 			ORDER BY c.name, month
 			""", nativeQuery = true)
-	List<CategoryMonthlyProjection> getCategoryMonthlySpend(@Param("userId") String userId,
-			@Param("startDate") LocalDate startDate, @Param("excludedCategoryIds") List<String> excludedCategoryIds);
+		List<CategoryMonthlyProjection> getCategoryMonthlySpend(
+			@Param("userId") String userId,
+			@Param("startDate") LocalDate startDate,
+			@Param("excludedCategoryIds") List<String> excludedCategoryIds);
 
 }

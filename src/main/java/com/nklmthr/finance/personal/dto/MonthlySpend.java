@@ -10,4 +10,6 @@ import lombok.NoArgsConstructor;
 public class MonthlySpend {
     private String month; // format YYYY-MM
     private double amount;
+
+
 }
