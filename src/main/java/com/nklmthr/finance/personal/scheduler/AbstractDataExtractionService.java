@@ -95,7 +95,7 @@ public abstract class AbstractDataExtractionService {
 								.execute();
 
 						String emailContent = extractPlainText(mess);
-
+						logger.debug("Extracted content for message ID {}: {}", mess.getId(), emailContent);
 						if (StringUtils.isBlank(emailContent) || "[Empty content]".equals(emailContent)
 								|| "[Error extracting message]".equals(emailContent)) {
 							logger.warn("Skipping message with empty content.");
@@ -111,13 +111,14 @@ public abstract class AbstractDataExtractionService {
 								.atZone(ZoneId.systemDefault()).toLocalDateTime());
 						accountTransaction.setDate(accountTransaction.getSourceTime());
 
-						extractTransactionData(accountTransaction, emailContent, appUser);
-
-						if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction, appUser)) {
-							logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
-						} else {
-							accountTransactionService.save(accountTransaction, appUser);
-							logger.debug("Saved transaction: {}", accountTransaction.getDescription());
+						accountTransaction = extractTransactionData(accountTransaction, emailContent, appUser);
+						if (accountTransaction != null) {
+							if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction, appUser)) {
+								logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
+							} else {
+								logger.info("Saving transaction: {}", accountTransaction);
+								accountTransactionService.save(accountTransaction, appUser);
+							}
 						}
 					}
 				}
@@ -198,7 +199,7 @@ public abstract class AbstractDataExtractionService {
 	protected List<String> getGMailAPIQuery() {
 		List<String> queries = new java.util.ArrayList<>();
 		LocalDate today = LocalDate.now();
-		LocalDate twoMonthAgo = today.minusDays(15);
+		LocalDate twoMonthAgo = today.minusDays(7);
 		for (String query : getEmailSubject()) {
 			queries.add(String.format("subject:(%s) from:(%s) after:%s before:%s", query, getSender(),
 					formatDate(twoMonthAgo), formatDate(today.plusDays(1))));

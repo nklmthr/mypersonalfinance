@@ -122,7 +122,7 @@ public class CategoryService {
 	}
 
 	private Category getCategoryById(AppUser appUser, String id) {
-		logger.info("Fetching category by id: {} for user: {}", id, appUser.getUsername());
+		logger.debug("Fetching category by id: {} for user: {}", id, appUser.getUsername());
 		return categoryRepository.findByAppUserAndId(appUser, id).orElse(null);
 	}
 
@@ -132,18 +132,18 @@ public class CategoryService {
 	}
 
 	private List<Category> getChildren(AppUser appUser, String parentId) {
-		logger.info("Fetching children categories for parentId: {} for user: {}", parentId, appUser.getUsername());
+		logger.debug("Fetching children categories for parentId: {} for user: {}", parentId, appUser.getUsername());
 		return categoryRepository.findByAppUserAndParentId(appUser, parentId);
 	}
 
 	public Category getNonClassifiedCategory(AppUser appUser) {
-		logger.info("Fetching non-classified category for user: {}", appUser.getUsername());
+		logger.debug("Fetching non-classified category for user: {}", appUser.getUsername());
 		return categoryRepository.findByAppUserAndName(appUser, "Not Classified")
 				.orElseThrow(() -> new RuntimeException("Default category not found"));
 	}
 
 	private Set<String> getAllDescendantCategoryIds(AppUser appUser, String categoryId) {
-		logger.info("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId,
+		logger.debug("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId,
 				appUser.getUsername());
 		Set<String> descendantIds = new HashSet<>();
 		collectChildCategoryIds(appUser, categoryId, descendantIds);

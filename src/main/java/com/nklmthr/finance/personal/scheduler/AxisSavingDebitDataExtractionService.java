@@ -65,11 +65,15 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 
 	@Override
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
+		if (emailContent.toLowerCase().contains("has been credited")) {
+			logger.error("Skipping credit message in debit extractor: {}", emailContent);
+			return null;
+		}
 		extractAmount(emailContent).ifPresent(tx::setAmount);
 		tx.setAccount(accountService.getAccountByName("Axis Salary Acc", appUser));
 		extractDescription(emailContent).ifPresent(tx::setDescription);
 		tx.setType(TransactionType.DEBIT);
-		logger.debug("Extracted transaction: {}", tx);
+		logger.info("Extracted transaction: {}", tx);
 		return tx;
 	}
 

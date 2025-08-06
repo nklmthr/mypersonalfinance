@@ -46,7 +46,7 @@ public class AccountService {
 	}
 
 	public Account findByAppUserAndId(String id, AppUser appUser) {
-		logger.info("Fetching account with id: " + id + " for user: " + appUser.getUsername());
+		logger.debug("Fetching account with id: " + id + " for user: " + appUser.getUsername());
 		return accountRepository.findByAppUserAndId(appUser, id).orElseThrow(
 				() -> new RuntimeException("No access to this account or Account not found with id: " + id));
 
@@ -123,7 +123,7 @@ public class AccountService {
 	}
 
 	public Account getAccountByName(String accountName, AppUser appUser) {
-		logger.info("Fetching account by name: " + accountName + " for user: " + appUser.getUsername());
+		logger.debug("Fetching account by name: " + accountName + " for user: " + appUser.getUsername());
 		return accountRepository.findByAppUserAndName(appUser, accountName)
 				.orElseThrow(() -> new RuntimeException("Account not found with name: " + accountName));
 	}

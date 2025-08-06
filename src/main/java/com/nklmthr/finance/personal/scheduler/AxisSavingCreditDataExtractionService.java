@@ -46,7 +46,11 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 
 	@Override
 	protected List<String> getEmailSubject() {
-		return Arrays.asList("Credit transaction alert for Axis Bank A/c", "was credited to your A/c.");
+		return Arrays.asList(
+			"Credit transaction alert for Axis Bank A/c",
+			"was credited to your A/c.",
+			"Credit notification from Axis Bank"
+		);
 	}
 
 	@Override
@@ -62,13 +66,26 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 			tx.setAccount(accountService.getAccountByName("Axis Salary Acc", appUser));
 
 			Map<String, BigDecimal> valuesFromPattern = getTransactionDetails(emailContent,
-					"Amount Credited: INR ([\\d,]+\\.\\d{2}).*?Account Number: (.*?)\\s+Date & Time: ([\\d\\-]+), "
-							+ "([\\d:]+) IST.*?Transaction Info: ([^\r\n]+)",
-					5);
+				"INR ([\\d,]+\\.\\d{2}) has been credited to .*? on (\\d{2}-\\d{2}-\\d{2}) at ([\\d:]+) IST\\. Reference no\\. - ([^\\.\\n]+)",
+				4);
 
 			if (valuesFromPattern == null) {
 				valuesFromPattern = getTransactionDetails(emailContent,
-						"has been credited with INR ([\\d,]+\\.\\d{2}) on ([\\d\\-]+) at ([\\d:]+) IST by (.+?)\\s", 4);
+					"Amount Credited: INR ([\\d,]+\\.\\d{2}).*?Account Number: (.*?)\\s+Date & Time: ([\\d\\-]+), ([\\d:]+) IST.*?Transaction Info: ([^\r\n]+)",
+					5);
+			}
+
+			if (valuesFromPattern == null) {
+				valuesFromPattern = getTransactionDetails(emailContent,
+					"has been credited with INR ([\\d,]+\\.\\d{2}) on ([\\d\\-]+) at ([\\d:]+) IST by (.+?)\\s",
+					4);
+			}
+
+			// New fallback for "Amount = ... Description = ..." format
+			if (valuesFromPattern == null) {
+				valuesFromPattern = getTransactionDetails(emailContent,
+					"Amount = ([\\d,]+\\.\\d{2})[^\\r\\n]+Description = ([^\r\n]+)",
+					2);
 			}
 
 			if (valuesFromPattern != null && !valuesFromPattern.isEmpty()) {
@@ -86,8 +103,7 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 		return tx;
 	}
 
-	private Map<String, BigDecimal> getTransactionDetails(String emailContent, String pattern,
-			int descriptionGroupIndex) {
+	private Map<String, BigDecimal> getTransactionDetails(String emailContent, String pattern, int descriptionGroupIndex) {
 		Pattern regex = Pattern.compile(pattern);
 		Matcher matcher = regex.matcher(emailContent);
 		if (matcher.find()) {
@@ -95,11 +111,10 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 			BigDecimal amount = new BigDecimal(amountStr);
 
 			String rawDescription = matcher.group(descriptionGroupIndex);
-			// Trim and clean up description line
 			String description = rawDescription.split("[\\r\\n]")[0].trim();
 
-			// Additional safeguard to truncate at known footer starts
-			for (String stopWord : List.of("Regards,", "Call us at", "Always open", "***", "Reach us at")) {
+			// Truncate at known footers or contact messages
+			for (String stopWord : List.of("Regards,", "Call us at", "Always open", "***", "Reach us at", "For any concerns")) {
 				int index = description.indexOf(stopWord);
 				if (index != -1) {
 					description = description.substring(0, index).trim();
@@ -114,5 +129,4 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 		logger.error("No match found for pattern: {}", pattern);
 		return null;
 	}
-
 }
