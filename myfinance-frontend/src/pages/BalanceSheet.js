@@ -40,7 +40,7 @@ export default function BalanceSheetPage() {
 				});
 
 				const sortedMonths = Array.from(allMonthsSet).sort(
-					(a, b) => new Date("01 " + a) - new Date("01 " + b)
+					(a, b) => new Date("01 " + b) - new Date("01 " + a)
 				);
 
 				setMonths(sortedMonths);

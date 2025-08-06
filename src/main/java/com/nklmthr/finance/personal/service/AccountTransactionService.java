@@ -361,7 +361,7 @@ public class AccountTransactionService {
 
 		for (AccountTransaction existingTxn : existingAccTxnList) {
 			if (existingTxn.getSourceId() != null && existingTxn.getSourceId().equals(newTransaction.getSourceId())) {
-				logger.info("Found existing transaction with same sourceId: dedupe match");
+				logger.debug("Found existing transaction with same sourceId: dedupe match");
 				return true;
 			}
 		}
