@@ -8,7 +8,7 @@ export default function CategorySpendSummary() {
 	const [expanded, setExpanded] = useState({});
 
 	const last6Months = [...Array(6)].map((_, i) =>
-		dayjs().subtract(5 - i, "month").format("YYYY-MM")
+	  dayjs().subtract(i, "month").format("YYYY-MM")
 	);
 
 	useEffect(() => {
@@ -45,13 +45,13 @@ export default function CategorySpendSummary() {
 
 			return [
 				<tr key={item.id} className="border-b">
-					<td className="py-1 px-2">
+					<td
+						className="py-1 px-2 sticky left-0 border-r z-10"
+						style={{ background: '#fff', minWidth: '200px' }}
+					>
 						<div style={{ paddingLeft: depth * 20 }} className="flex items-center gap-1">
 							{hasChildren ? (
-								<button
-									onClick={() => toggle(item.id)}
-									className="text-sm text-blue-500"
-								>
+								<button onClick={() => toggle(item.id)} className="text-sm text-blue-500">
 									{isExpanded ? "▾" : "▸"}
 								</button>
 							) : (
@@ -60,6 +60,9 @@ export default function CategorySpendSummary() {
 							{item.name}
 						</div>
 					</td>
+
+
+
 					{last6Months.map((month) => (
 						<td className="text-right px-2 py-1">
 							<Link
@@ -80,24 +83,30 @@ export default function CategorySpendSummary() {
 	};
 
 	return (
-	  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-	    <div style={{ minWidth: '800px', width: 'max-content' }}>
-	      <table className="min-w-full text-sm border mt-4 border-gray-300">
-	        <thead className="bg-gray-100">
-	          <tr>
-	            <th className="text-left py-2 px-2">Category</th>
-	            {last6Months.map((month) => (
-	              <th key={month} className="text-right py-2 px-2 whitespace-nowrap">
-	                {dayjs(month).format("MMM YY")}
-	              </th>
-	            ))}
-	            <th className="text-right py-2 px-2">Total</th>
-	          </tr>
-	        </thead>
-	        <tbody>{renderRows(data)}</tbody>
-	      </table>
-	    </div>
-	  </div>
+		<div className="w-full overflow-x-auto">
+			<table className="table-fixed border border-gray-300 mt-4 text-sm min-w-[900px]">
+				<thead className="bg-gray-100">
+					<tr>
+						<th
+							className="text-left py-2 px-2 border-r sticky left-0 z-20"
+							style={{ minWidth: '200px', background: '#fff' }}
+						>
+							Category
+						</th>
+						{last6Months.map((month) => (
+							<th key={month} className="text-right py-2 px-2 whitespace-nowrap">
+								{dayjs(month).format("MMM YY")}
+							</th>
+						))}
+						<th className="text-right py-2 px-2">Total</th>
+					</tr>
+				</thead>
+				<tbody>
+					{renderRows(data)}
+				</tbody>
+			</table>
+		</div>
+
 	);
 
 

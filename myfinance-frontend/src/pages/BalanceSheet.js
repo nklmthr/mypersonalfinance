@@ -121,11 +121,11 @@ export default function BalanceSheetPage() {
 				</div>
 			</div>
 
-			<div className="overflow-x-auto">
-				<table className="min-w-full border-collapse border text-sm text-left">
+			<div className="overflow-x-auto relative">
+			  <table className="min-w-full border-collapse border text-sm text-left">
 					<thead>
 						<tr className="bg-gray-100 text-nowrap">
-							<th className="border px-4 py-2 sticky left-0 bg-white z-10border px-4 py-2 font-medium sticky left-0 bg-gray-50 z-10">Classification</th>
+							<th className="border px-4 py-2 sticky left-0 bg-white z-10">Classification</th>
 							{months.map((month) => (
 								<th key={month} className="border px-4 py-2 text-right min-w-[100px]">
 									{month}
@@ -136,7 +136,7 @@ export default function BalanceSheetPage() {
 					<tbody>
 						{Object.entries(rowsByClassification).map(([classification, balances]) => (
 							<tr key={classification}>
-								<td className="border px-4 py-2 font-medium sticky left-0 bg-gray-50 z-10">{classification}</td>
+							<td className="border px-4 py-2 font-medium sticky left-0 bg-gray-50 z-10 bg-white">{classification}</td>
 								{months.map((month) => (
 									<td key={month} className="border px-4 py-2 text-right">
 										{balances[month] !== undefined ? formatCurrency(balances[month]) : "-"}
