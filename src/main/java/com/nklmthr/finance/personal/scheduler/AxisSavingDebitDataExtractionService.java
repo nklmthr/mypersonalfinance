@@ -73,7 +73,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 		tx.setAccount(accountService.getAccountByName("Axis Salary Acc", appUser));
 		extractDescription(emailContent).ifPresent(tx::setDescription);
 		tx.setType(TransactionType.DEBIT);
-		logger.info("Extracted transaction: {}", tx);
+		logger.debug("Extracted transaction: {}", tx);
 		return tx;
 	}
 

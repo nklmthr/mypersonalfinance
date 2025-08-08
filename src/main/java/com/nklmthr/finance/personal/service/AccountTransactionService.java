@@ -117,6 +117,7 @@ public class AccountTransactionService {
 		BigDecimal totalChildrenAmount = tx.getChildren().stream().map(AccountTransaction::getAmount)
 				.reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
 		tx.setAmount(tx.getAmount().add(totalChildrenAmount).setScale(2, RoundingMode.HALF_UP));
+		logger.info("Total children amount for transaction ID {}: {}", tx.getId(), tx.getAmount());
 		tx.getChildren().forEach(child -> {
 			if (child.getDescription() != null) {
 				child.setShortDescription(
