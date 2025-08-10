@@ -113,10 +113,10 @@ public class AccountTransaction {
 	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	private UploadedStatement uploadedStatement;
 
-	@OneToMany(mappedBy = "accountTransaction", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
-	@Builder.Default
-	private List<Attachment> attachments = new ArrayList<>();
+//	@OneToMany(mappedBy = "accountTransaction", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+//	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+//	@Builder.Default
+//	private List<Attachment> attachments = new ArrayList<>();
 
 	@Column
 	private String dataVersionId;

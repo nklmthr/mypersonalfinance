@@ -398,26 +398,25 @@ export default function Transactions() {
 		NProgress.start();
 		try {
 			const params = new URLSearchParams({
-				page, size: pageSize,
-				month: filterMonth,
-				accountId: filterAccount,
-				type: filterType,
-				search
-			});
-			if (filterCategory) params.append("categoryId", filterCategory);
-			const paramsForCurrentTotal = new URLSearchParams({
-				month: filterMonth || '',
-				accountId: filterAccount || '',
-				type: filterType || '',
-				search: search || '',
-				categoryId: filterCategory || ''
+				page,
+				size: pageSize,
+				month: filterMonth || "",
+				accountId: filterAccount || "",
+				type: filterType || "",
+				search: search || ""
 			});
 
+			// Add categoryId only if it has a value
+			if (filterCategory) {
+				params.append("categoryId", filterCategory);
+			}
+
+			// Use same params for both calls
 			const [txRes, accRes, catRes, currentTotalRes] = await Promise.all([
-				api.get(`/transactions?${params}`),
+				api.get(`/transactions?${params.toString()}`),
 				api.get("/accounts"),
 				api.get("/categories"),
-				api.get(`/transactions/currentTotal?${paramsForCurrentTotal}`)
+				api.get(`/transactions/currentTotal?${params.toString()}`)
 			]);
 			setTransactions(txRes.data.content);
 			setTotalPages(txRes.data.totalPages);
@@ -521,8 +520,8 @@ export default function Transactions() {
 
 				<div className="text-gray-700">
 					<span className={`font-semibold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-					₹{(typeof tx.amount === 'number' ? tx.amount : 0)
-					    .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+						₹{(typeof tx.amount === 'number' ? tx.amount : 0)
+							.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 					</span>
 					<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">{tx.type}</span><br />
 					<span className="text-xs text-gray-500">{tx.account?.name}</span>

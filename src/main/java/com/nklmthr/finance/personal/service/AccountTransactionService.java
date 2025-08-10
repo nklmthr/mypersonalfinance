@@ -51,68 +51,10 @@ public class AccountTransactionService {
 	@Autowired
 	private CategoryService categoryService;
 
-	@Autowired
-	private AttachmentRepository attachmentRepository;
+//	@Autowired
+//	private AttachmentRepository attachmentRepository;
 
 	private static final Logger logger = LoggerFactory.getLogger(AccountTransactionService.class);
-
-	public Page<AccountTransaction> getFilteredTransactions(Pageable pageable, String month, String accountId,
-			String type, String search, String categoryId) {
-		AppUser appUser = appUserService.getCurrentUser();
-		Specification<AccountTransaction> spec = Specification.where(null);
-		spec = spec.and(AccountTransactionSpecifications.isRootTransaction());
-		if(StringUtils.isNotBlank(categoryId)) {
-			logger.info("Category filter applied, fetching transactions for category ID: {}", categoryId);
-			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryService.getAllDescendantCategoryIds(categoryId)));
-		} else {
-			spec = spec.and(AccountTransactionSpecifications.isRootTransaction());
-		}
-		if (StringUtils.isNotBlank(accountId)) {
-			logger.info("Filtering transactions for account ID: {}", accountId);
-			spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
-		}
-		if (StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
-			logger.info("Filtering transactions for type: {}", type);
-			spec = spec.and(AccountTransactionSpecifications.hasTransactionType(TransactionType.valueOf(type)));
-		}
-		if (StringUtils.isNotBlank(month)) {
-			YearMonth ym = YearMonth.parse(month); // expected format: "2025-07"
-			logger.info("Filtering transactions for month: {}", ym);
-			LocalDateTime start = ym.atDay(1).atStartOfDay(); // 1st of the month, 00:00
-			LocalDateTime end = ym.atEndOfMonth().atTime(LocalTime.MAX); // end of month, 23:59:59.999999999
-			logger.info("Filtering transactions between start: {} and end: {}", start, end);
-			logger.info("Applying date filter for transactions {} for month: {}", start, month);
-			spec = spec.and(AccountTransactionSpecifications.dateBetween(start, end));
-		}
-		if (StringUtils.isNotBlank(search)) {
-			logger.info("Applying search filter for transactions with search term: {}", search);
-			spec = spec.and(AccountTransactionSpecifications.matchesSearch(search));
-		}
-		if (StringUtils.isNotBlank(categoryId)) {
-			logger.info("Filtering transactions for category ID: {}", categoryId);
-			Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(categoryId);
-			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryIds));
-		}
-		spec = spec.and(AccountTransactionSpecifications.belongsToUser(appUser));
-		logger.info(
-				"Fetching transactions with filters - Month: {}, Account ID: {}, Type: {}, Search: {}, Category ID: {}",
-				month, accountId, type, search, categoryId);
-		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
-		page.getContent().forEach(tx -> {
-			if (tx.getDescription() != null) {
-				tx.setShortDescription(
-						tx.getDescription().length() > 40 ? tx.getDescription().substring(0, 40) : tx.getDescription());
-			}
-			if (tx.getExplanation() != null) {
-				tx.setShortExplanation(
-						tx.getExplanation().length() > 60 ? tx.getExplanation().substring(0, 60) : tx.getExplanation());
-			}
-			if (tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
-				makeChangesForSplitTransactions(tx);
-			}
-		});
-		return page;
-	}
 
 	private void makeChangesForSplitTransactions(AccountTransaction tx) {
 		logger.info("Setting split transaction amount as sum of children for transaction ID: {}", tx);
@@ -224,37 +166,69 @@ public class AccountTransactionService {
 	}
 
 	@Transactional
-	public Optional<AccountTransaction> updateTransaction(String id, AccountTransaction tx) {
-		logger.info("Updating transaction with ID: {}", id);
-		return getById(id).map(existing -> {
-			AppUser appUser = appUserService.getCurrentUser();
+	public Optional<AccountTransaction> updateTransaction(String id, AccountTransaction txUpdate) {
+	    logger.info("Updating transaction with ID: {}", id);
 
-			tx.setId(id);
-			tx.setAppUser(appUser);
-			tx.setAccount(accountService.findById(tx.getAccount().getId()));
-			tx.setCategory(categoryService.getCategoryById(tx.getCategory().getId()));
-			// Preserve immutable fields
-			tx.setParent(existing.getParent());
-			tx.setChildren(existing.getChildren());
-			tx.setSourceId(existing.getSourceId());
-			tx.setSourceThreadId(existing.getSourceThreadId());
-			tx.setHref(existing.getHref());
-			tx.setHrefText(existing.getHrefText());
-			tx.setSourceTime(existing.getSourceTime());
-			// Update balance logic
-			if (tx.getType().equals(TransactionType.DEBIT)) {
-				logger.info("Updating transaction as DEBIT, deducting amount {} from account balance {}",
-						tx.getAmount(), tx.getAccount().getBalance());
-				tx.getAccount().setBalance(tx.getAccount().getBalance().subtract(tx.getAmount()));
-			} else {
-				logger.info("Updating transaction as CREDIT, adding amount {} to account balance {}", tx.getAmount(),
-						tx.getAccount().getBalance());
-				tx.getAccount().setBalance(tx.getAccount().getBalance().add(tx.getAmount()));
-			}
-			logger.info("Update Transaction: {}", tx);
-			return accountTransactionRepository.save(tx);
-		});
+	    return getById(id).map(existingTx -> {
+	        AppUser appUser = appUserService.getCurrentUser();
+
+	        // Fetch old values for comparison
+	        BigDecimal oldAmount = existingTx.getAmount();
+	        TransactionType oldType = existingTx.getType();
+	        Account oldAccount = existingTx.getAccount();
+	        Account newAccount = accountService.findById(txUpdate.getAccount().getId());
+	        TransactionType newType = txUpdate.getType();
+	        BigDecimal newAmount = txUpdate.getAmount();
+
+	        // Update simple fields
+	        txUpdate.setId(id);
+	        txUpdate.setAppUser(appUser);
+	        txUpdate.setAccount(newAccount);
+	        txUpdate.setCategory(categoryService.getCategoryById(txUpdate.getCategory().getId()));
+	        txUpdate.setParent(existingTx.getParent());
+	        txUpdate.setSourceId(existingTx.getSourceId());
+	        txUpdate.setSourceThreadId(existingTx.getSourceThreadId());
+	        txUpdate.setHref(existingTx.getHref());
+	        txUpdate.setHrefText(existingTx.getHrefText());
+	        txUpdate.setSourceTime(existingTx.getSourceTime());
+	        // Update child entities
+	        txUpdate.setChildren(txUpdate.getChildren()); // or update/merge as necessary
+
+	        // --------- Balance Adjustment Logic ---------
+	        // 1. Reverse the effect of the old transaction on the old account
+	        if (oldType == TransactionType.DEBIT) {
+	            oldAccount.setBalance(oldAccount.getBalance().add(oldAmount));
+	        } else if (oldType == TransactionType.CREDIT) {
+	            oldAccount.setBalance(oldAccount.getBalance().subtract(oldAmount));
+	        }
+
+	        // 2. Apply the effect of the new transaction
+	        if (newAccount.getId().equals(oldAccount.getId())) {
+	            // Account stays the same, just apply new type/amount
+	            if (newType == TransactionType.DEBIT) {
+	                newAccount.setBalance(newAccount.getBalance().subtract(newAmount));
+	            } else if (newType == TransactionType.CREDIT) {
+	                newAccount.setBalance(newAccount.getBalance().add(newAmount));
+	            }
+	        } else {
+	            // Account switched
+	            // Old account: only reverse the old tx
+	            // New account: apply new tx
+	            if (newType == TransactionType.DEBIT) {
+	                newAccount.setBalance(newAccount.getBalance().subtract(newAmount));
+	            } else if (newType == TransactionType.CREDIT) {
+	                newAccount.setBalance(newAccount.getBalance().add(newAmount));
+	            }
+	            // Save both accounts to be safe
+	            accountService.save(oldAccount);
+	            accountService.save(newAccount);
+	        }
+
+	        logger.info("Transaction updated: {}", txUpdate);
+	        return accountTransactionRepository.save(txUpdate);
+	    });
 	}
+
 
 	public Optional<AccountTransaction> getById(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
@@ -475,52 +449,100 @@ public class AccountTransactionService {
 
 	}
 
-	public List<Attachment> getTransactionAttachments(String id) {
-		AppUser appUser = appUserService.getCurrentUser();
-		if (StringUtils.isBlank(id)) {
-			logger.warn("Transaction ID is blank, returning empty attachment list");
-			return List.of(); // Return empty list if ID is blank
-		}
-		logger.info("Fetching attachments for transaction ID: {}", id);
-		return attachmentRepository.findByAccountTransaction_IdAndAccountTransaction_AppUser_Id(id, appUser.getId());
+//	public List<Attachment> getTransactionAttachments(String id) {
+//		AppUser appUser = appUserService.getCurrentUser();
+//		if (StringUtils.isBlank(id)) {
+//			logger.warn("Transaction ID is blank, returning empty attachment list");
+//			return List.of(); // Return empty list if ID is blank
+//		}
+//		logger.info("Fetching attachments for transaction ID: {}", id);
+//		return attachmentRepository.findByAccountTransaction_IdAndAccountTransaction_AppUser_Id(id, appUser.getId());
+//
+//	}
 
+//	@Transactional
+//	public Attachment addTransactionAttachment(String id, Attachment attachment) {
+//		AppUser appUser = appUserService.getCurrentUser();
+//		if (StringUtils.isBlank(id)) {
+//			logger.warn("Transaction ID is blank, cannot add attachment");
+//			return null; // Cannot add attachment without a valid transaction ID
+//		}
+//		Optional<AccountTransaction> transactionOpt = getById(id);
+//		if (transactionOpt.isEmpty()) {
+//			logger.warn("Transaction with ID {} not found, cannot add attachment", id);
+//			return null; // Transaction not found
+//		}
+//		AccountTransaction transaction = transactionOpt.get();
+//		attachment.setAccountTransaction(transaction);
+//		attachment.setAppUser(appUser);
+//		transaction.getAttachments().add(attachment);
+//		logger.info("Adding attachment to transaction ID: {}", id);
+//		accountTransactionRepository.save(transaction);
+//		return attachmentRepository.save(attachment);
+//
+//	}
+
+	// Shared method to build filter Specifications
+	private Specification<AccountTransaction> buildTransactionSpec(
+	    String month, String accountId, String type, String search, String categoryId, boolean rootOnly) {
+
+	    AppUser appUser = appUserService.getCurrentUser();
+	    Specification<AccountTransaction> spec = Specification.where(null);
+
+	    if (rootOnly) {
+	        spec = spec.and(AccountTransactionSpecifications.isRootTransaction());
+	    }
+
+	    if (StringUtils.isNotBlank(categoryId)) {
+	        Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(categoryId);
+	        spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryIds));
+	    }
+	    if (StringUtils.isNotBlank(accountId)) {
+	        spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
+	    }
+	    if (StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
+	        spec = spec.and(AccountTransactionSpecifications.hasTransactionType(TransactionType.valueOf(type)));
+	    }
+	    if (StringUtils.isNotBlank(month)) {
+	        YearMonth ym = YearMonth.parse(month);
+	        LocalDateTime start = ym.atDay(1).atStartOfDay();
+	        LocalDateTime end = ym.atEndOfMonth().atTime(LocalTime.MAX);
+	        spec = spec.and(AccountTransactionSpecifications.dateBetween(start, end));
+	    }
+	    if (StringUtils.isNotBlank(search)) {
+	        spec = spec.and(AccountTransactionSpecifications.matchesSearch(search));
+	    }
+	    spec = spec.and(AccountTransactionSpecifications.belongsToUser(appUser));
+	    return spec;
 	}
 
-	@Transactional
-	public Attachment addTransactionAttachment(String id, Attachment attachment) {
-		AppUser appUser = appUserService.getCurrentUser();
-		if (StringUtils.isBlank(id)) {
-			logger.warn("Transaction ID is blank, cannot add attachment");
-			return null; // Cannot add attachment without a valid transaction ID
-		}
-		Optional<AccountTransaction> transactionOpt = getById(id);
-		if (transactionOpt.isEmpty()) {
-			logger.warn("Transaction with ID {} not found, cannot add attachment", id);
-			return null; // Transaction not found
-		}
-		AccountTransaction transaction = transactionOpt.get();
-		attachment.setAccountTransaction(transaction);
-		attachment.setAppUser(appUser);
-		transaction.getAttachments().add(attachment);
-		logger.info("Adding attachment to transaction ID: {}", id);
-		accountTransactionRepository.save(transaction);
-		return attachmentRepository.save(attachment);
-
+	// Updated method for fetching filtered transactions with consistent spec
+	public Page<AccountTransaction> getFilteredTransactions(Pageable pageable, String month, String accountId,
+	                                                       String type, String search, String categoryId) {
+	    Specification<AccountTransaction> spec = buildTransactionSpec(month, accountId, type, search, categoryId, true);
+	    Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
+	    page.getContent().forEach(tx -> {
+	        if (tx.getDescription() != null) {
+	            tx.setShortDescription(tx.getDescription().length() > 40 ? tx.getDescription().substring(0, 40) : tx.getDescription());
+	        }
+	        if (tx.getExplanation() != null) {
+	            tx.setShortExplanation(tx.getExplanation().length() > 60 ? tx.getExplanation().substring(0, 60) : tx.getExplanation());
+	        }
+	        if (tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
+	            makeChangesForSplitTransactions(tx);
+	        }
+	    });
+	    return page;
 	}
 
+	// Updated method for current total that uses identical filtering Specification
 	public BigDecimal getCurrentTotal(String month, String accountId, String type, String search, String categoryId) {
-		logger.info(
-				"Calculating current total with filters - Month: {}, Account ID: {}, Type: {}, Search: {}, Category ID: {}",
-				month, accountId, type, search, categoryId);
-		TransactionType transType = null;
-		if(StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
-			transType = TransactionType.valueOf(type);
-		}
-		BigDecimal currentTotal = accountTransactionRepository.getCurrentTotal(month, accountId, transType, search,
-				categoryId);
-		logger.info("Current total calculated: {}", currentTotal);
-		return currentTotal != null ? currentTotal.setScale(2, RoundingMode.HALF_UP)
-				: BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+	    Specification<AccountTransaction> spec = buildTransactionSpec(month, accountId, type, search, categoryId, true);
+	    Page<AccountTransaction> txns = accountTransactionRepository.findAll(spec, Pageable.unpaged());
+	    BigDecimal total = txns.stream()
+	        .map(t -> t.getType() == TransactionType.CREDIT ? t.getAmount() : t.getAmount().negate())
+	        .reduce(BigDecimal.ZERO, BigDecimal::add);
+	    return total.setScale(2, RoundingMode.HALF_UP);
 	}
 
 }

@@ -17,8 +17,14 @@ public class AppUserService {
 	private AppUserRepository appUserRepository;
 
 	private static final Logger logger = LoggerFactory.getLogger(AppUserService.class);
+	private final ThreadLocal<AppUser> currentUserCache = new ThreadLocal<>();
 
 	public AppUser getCurrentUser() {
+        if (currentUserCache.get() != null) {
+			logger.info("Returning cached current user: " + currentUserCache.get().getUsername());
+            return currentUserCache.get();
+        }
+		logger.info("Fetching current user from security context");
 		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 		if (auth == null) {
 			logger.error("No authentication in context");

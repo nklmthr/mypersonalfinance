@@ -43,7 +43,8 @@ public class AccountTransactionController {
 	}
 	
 	@GetMapping("/currentTotal")
-	public BigDecimal getCurrentTotal(@RequestParam(required = false) String month,
+	public BigDecimal getCurrentTotal(@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String month,
 			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
 			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
 		return transactionService.getCurrentTotal(month, accountId, type, search, categoryId);
@@ -98,13 +99,13 @@ public class AccountTransactionController {
 		return ResponseEntity.noContent().build();
 	}
 
-	@GetMapping("{id}/attachments/")
-	public List<Attachment> getAttachments(@PathVariable String id) {
-		return transactionService.getTransactionAttachments(id);
-	}
+//	@GetMapping("{id}/attachments/")
+//	public List<Attachment> getAttachments(@PathVariable String id) {
+//		return transactionService.getTransactionAttachments(id);
+//	}
 
-	@PostMapping("/{id}/attachments")
-	public Attachment addAttachment(@PathVariable String id, @RequestBody Attachment attachment) {
-		return transactionService.addTransactionAttachment(id, attachment);
-	}
+//	@PostMapping("/{id}/attachments")
+//	public Attachment addAttachment(@PathVariable String id, @RequestBody Attachment attachment) {
+//		return transactionService.addTransactionAttachment(id, attachment);
+//	}
 }
