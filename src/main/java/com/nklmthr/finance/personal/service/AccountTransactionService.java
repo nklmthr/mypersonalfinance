@@ -7,6 +7,7 @@ import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -15,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -120,14 +122,12 @@ public class AccountTransactionService {
 		logger.info("Total children amount for transaction ID {}: {}", tx.getId(), tx.getAmount());
 		tx.getChildren().forEach(child -> {
 			if (child.getDescription() != null) {
-				child.setShortDescription(
-						child.getDescription().length() > 40 ? child.getDescription().substring(0, 40)
-								: child.getDescription());
-			} 
+				child.setShortDescription(child.getDescription().length() > 40 ? child.getDescription().substring(0, 40)
+						: child.getDescription());
+			}
 			if (child.getExplanation() != null) {
-				child.setShortExplanation(
-						child.getExplanation().length() > 60 ? child.getExplanation().substring(0, 60)
-								: child.getExplanation());
+				child.setShortExplanation(child.getExplanation().length() > 60 ? child.getExplanation().substring(0, 60)
+						: child.getExplanation());
 			}
 		});
 	}
@@ -506,6 +506,21 @@ public class AccountTransactionService {
 		accountTransactionRepository.save(transaction);
 		return attachmentRepository.save(attachment);
 
+	}
+
+	public BigDecimal getCurrentTotal(String month, String accountId, String type, String search, String categoryId) {
+		logger.info(
+				"Calculating current total with filters - Month: {}, Account ID: {}, Type: {}, Search: {}, Category ID: {}",
+				month, accountId, type, search, categoryId);
+		TransactionType transType = null;
+		if(StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
+			transType = TransactionType.valueOf(type);
+		}
+		BigDecimal currentTotal = accountTransactionRepository.getCurrentTotal(month, accountId, transType, search,
+				categoryId);
+		logger.info("Current total calculated: {}", currentTotal);
+		return currentTotal != null ? currentTotal.setScale(2, RoundingMode.HALF_UP)
+				: BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 	}
 
 }

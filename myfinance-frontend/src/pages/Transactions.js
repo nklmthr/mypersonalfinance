@@ -367,6 +367,7 @@ export default function Transactions() {
 	const [transactions, setTransactions] = useState([]);
 	const [expandedParents, setExpandedParents] = useState({});
 	const [accounts, setAccounts] = useState([]);
+	const [currentTotal, setCurrentTotal] = useState(0);
 	const [categories, setCategories] = useState([]);
 	const [editTx, setEditTx] = useState(null);
 	const [splitTx, setSplitTx] = useState(null);
@@ -404,17 +405,26 @@ export default function Transactions() {
 				search
 			});
 			if (filterCategory) params.append("categoryId", filterCategory);
+			const paramsForCurrentTotal = new URLSearchParams({
+			  month: filterMonth || '',
+			  accountId: filterAccount || '',
+			  type: filterType || '',
+			  search: search || '',
+			  categoryId: filterCategory || ''
+			});
 
-			const [txRes, accRes, catRes] = await Promise.all([
+			const [txRes, accRes, catRes, currentTotalRes] = await Promise.all([
 				api.get(`/transactions?${params}`),
 				api.get("/accounts"),
 				api.get("/categories"),
+				api.get(`/transactions/currentTotal?${paramsForCurrentTotal}`)
 			]);
 			setTransactions(txRes.data.content);
 			setTotalPages(txRes.data.totalPages);
 			setAccounts(accRes.data);
 			setCategories(catRes.data);
 			setTotalCount(txRes.data.totalElements);
+			setCurrentTotal(currentTotalRes.data);
 		} finally {
 			NProgress.done();
 			setLoading(false);
@@ -426,7 +436,7 @@ export default function Transactions() {
 		}
 	}, [totalCount, page, pageSize]);
 
-	useEffect(() => { fetchData(); }, [page, pageSize, filterMonth, filterAccount, filterType, filterCategory, debouncedSearch]);
+	useEffect(() => { setCurrentTotal(0); fetchData(); }, [page, pageSize, filterMonth, filterAccount, filterType, filterCategory, debouncedSearch]);
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
 		NProgress.start();
@@ -651,7 +661,12 @@ export default function Transactions() {
 				>
 					Export PDF
 				</button>
-
+				<button
+					onClick={() => alert(`Current Total: ₹${currentTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`)}
+					className="bg-gray-700 text-white px-3 py-1 rounded text-sm"
+				>
+					Current Total: ₹{currentTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+				</button>
 			</div>
 		);
 	}
@@ -758,6 +773,7 @@ export default function Transactions() {
 					filterCategory={filterCategory}
 					filterType={filterType}
 					search={debouncedSearch}
+					currentTotal={currentTotal}
 				/>
 
 			</div>

@@ -4,9 +4,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -62,7 +64,7 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 			    c.name AS categoryName,
 			    c.parent_id AS parentId,
 			    DATE_FORMAT(t.date, '%Y-%m') AS month,
-			    COALESCE(SUM(CASE 
+			    COALESCE(SUM(CASE
 			        WHEN t.type = 'CREDIT' THEN t.amount
 			        WHEN t.type = 'DEBIT' THEN -t.amount
 			        ELSE 0
@@ -76,9 +78,31 @@ public interface AccountTransactionRepository extends JpaRepository<AccountTrans
 			GROUP BY c.id, DATE_FORMAT(t.date, '%Y-%m')
 			ORDER BY c.name, month
 			""", nativeQuery = true)
-		List<CategoryMonthlyProjection> getCategoryMonthlySpend(
-			@Param("userId") String userId,
-			@Param("startDate") LocalDate startDate,
-			@Param("excludedCategoryIds") List<String> excludedCategoryIds);
+	List<CategoryMonthlyProjection> getCategoryMonthlySpend(@Param("userId") String userId,
+			@Param("startDate") LocalDate startDate, @Param("excludedCategoryIds") List<String> excludedCategoryIds);
+
+	@Query("""
+		    SELECT COALESCE(SUM(
+		        CASE 
+		            WHEN t.type = 'CREDIT' THEN t.amount
+		            WHEN t.type = 'DEBIT'  THEN -t.amount
+		            ELSE 0 
+		        END
+		    ), 0)
+		    FROM AccountTransaction t
+		    WHERE (:month IS NULL OR :month = '' OR FUNCTION('DATE_FORMAT', t.date, '%Y-%m') = :month)
+		      AND (:accountId IS NULL OR :accountId = '' OR t.account.id = :accountId)
+		      AND (:type IS NULL OR :type = '' OR :type = 'ALL' OR t.type = :type)
+		      AND (:search IS NULL OR :search = '' OR LOWER(t.description) LIKE LOWER(CONCAT('%', :search, '%')))
+		      AND (:categoryId IS NULL OR :categoryId = '' OR t.category.id = :categoryId)
+		""")
+		BigDecimal getCurrentTotal(
+		        @Param("month") String month,
+		        @Param("accountId") String accountId,
+		        @Param("type") TransactionType transactionType,
+		        @Param("search") String search,
+		        @Param("categoryId") String categoryId
+		);
+
 
 }
