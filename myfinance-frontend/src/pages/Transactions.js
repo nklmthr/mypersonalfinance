@@ -406,11 +406,11 @@ export default function Transactions() {
 			});
 			if (filterCategory) params.append("categoryId", filterCategory);
 			const paramsForCurrentTotal = new URLSearchParams({
-			  month: filterMonth || '',
-			  accountId: filterAccount || '',
-			  type: filterType || '',
-			  search: search || '',
-			  categoryId: filterCategory || ''
+				month: filterMonth || '',
+				accountId: filterAccount || '',
+				type: filterType || '',
+				search: search || '',
+				categoryId: filterCategory || ''
 			});
 
 			const [txRes, accRes, catRes, currentTotalRes] = await Promise.all([
@@ -522,7 +522,8 @@ export default function Transactions() {
 
 				<div className="text-gray-700">
 					<span className={`font-semibold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-						₹{tx.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+					₹{(typeof tx.amount === 'number' ? tx.amount : 0)
+					    .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 					</span>
 					<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">{tx.type}</span><br />
 					<span className="text-xs text-gray-500">{tx.account?.name}</span>
@@ -785,7 +786,10 @@ export default function Transactions() {
 			{transactions.flatMap((tx, idx) => [
 				renderRow(tx, false, idx),
 				...(expandedParents[tx.id] && tx.children
-					? tx.children.map(child => renderRow(child, true))
+					? tx.children
+						.filter(c => typeof c === 'object' && c !== null)
+						.map(child => renderRow(child, true))
+
 					: [])
 			])}
 
