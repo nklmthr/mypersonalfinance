@@ -7,7 +7,6 @@ import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -16,7 +15,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -62,9 +60,11 @@ public class AccountTransactionService {
 			String type, String search, String categoryId) {
 		AppUser appUser = appUserService.getCurrentUser();
 		Specification<AccountTransaction> spec = Specification.where(null);
-
-		if (StringUtils.isBlank(categoryId)) {
-			logger.info("No category filter applied, fetching all root transactions");
+		spec = spec.and(AccountTransactionSpecifications.isRootTransaction());
+		if(StringUtils.isNotBlank(categoryId)) {
+			logger.info("Category filter applied, fetching transactions for category ID: {}", categoryId);
+			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryService.getAllDescendantCategoryIds(categoryId)));
+		} else {
 			spec = spec.and(AccountTransactionSpecifications.isRootTransaction());
 		}
 		if (StringUtils.isNotBlank(accountId)) {
@@ -115,7 +115,7 @@ public class AccountTransactionService {
 	}
 
 	private void makeChangesForSplitTransactions(AccountTransaction tx) {
-		logger.info("Setting split transaction amount as sum of children for transaction ID: {}", tx.getId());
+		logger.info("Setting split transaction amount as sum of children for transaction ID: {}", tx);
 		BigDecimal totalChildrenAmount = tx.getChildren().stream().map(AccountTransaction::getAmount)
 				.reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
 		tx.setAmount(tx.getAmount().add(totalChildrenAmount).setScale(2, RoundingMode.HALF_UP));

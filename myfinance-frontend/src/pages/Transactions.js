@@ -473,7 +473,6 @@ export default function Transactions() {
 
 		for (const c of categoryList) {
 			flat.push({ id: c.id, name: prefix + c.name });
-			console.log(prefix + c.name);
 			if (c.children && c.children.length > 0) {
 				flat = flat.concat(flattenCategories(c.children, prefix + "— "));
 			}
