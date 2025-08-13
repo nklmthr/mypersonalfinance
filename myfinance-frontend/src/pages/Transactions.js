@@ -595,7 +595,16 @@ export default function Transactions() {
 						});
 						if (filterCategory) params.append("categoryId", filterCategory);
 						const res = await api.get(`/transactions/export?${params}`);
-						const csv = Papa.unparse(res.data);
+						const flattened = res.data.map(tx => ({
+						  Date: tx.date,
+						  Description: tx.description,
+						  Explanation: tx.explanation || "",
+						  Amount: tx.amount,
+						  Type: tx.type,
+						  Account: tx.account?.name || "",
+						  Category: tx.category?.name || ""
+						}));
+						const csv = Papa.unparse(flattened);
 						const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
 						saveAs(blob, "transactions.csv");
 					}}
@@ -614,7 +623,16 @@ export default function Transactions() {
 						});
 						if (filterCategory) params.append("categoryId", filterCategory);
 						const res = await api.get(`/transactions/export?${params}`);
-						const worksheet = XLSX.utils.json_to_sheet(res.data);
+						const flattened = res.data.map(tx => ({
+						  Date: tx.date,
+						  Description: tx.description,
+						  Explanation: tx.explanation || "",
+						  Amount: tx.amount,
+						  Type: tx.type,
+						  Account: tx.account?.name || "",
+						  Category: tx.category?.name || ""
+						}));
+						const worksheet = XLSX.utils.json_to_sheet(flattened);
 						const workbook = XLSX.utils.book_new();
 						XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
 						const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
@@ -636,22 +654,39 @@ export default function Transactions() {
 						if (filterCategory) params.append("categoryId", filterCategory);
 
 						const res = await api.get(`/transactions/export?${params}`);
-
-						// Create a PDF using jsPDF
 						const { jsPDF } = await import("jspdf");
-						const doc = new jsPDF();
-
-						// Optional: AutoTable plugin for tables
+						const flattened = res.data.map(tx => ({
+						  Date: tx.date,
+						  Description: tx.shortDescription,
+						  Explanation: tx.shortExplanation || "",
+						  Amount: tx.amount,
+						  Type: tx.type,
+						  Account: tx.account?.name || "",
+						  Category: tx.category?.name || ""
+						}));
 						const autoTable = (await import("jspdf-autotable")).default;
-
-						const headers = Object.keys(res.data[0] || {});
-						const rows = res.data.map(row => headers.map(key => row[key]));
+						const doc = new jsPDF();
+						const headers = Object.keys(flattened[0] || {});
+						const rows = flattened.map(row => headers.map(key => row[key]));
 
 						autoTable(doc, {
-							head: [headers],
-							body: rows,
-							styles: { fontSize: 8 },
-							margin: { top: 20 },
+						  head: [headers],
+						  body: rows,
+						  styles: {
+						    fontSize: 8,
+						    cellWidth: 'wrap',
+						  },
+						  columnStyles: {
+						    0: { cellWidth: 20 }, // Date
+						    1: { cellWidth: 40 }, // Description
+						    2: { cellWidth: 40 }, // Explanation
+						    3: { cellWidth: 20, halign: 'right' }, // Amount
+						    4: { cellWidth: 15 }, // Type
+						    5: { cellWidth: 25 }, // Account
+						    6: { cellWidth: 25 }, // Category
+						  },
+						  tableWidth: 'wrap', // fit to page width
+						  margin: { top: 20 },
 						});
 
 						doc.save("transactions.pdf");
