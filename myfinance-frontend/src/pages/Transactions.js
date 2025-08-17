@@ -657,8 +657,8 @@ export default function Transactions() {
 						const { jsPDF } = await import("jspdf");
 						const flattened = res.data.map(tx => ({
 						  Date: tx.date,
-						  Description: tx.shortDescription,
-						  Explanation: tx.shortExplanation || "",
+						  Description: tx.description,
+						  Explanation: tx.explanation || "",
 						  Amount: tx.amount,
 						  Type: tx.type,
 						  Account: tx.account?.name || "",
