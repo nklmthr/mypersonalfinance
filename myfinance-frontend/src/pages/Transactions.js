@@ -678,12 +678,12 @@ export default function Transactions() {
 						  },
 						  columnStyles: {
 						    0: { cellWidth: 20 }, // Date
-						    1: { cellWidth: 40 }, // Description
-						    2: { cellWidth: 40 }, // Explanation
+						    1: { cellWidth: 45 }, // Description
+						    2: { cellWidth: 45 }, // Explanation
 						    3: { cellWidth: 20, halign: 'right' }, // Amount
 						    4: { cellWidth: 15 }, // Type
-						    5: { cellWidth: 25 }, // Account
-						    6: { cellWidth: 25 }, // Category
+						    5: { cellWidth: 20 }, // Account
+						    6: { cellWidth: 20 }, // Category
 						  },
 						  tableWidth: 'wrap', // fit to page width
 						  margin: { top: 20 },
