@@ -6,6 +6,8 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.dto.AccountTypeDTO;
+import com.nklmthr.finance.personal.mapper.AccountTypeMapper;
 import com.nklmthr.finance.personal.model.AccountType;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.repository.AccountTypeRepository;
@@ -21,6 +23,9 @@ public class AccountTypeService {
 	private AppUserService appUserService;
 	@Autowired
 	private AccountTypeRepository accountTypeRepository;
+	
+	@Autowired
+	private final AccountTypeMapper accountTypeMapper;
 
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AccountTypeService.class);
 
@@ -35,10 +40,11 @@ public class AccountTypeService {
 		return accountTypeRepository.save(accountType);
 	}
 
-	public List<AccountType> getAll() {
+	public List<AccountTypeDTO> getAll() {
 		AppUser appUser = appUserService.getCurrentUser();
 		logger.info("Fetching all account types for user: " + appUser.getUsername());
-		return accountTypeRepository.findByAppUser(appUser);
+		List<AccountType> accountTypes = accountTypeRepository.findByAppUser(appUser);
+		return accountTypeMapper.toDTOList(accountTypes);
 	}
 
 	public Optional<AccountType> getById(String id) {

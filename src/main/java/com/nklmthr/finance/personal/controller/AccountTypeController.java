@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.nklmthr.finance.personal.dto.AccountTypeDTO;
 import com.nklmthr.finance.personal.model.AccountType;
 import com.nklmthr.finance.personal.service.AccountTypeService;
 
@@ -33,7 +34,7 @@ public class AccountTypeController {
 	}
 
 	@GetMapping
-	public ResponseEntity<List<AccountType>> getAll() {
+	public ResponseEntity<List<AccountTypeDTO>> getAll() {
 		return ResponseEntity.ok(accountTypeService.getAll());
 	}
 
