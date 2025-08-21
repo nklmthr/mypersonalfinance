@@ -411,11 +411,11 @@ export default function Transactions() {
 				params.append("categoryId", filterCategory);
 			}
 
-			
+
 			const [txRes, accRes, catRes, currentTotalRes] = await Promise.all([
 				api.get(`/transactions?${params.toString()}`),
-				api.get("/accounts"),
-				api.get("/categories"),
+				api.get(`/accounts`),
+				api.get(`/categories`),
 				api.get(`/transactions/currentTotal?${params.toString()}`)
 			])
 			setTransactions(txRes.data.content);
@@ -424,8 +424,8 @@ export default function Transactions() {
 			setCategories(catRes.data);
 			setTotalCount(txRes.data.totalElements);
 			setCurrentTotal(currentTotalRes.data);
-		} 
-		catch(error){
+		}
+		catch (error) {
 			console.log("Error fetching transaction page apis:", error);
 		}
 		finally {
@@ -602,9 +602,7 @@ export default function Transactions() {
 							search
 						});
 						if (filterCategory) params.append("categoryId", filterCategory);
-						const res = await api.get(`/transactions/export?${params}`).then(() => {
-							console.log("Transaction exported successfully");
-						}).catch((error) => {
+						const res = await api.get(`/transactions/export?${params}`).catch((error) => {
 							console.error("Error exporting transaction:", error);
 						});
 						const flattened = res.data.map(tx => ({
@@ -634,9 +632,7 @@ export default function Transactions() {
 							search
 						});
 						if (filterCategory) params.append("categoryId", filterCategory);
-						const res = await api.get(`/transactions/export?${params}`).then(() => {
-							console.log("Transaction exported successfully");
-						}).catch((error) => {
+						const res = await api.get(`/transactions/export?${params}`).catch((error) => {
 							console.error("Error exporting transaction:", error);
 						});
 						const flattened = res.data.map(tx => ({
@@ -669,9 +665,7 @@ export default function Transactions() {
 						});
 						if (filterCategory) params.append("categoryId", filterCategory);
 
-						const res = await api.get(`/transactions/export?${params}`).then(() => {
-							console.log("Transaction exported successfully");
-						}).catch((error) => {
+						const res = await api.get(`/transactions/export?${params}`).catch((error) => {
 							console.error("Error exporting transaction:", error);
 						});
 						const { jsPDF } = await import("jspdf");
