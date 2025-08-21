@@ -145,10 +145,4 @@ public interface AccountTransactionRepository
 		return findAll(spec, page).map(AccountTransaction::getId);
 	}
 
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
-	@Query("SELECT t FROM AccountTransaction t WHERE t.id IN :txnIds")
-	List<AccountTransaction> findAllWithChildrenByIds(List<String> txnIds);
 }

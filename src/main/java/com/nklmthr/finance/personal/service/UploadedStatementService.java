@@ -18,6 +18,7 @@ import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.UploadedStatement;
 import com.nklmthr.finance.personal.model.UploadedStatement.Status;
+import com.nklmthr.finance.personal.repository.AccountRepository;
 import com.nklmthr.finance.personal.repository.UploadedStatementRepository;
 import com.nklmthr.finance.personal.upload.parser.SBICsvParser;
 import com.nklmthr.finance.personal.upload.parser.StatementParser;
@@ -39,12 +40,12 @@ public class UploadedStatementService {
 	private CategoryService categoryService;
 
 	@Autowired
-	private AccountService accountService;
+	private AccountRepository accountRepository; 
 
 	@Transactional
 	public UploadedStatement upload(MultipartFile file, String accountId) throws Exception {
 		AppUser appUser = appUserService.getCurrentUser(); // Ensure user context
-		Account account = accountService.findById(accountId);
+		Account account = accountRepository.findByAppUserAndId(appUser, accountId).get();
 		if (account == null) {
 			throw new IllegalArgumentException("Account not found: " + accountId);
 		}
@@ -105,27 +106,27 @@ public class UploadedStatementService {
 			tx.setCategory(categoryService.getNonClassifiedCategory());
 		}
 		logger.info("Parsed {} transactions from statement {}", transactions.size(), id);
-		accountTransactionService.save(transactions);
+		//accountTransactionService.save(transactions);
 		logger.info("Saved {} transactions for statement {}", transactions.size(), id);
 		statement.setStatus(Status.PROCESSED);
 		uploadedStatementRepository.save(statement);
 		logger.info("Statement {} processed successfully", id);
 	}
 
-	@Transactional
-	public void deleteTransactions(String id) {
-		AppUser appUser = appUserService.getCurrentUser();
-		UploadedStatement statement = uploadedStatementRepository.findByAppUserAndId(appUser, id)
-				.orElseThrow(() -> new IllegalArgumentException("Statement not found: " + id));
-		logger.info("Deleting transactions for statement with id: {} for user: {}", id, appUser.getUsername());
-		List<AccountTransaction> transactions = accountTransactionService.getTransactionsByUploadedStatement(statement);
-		logger.info("Found {} transactions to delete for statement {}", transactions.size(), id);
-		accountTransactionService.deleteAll(transactions);
-		logger.info("Deleted {} transactions for statement {}", transactions.size(), id);
-		statement.setStatus(Status.UPLOADED); // Reset status after deletion");
-		logger.info("Resetting status of statement {} to UPLOADED", id);
-		uploadedStatementRepository.save(statement);
-	}
+//	@Transactional
+//	public void deleteTransactions(String id) {
+//		AppUser appUser = appUserService.getCurrentUser();
+//		UploadedStatement statement = uploadedStatementRepository.findByAppUserAndId(appUser, id)
+//				.orElseThrow(() -> new IllegalArgumentException("Statement not found: " + id));
+//		logger.info("Deleting transactions for statement with id: {} for user: {}", id, appUser.getUsername());
+//		List<AccountTransaction> transactions = accountTransactionService.getTransactionsByUploadedStatement(statement);
+//		logger.info("Found {} transactions to delete for statement {}", transactions.size(), id);
+//		accountTransactionService.deleteAll(transactions);
+//		logger.info("Deleted {} transactions for statement {}", transactions.size(), id);
+//		statement.setStatus(Status.UPLOADED); // Reset status after deletion");
+//		logger.info("Resetting status of statement {} to UPLOADED", id);
+//		uploadedStatementRepository.save(statement);
+//	}
 
 	@Transactional
 	public void delete(String id) {

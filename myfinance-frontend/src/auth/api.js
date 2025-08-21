@@ -10,6 +10,7 @@ const api = axios.create({
 api.interceptors.response.use(
 	(response) => response,
 	(error) => {
+		console.error("AXIOS ERROR", error);
 		if (error.response?.status === 401) {
 			localStorage.removeItem('authToken');
 			showModal('Session expired. Please log in again.');
@@ -28,7 +29,9 @@ api.interceptors.response.use(
 		}
 
 		if (error.response?.status === 500) {
-			showModal('Something went wrong on the server. Please try again later.');
+			const message = error.response.data?.message || 'Server error';
+			showModal(`Error: ${message}`);
+			return Promise.resolve();
 		}
 		return Promise.reject(error);
 	}

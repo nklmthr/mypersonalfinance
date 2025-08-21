@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -18,10 +20,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
 import com.nklmthr.finance.personal.dto.SplitTransactionRequest;
 import com.nklmthr.finance.personal.dto.TransferRequest;
-import com.nklmthr.finance.personal.model.AccountTransaction;
-import com.nklmthr.finance.personal.model.Attachment;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
 
 import lombok.RequiredArgsConstructor;
@@ -31,81 +32,95 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountTransactionController {
 
-	private final AccountTransactionService transactionService;
+    private final AccountTransactionService transactionService;
+    
+    private static final Logger logger = LoggerFactory.getLogger(AccountTransactionController.class);
 
-	@GetMapping
-	public Page<AccountTransaction> getTransactions(@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String month,
-			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
-			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
-		return transactionService.getFilteredTransactions(PageRequest.of(page, size, Sort.by("date").descending()),
-				month, accountId, type, search, categoryId);
-	}
-	
-	@GetMapping("/currentTotal")
-	public BigDecimal getCurrentTotal(@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String month,
-			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
-			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
-		return transactionService.getCurrentTotal(month, accountId, type, search, categoryId);
-	}
+    @GetMapping
+    public Page<AccountTransactionDTO> getTransactions(@RequestParam(defaultValue = "0") int page,
+                                                       @RequestParam(defaultValue = "10") int size,
+                                                       @RequestParam(required = false) String month,
+                                                       @RequestParam(required = false) String accountId,
+                                                       @RequestParam(required = false) String type,
+                                                       @RequestParam(required = false) String categoryId,
+                                                       @RequestParam(required = false) String search) {
+        return transactionService.getFilteredTransactions(
+                PageRequest.of(page, size, Sort.by("date").descending()),
+                month, accountId, type, search, categoryId);
+    }
 
-	@GetMapping("/export")
-	public List<AccountTransaction> exportTransactions(@RequestParam(required = false) String month,
-			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
-			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
-		return transactionService.getFilteredTransactionsForExport(month, accountId, type, categoryId, search);
-	}
+    @GetMapping("/currentTotal")
+    public BigDecimal getCurrentTotal(@RequestParam(required = false) String month,
+                                      @RequestParam(required = false) String accountId,
+                                      @RequestParam(required = false) String type,
+                                      @RequestParam(required = false) String categoryId,
+                                      @RequestParam(required = false) String search) {
+        return transactionService.getCurrentTotal(month, accountId, type, search, categoryId);
+    }
 
-	@GetMapping("/{id}")
-	public ResponseEntity<AccountTransaction> getById(@PathVariable String id) {
-		return transactionService.getById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
-	}
+    @GetMapping("/export")
+    public List<AccountTransactionDTO> exportTransactions(@RequestParam(required = false) String month,
+                                                          @RequestParam(required = false) String accountId,
+                                                          @RequestParam(required = false) String type,
+                                                          @RequestParam(required = false) String categoryId,
+                                                          @RequestParam(required = false) String search) {
+        return transactionService.getFilteredTransactionsForExport(month, accountId, type, categoryId, search);
+    }
 
-	@GetMapping("/{id}/children")
-	public List<AccountTransaction> getChildren(@PathVariable String id) {
-		return transactionService.getChildren(id);
-	}
+    @GetMapping("/{id}")
+    public ResponseEntity<AccountTransactionDTO> getById(@PathVariable String id) {
+        return transactionService.getById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
 
-	@PostMapping
-	public AccountTransaction create(@RequestBody AccountTransaction tx) {
-		return transactionService.save(tx);
-	}
+    @GetMapping("/{id}/children")
+    public List<AccountTransactionDTO> getChildren(@PathVariable String id) {
+        return transactionService.getChildren(id);
+    }
 
-	@PutMapping("/{id}")
-	public ResponseEntity<AccountTransaction> update(@PathVariable String id, @RequestBody AccountTransaction tx) {
-		return transactionService.updateTransaction(id, tx).map(ResponseEntity::ok)
-				.orElse(ResponseEntity.notFound().build());
-	}
+    @PostMapping
+    public AccountTransactionDTO create(@RequestBody AccountTransactionDTO tx) {
+        return transactionService.save(tx);
+    }
 
-	@PostMapping("/transfer")
-	public ResponseEntity<?> createTransfer(@RequestBody TransferRequest request) {
-		try {
-			transactionService.createTransfer(request);
-			return ResponseEntity.ok(Map.of("message", "Transfer successful"));
-		} catch (Exception e) {
-			return ResponseEntity.badRequest().body("Transfer failed: " + e.getMessage());
-		}
-	}
+    @PutMapping("/{id}")
+    public ResponseEntity<AccountTransactionDTO> update(@PathVariable String id,
+                                                        @RequestBody AccountTransactionDTO tx) {
+        return transactionService.updateTransaction(id, tx)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
 
-	@PostMapping("/split")
-	public ResponseEntity<String> splitTransaction(@RequestBody List<SplitTransactionRequest> splitTransactions) {
-		return transactionService.splitTransaction(splitTransactions);
-	}
+    @PostMapping("/transfer")
+    public ResponseEntity<?> createTransfer(@RequestBody TransferRequest request) {
+        try {
+            transactionService.createTransfer(request);
+            return ResponseEntity.ok(Map.of("message", "Transfer successful"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Transfer failed: " + e.getMessage());
+        }
+    }
 
-	@DeleteMapping("/{id}")
-	public ResponseEntity<Void> delete(@PathVariable String id) {
-		transactionService.delete(id);
-		return ResponseEntity.noContent().build();
-	}
+    @PostMapping("/split")
+    public ResponseEntity<String> splitTransaction(@RequestBody List<SplitTransactionRequest> splitTransactions) {
+        return transactionService.splitTransaction(splitTransactions);
+    }
 
-//	@GetMapping("{id}/attachments/")
-//	public List<Attachment> getAttachments(@PathVariable String id) {
-//		return transactionService.getTransactionAttachments(id);
-//	}
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable String id) {
+   	
+        transactionService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
 
-//	@PostMapping("/{id}/attachments")
-//	public Attachment addAttachment(@PathVariable String id, @RequestBody Attachment attachment) {
-//		return transactionService.addTransactionAttachment(id, attachment);
-//	}
+//    @GetMapping("{id}/attachments/")
+//    public List<AttachmentDTO> getAttachments(@PathVariable String id) {
+//        return transactionService.getTransactionAttachments(id);
+//    }
+//
+//    @PostMapping("/{id}/attachments")
+//    public AttachmentDTO addAttachment(@PathVariable String id, @RequestBody AttachmentDTO attachment) {
+//        return transactionService.addTransactionAttachment(id, attachment);
+//    }
 }

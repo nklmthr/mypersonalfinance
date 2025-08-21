@@ -85,30 +85,30 @@ public class AccountTransaction {
 	@JsonIgnore
 	private LocalDateTime sourceTime;
 
-	@ManyToOne(fetch = FetchType.LAZY)
+	@ManyToOne
 	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	private Account account;
 
-	@ManyToOne(fetch = FetchType.LAZY)
+	@ManyToOne
 	@JoinColumn(name = "category_id")
 	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	private Category category;
 
-	@ManyToOne(fetch = FetchType.LAZY)
+	@ManyToOne
 	@JoinColumn(name = "parent_id")
 	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	private AccountTransaction parent;
 
-	@OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+	@OneToMany(mappedBy = "parent")
 	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	@Builder.Default
 	private List<AccountTransaction> children = new ArrayList<>();
 
-	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@ManyToOne(optional = false)
 	@JsonIgnore
 	private AppUser appUser;
 
-	@ManyToOne(fetch = FetchType.LAZY)
+	@ManyToOne
 	@JoinColumn(name = "uploaded_statement_id")
 	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	private UploadedStatement uploadedStatement;

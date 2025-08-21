@@ -69,7 +69,6 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 				tx.setDescription(tx.getDescription() + " UPI Ref " + ref.group(1));
 			}
 
-			// Account selection
 			if (emailContent.contains("2606")) {
 				tx.setAccount(accountService.getAccountByName("SBI Rupay Credit Card", appUser));
 			} else {

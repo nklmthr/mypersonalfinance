@@ -411,20 +411,24 @@ export default function Transactions() {
 				params.append("categoryId", filterCategory);
 			}
 
-			// Use same params for both calls
+			
 			const [txRes, accRes, catRes, currentTotalRes] = await Promise.all([
 				api.get(`/transactions?${params.toString()}`),
 				api.get("/accounts"),
 				api.get("/categories"),
 				api.get(`/transactions/currentTotal?${params.toString()}`)
-			]);
+			])
 			setTransactions(txRes.data.content);
 			setTotalPages(txRes.data.totalPages);
 			setAccounts(accRes.data);
 			setCategories(catRes.data);
 			setTotalCount(txRes.data.totalElements);
 			setCurrentTotal(currentTotalRes.data);
-		} finally {
+		} 
+		catch(error){
+			console.log("Error fetching transaction page apis:", error);
+		}
+		finally {
 			NProgress.done();
 			setLoading(false);
 		}
@@ -459,7 +463,11 @@ export default function Transactions() {
 		if (!window.confirm("Delete this transaction?")) return;
 		setLoading(true);
 		NProgress.start();
-		await api.delete(`/transactions/${id}`);
+		await api.delete(`/transactions/${id}`).then(() => {
+			console.log("Transaction deleted successfully");
+		}).catch((error) => {
+			console.error("Error deleting transaction:", error);
+		});
 		await fetchData();
 		NProgress.done();
 		setLoading(false);
@@ -594,15 +602,19 @@ export default function Transactions() {
 							search
 						});
 						if (filterCategory) params.append("categoryId", filterCategory);
-						const res = await api.get(`/transactions/export?${params}`);
+						const res = await api.get(`/transactions/export?${params}`).then(() => {
+							console.log("Transaction exported successfully");
+						}).catch((error) => {
+							console.error("Error exporting transaction:", error);
+						});
 						const flattened = res.data.map(tx => ({
-						  Date: tx.date,
-						  Description: tx.description,
-						  Explanation: tx.explanation || "",
-						  Amount: tx.amount,
-						  Type: tx.type,
-						  Account: tx.account?.name || "",
-						  Category: tx.category?.name || ""
+							Date: tx.date,
+							Description: tx.description,
+							Explanation: tx.explanation || "",
+							Amount: tx.amount,
+							Type: tx.type,
+							Account: tx.account?.name || "",
+							Category: tx.category?.name || ""
 						}));
 						const csv = Papa.unparse(flattened);
 						const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -622,15 +634,19 @@ export default function Transactions() {
 							search
 						});
 						if (filterCategory) params.append("categoryId", filterCategory);
-						const res = await api.get(`/transactions/export?${params}`);
+						const res = await api.get(`/transactions/export?${params}`).then(() => {
+							console.log("Transaction exported successfully");
+						}).catch((error) => {
+							console.error("Error exporting transaction:", error);
+						});
 						const flattened = res.data.map(tx => ({
-						  Date: tx.date,
-						  Description: tx.description,
-						  Explanation: tx.explanation || "",
-						  Amount: tx.amount,
-						  Type: tx.type,
-						  Account: tx.account?.name || "",
-						  Category: tx.category?.name || ""
+							Date: tx.date,
+							Description: tx.description,
+							Explanation: tx.explanation || "",
+							Amount: tx.amount,
+							Type: tx.type,
+							Account: tx.account?.name || "",
+							Category: tx.category?.name || ""
 						}));
 						const worksheet = XLSX.utils.json_to_sheet(flattened);
 						const workbook = XLSX.utils.book_new();
@@ -653,16 +669,20 @@ export default function Transactions() {
 						});
 						if (filterCategory) params.append("categoryId", filterCategory);
 
-						const res = await api.get(`/transactions/export?${params}`);
+						const res = await api.get(`/transactions/export?${params}`).then(() => {
+							console.log("Transaction exported successfully");
+						}).catch((error) => {
+							console.error("Error exporting transaction:", error);
+						});
 						const { jsPDF } = await import("jspdf");
 						const flattened = res.data.map(tx => ({
-						  Date: tx.date,
-						  Description: tx.description,
-						  Explanation: tx.explanation || "",
-						  Amount: tx.amount,
-						  Type: tx.type,
-						  Account: tx.account?.name || "",
-						  Category: tx.category?.name || ""
+							Date: tx.date,
+							Description: tx.description,
+							Explanation: tx.explanation || "",
+							Amount: tx.amount,
+							Type: tx.type,
+							Account: tx.account?.name || "",
+							Category: tx.category?.name || ""
 						}));
 						const autoTable = (await import("jspdf-autotable")).default;
 						const doc = new jsPDF();
@@ -670,23 +690,23 @@ export default function Transactions() {
 						const rows = flattened.map(row => headers.map(key => row[key]));
 
 						autoTable(doc, {
-						  head: [headers],
-						  body: rows,
-						  styles: {
-						    fontSize: 8,
-						    cellWidth: 'wrap',
-						  },
-						  columnStyles: {
-						    0: { cellWidth: 20 }, // Date
-						    1: { cellWidth: 45 }, // Description
-						    2: { cellWidth: 45 }, // Explanation
-						    3: { cellWidth: 20, halign: 'right' }, // Amount
-						    4: { cellWidth: 15 }, // Type
-						    5: { cellWidth: 20 }, // Account
-						    6: { cellWidth: 20 }, // Category
-						  },
-						  tableWidth: 'wrap', // fit to page width
-						  margin: { top: 20 },
+							head: [headers],
+							body: rows,
+							styles: {
+								fontSize: 8,
+								cellWidth: 'wrap',
+							},
+							columnStyles: {
+								0: { cellWidth: 20 }, // Date
+								1: { cellWidth: 45 }, // Description
+								2: { cellWidth: 45 }, // Explanation
+								3: { cellWidth: 20, halign: 'right' }, // Amount
+								4: { cellWidth: 15 }, // Type
+								5: { cellWidth: 20 }, // Account
+								6: { cellWidth: 20 }, // Category
+							},
+							tableWidth: 'wrap', // fit to page width
+							margin: { top: 20 },
 						});
 
 						doc.save("transactions.pdf");
@@ -839,7 +859,11 @@ export default function Transactions() {
 						category: c.categoryId ? { id: c.categoryId } : null,
 						parentId: enrichedParent.parentId
 					}));
-					await api.post("/transactions/split", childrenPayload);
+					await api.post("/transactions/split", childrenPayload).then(() => {
+						console.log("Transaction split successfully");
+					}).catch((error) => {
+						console.error("Error split transaction:", error);
+					});
 					setSplitTx(null); await fetchData(); NProgress.done(); setLoading(false);
 				}} categories={categories} />
 			)}
@@ -851,6 +875,10 @@ export default function Transactions() {
 						sourceTransactionId: transferTx.id,
 						destinationAccountId: transferTx.destinationAccountId,
 						explanation: transferTx.explanation
+					}).then(() => {
+						console.log("Transaction transfer successful");
+					}).catch((error) => {
+						console.error("Error transfer transaction:", error);
 					});
 					setTransferTx(null); await fetchData(); NProgress.done(); setLoading(false);
 				}} accounts={accounts} />

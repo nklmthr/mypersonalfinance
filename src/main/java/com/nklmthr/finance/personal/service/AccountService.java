@@ -1,11 +1,16 @@
 package com.nklmthr.finance.personal.service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.dto.AccountDTO;
+import com.nklmthr.finance.personal.mapper.AccountMapper;
 import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.repository.AccountRepository;
@@ -15,124 +20,133 @@ import com.nklmthr.finance.personal.repository.InstitutionRepository;
 
 @Service
 public class AccountService {
-	@Autowired
-	private AppUserService appUserService;
 
-	@Autowired
-	private AccountRepository accountRepository;
+    @Autowired
+    private AppUserService appUserService;
 
-	@Autowired
-	private InstitutionRepository institutionRepository;
+    @Autowired
+    private AccountRepository accountRepository;
 
-	@Autowired
-	private AccountTypeRepository accountTypeRepository;
+    @Autowired
+    private InstitutionRepository institutionRepository;
 
-	@Autowired
-	private AccountTransactionRepository acountTransactionRepository;
+    @Autowired
+    private AccountTypeRepository accountTypeRepository;
 
-	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AccountService.class);
+    @Autowired
+    private AccountTransactionRepository acountTransactionRepository;
 
-	public List<Account> getAllAccounts() {
-		AppUser appUser = appUserService.getCurrentUser();
-		logger.info("Fetching all accounts for user: " + appUser.getUsername());
-		return accountRepository.findAllByAppUser(appUser, Sort.by("name").ascending());
-	}
+    @Autowired
+    private AccountMapper accountMapper;
 
-	public Account findById(String id) {
-		AppUser appUser = appUserService.getCurrentUser();
-		logger.info("Finding account by id: " + id + " for user: " + appUser.getUsername());
-		return findByAppUserAndId(id, appUser);
+    private static final Logger logger = LoggerFactory.getLogger(AccountService.class);
 
-	}
+    public List<AccountDTO> getAllAccounts() {
+        AppUser appUser = appUserService.getCurrentUser();
+        logger.info("Fetching all accounts for user: {}", appUser.getUsername());
+        return accountRepository.findAllByAppUser(appUser, Sort.by("name").ascending())
+                .stream()
+                .map(accountMapper::toDTO)
+                .collect(Collectors.toList());
+    }
 
-	public Account findByAppUserAndId(String id, AppUser appUser) {
-		logger.debug("Fetching account with id: " + id + " for user: " + appUser.getUsername());
-		return accountRepository.findByAppUserAndId(appUser, id).orElseThrow(
-				() -> new RuntimeException("No access to this account or Account not found with id: " + id));
+    public AccountDTO findById(String id) {
+        AppUser appUser = appUserService.getCurrentUser();
+        logger.info("Finding account by id: {} for user: {}", id, appUser.getUsername());
+        return accountMapper.toDTO(findByAppUserAndId(id, appUser));
+    }
 
-	}
+    private Account findByAppUserAndId(String id, AppUser appUser) {
+        logger.debug("Fetching account with id: {} for user: {}", id, appUser.getUsername());
+        return accountRepository.findByAppUserAndId(appUser, id)
+                .orElseThrow(() -> new RuntimeException("No access to this account or Account not found with id: " + id));
+    }
 
-	public Account createAccount(Account account) {
-		AppUser appUser = appUserService.getCurrentUser();
-		if (institutionRepository.findByAppUserAndId(appUser, account.getInstitution().getId()).isEmpty()) {
-			logger.error("Institution not found for user: " + appUser.getUsername());
-			throw new RuntimeException("Institution not found");
-		}
-		if (!accountTypeRepository.existsByAppUserAndId(appUser, account.getAccountType().getId())) {
-			logger.error("AccountType not found for user: " + appUser.getUsername());
-			throw new RuntimeException("AccountType not found");
-		}
-		account.setAppUser(appUser);
-		logger.info("Creating account for user: " + appUser.getUsername() + " with name: " + account.getName());
-		return accountRepository.save(account);
-	}
+    public AccountDTO createAccount(AccountDTO accountDTO) {
+        AppUser appUser = appUserService.getCurrentUser();
+        Account account = accountMapper.toEntity(accountDTO);
 
-	public Account updateAccount(String id, Account updatedAccount) {
-		AppUser appUser = appUserService.getCurrentUser();
-		Account account = findById(id);
+        if (institutionRepository.findByAppUserAndId(appUser, account.getInstitution().getId()).isEmpty()) {
+            logger.error("Institution not found for user: {}", appUser.getUsername());
+            throw new RuntimeException("Institution not found");
+        }
+        if (!accountTypeRepository.existsByAppUserAndId(appUser, account.getAccountType().getId())) {
+            logger.error("AccountType not found for user: {}", appUser.getUsername());
+            throw new RuntimeException("AccountType not found");
+        }
+        account.setAppUser(appUser);
+        logger.info("Creating account for user: {} with name: {}", appUser.getUsername(), account.getName());
+        return accountMapper.toDTO(accountRepository.save(account));
+    }
 
-		account.setName(updatedAccount.getName());
-		account.setBalance(updatedAccount.getBalance());
+    public AccountDTO updateAccount(String id, AccountDTO updatedAccountDTO) {
+        AppUser appUser = appUserService.getCurrentUser();
+        Account account = findByAppUserAndId(id, appUser);
 
-		if (updatedAccount.getInstitution() != null) {
-			account.setInstitution(updatedAccount.getInstitution());
-		}
-		if (updatedAccount.getAccountType() != null) {
-			account.setAccountType(updatedAccount.getAccountType());
-		}
-		account.setAppUser(appUser);
-		logger.info("Updating account with id: " + id + " for user: " + appUser.getUsername());
-		return accountRepository.save(account);
-	}
+        Account updatedAccount = accountMapper.toEntity(updatedAccountDTO);
+        account.setName(updatedAccount.getName());
+        account.setBalance(updatedAccount.getBalance());
 
-	public void deleteAccount(String id) {
-		AppUser appUser = appUserService.getCurrentUser();
-		if (!acountTransactionRepository.findByAppUserAndAccountId(appUser, id).isEmpty()) {
-			logger.error("Cannot delete account with existing transactions for user: " + appUser.getUsername());
-			throw new IllegalStateException("Cannot delete account with existing transactions.");
-		}
-		logger.info("Deleting account with id: " + id + " for user: " + appUser.getUsername());
-		accountRepository.deleteById(id);
-	}
+        if (updatedAccount.getInstitution() != null) {
+            account.setInstitution(updatedAccount.getInstitution());
+        }
+        if (updatedAccount.getAccountType() != null) {
+            account.setAccountType(updatedAccount.getAccountType());
+        }
+        account.setAppUser(appUser);
+        logger.info("Updating account with id: {} for user: {}", id, appUser.getUsername());
+        return accountMapper.toDTO(accountRepository.save(account));
+    }
 
-	public List<Account> getFilteredAccounts(String accountTypeId, String institutionId) {
-		AppUser appUser = appUserService.getCurrentUser();
-		if (accountTypeId != null && institutionId != null) {
-			logger.info("Fetching accounts for user: " + appUser.getUsername() + " with accountTypeId: " + accountTypeId
-					+ " and institutionId: " + institutionId);
-			return accountRepository.findByAppUserAndAccountTypeIdAndInstitutionId(appUser, accountTypeId,
-					institutionId);
-		} else if (accountTypeId != null) {
-			logger.info(
-					"Fetching accounts for user: " + appUser.getUsername() + " with accountTypeId: " + accountTypeId);
-			return accountRepository.findByAppUserAndAccountTypeId(appUser, accountTypeId);
-		} else if (institutionId != null) {
-			logger.info(
-					"Fetching accounts for user: " + appUser.getUsername() + " with institutionId: " + institutionId);
-			return accountRepository.findByAppUserAndInstitutionId(appUser, institutionId);
-		} else {
-			logger.info("Fetching all accounts for user: " + appUser.getUsername());
-			return accountRepository.findAllByAppUser(appUser, Sort.by("name").ascending());
-		}
-	}
+    public void deleteAccount(String id) {
+        AppUser appUser = appUserService.getCurrentUser();
+        if (!acountTransactionRepository.findByAppUserAndAccountId(appUser, id).isEmpty()) {
+            logger.error("Cannot delete account with existing transactions for user: {}", appUser.getUsername());
+            throw new IllegalStateException("Cannot delete account with existing transactions.");
+        }
+        logger.info("Deleting account with id: {} for user: {}", id, appUser.getUsername());
+        accountRepository.deleteById(id);
+    }
 
-	public Account getAccountByName(String accountName) {
-		AppUser appUser = appUserService.getCurrentUser();
-		logger.info("Fetching account by name: " + accountName + " for user: " + appUser.getUsername());
-		return getAccountByName(accountName, appUser);
-	}
+    public List<AccountDTO> getFilteredAccounts(String accountTypeId, String institutionId) {
+        AppUser appUser = appUserService.getCurrentUser();
+        List<Account> accounts;
 
-	public Account getAccountByName(String accountName, AppUser appUser) {
-		logger.debug("Fetching account by name: " + accountName + " for user: " + appUser.getUsername());
-		return accountRepository.findByAppUserAndName(appUser, accountName)
-				.orElseThrow(() -> new RuntimeException("Account not found with name: " + accountName));
-	}
-	
-	public void save(Account account) {
-		AppUser appUser = appUserService.getCurrentUser();
-		account.setAppUser(appUser);
-		logger.info("Saving account for user: " + appUser.getUsername() + " with name: " + account.getName());
-		accountRepository.save(account);
-	}
+        if (accountTypeId != null && institutionId != null) {
+            logger.info("Fetching accounts for user: {} with accountTypeId: {} and institutionId: {}",
+                    appUser.getUsername(), accountTypeId, institutionId);
+            accounts = accountRepository.findByAppUserAndAccountTypeIdAndInstitutionId(appUser, accountTypeId, institutionId);
+        } else if (accountTypeId != null) {
+            logger.info("Fetching accounts for user: {} with accountTypeId: {}", appUser.getUsername(), accountTypeId);
+            accounts = accountRepository.findByAppUserAndAccountTypeId(appUser, accountTypeId);
+        } else if (institutionId != null) {
+            logger.info("Fetching accounts for user: {} with institutionId: {}", appUser.getUsername(), institutionId);
+            accounts = accountRepository.findByAppUserAndInstitutionId(appUser, institutionId);
+        } else {
+            logger.info("Fetching all accounts for user: {}", appUser.getUsername());
+            accounts = accountRepository.findAllByAppUser(appUser, Sort.by("name").ascending());
+        }
 
+        return accounts.stream().map(accountMapper::toDTO).collect(Collectors.toList());
+    }
+
+    public AccountDTO getAccountByName(String accountName) {
+        AppUser appUser = appUserService.getCurrentUser();
+        logger.info("Fetching account by name: {} for user: {}", accountName, appUser.getUsername());
+        return accountMapper.toDTO(getAccountByName(accountName, appUser));
+    }
+
+    public Account getAccountByName(String accountName, AppUser appUser) {
+        logger.debug("Fetching account by name: {} for user: {}", accountName, appUser.getUsername());
+        return accountRepository.findByAppUserAndName(appUser, accountName)
+                .orElseThrow(() -> new RuntimeException("Account not found with name: " + accountName));
+    }
+
+    public void save(AccountDTO accountDTO) {
+        AppUser appUser = appUserService.getCurrentUser();
+        Account account = accountMapper.toEntity(accountDTO);
+        account.setAppUser(appUser);
+        logger.info("Saving account for user: {} with name: {}", appUser.getUsername(), account.getName());
+        accountRepository.save(account);
+    }
 }

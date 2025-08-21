@@ -48,7 +48,7 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 		return "alerts@axisbank.com";
 	}
 
-	public AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
+	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 		try {
 			// Amount (e.g., "INR 5090" or "INR 5,090.00")
 			Pattern amountPattern = Pattern.compile("for INR ([\\d,]+\\.?\\d*)");
