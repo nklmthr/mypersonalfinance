@@ -331,7 +331,7 @@ public class AccountTransactionService {
 		List<AccountTransaction> list = accountTransactionRepository.findAll(spec,
 				Sort.by(Sort.Direction.DESC, "date"));
 		logger.info("Total transactions found for export: {}", list.size());
-		return accountTransactionMapper.toDTOList(formatTransactionResponse(list));
+		return accountTransactionMapper.toDTOList(list);
 	}
 
 	public List<AccountTransactionDTO> getTransactionsByUploadedStatement(UploadedStatement statement) {
@@ -395,42 +395,10 @@ public class AccountTransactionService {
 		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
 		logger.info("Total transactions found: {}", page.getTotalElements());
 		List<AccountTransactionDTO> formatted = accountTransactionMapper
-				.toDTOList(formatTransactionResponse(page.getContent()));
+				.toDTOList(page.getContent());
 		return new PageImpl<>(formatted, pageable, page.getTotalElements());
 	}
 
-	private List<AccountTransaction> formatTransactionResponse(List<AccountTransaction> content) {
-		content.forEach(tx -> {
-			if (tx.getDescription() != null) {
-				tx.setShortDescription(
-						tx.getDescription().length() > 40 ? tx.getDescription().substring(0, 40) : tx.getDescription());
-			}
-			if (tx.getExplanation() != null) {
-				tx.setShortExplanation(
-						tx.getExplanation().length() > 60 ? tx.getExplanation().substring(0, 60) : tx.getExplanation());
-			}
-			if (tx.getCategory().equals(categoryService.getSplitTrnsactionCategory())) {
-				makeChangesForSplitTransactions(tx);
-			}
-		});
-		return content;
-	}
-
-	private void makeChangesForSplitTransactions(AccountTransaction tx) {
-		BigDecimal totalChildrenAmount = tx.getChildren().stream().map(AccountTransaction::getAmount)
-				.reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
-		tx.setAmount(tx.getAmount().add(totalChildrenAmount).setScale(2, RoundingMode.HALF_UP));
-		tx.getChildren().forEach(child -> {
-			if (child.getDescription() != null) {
-				child.setShortDescription(child.getDescription().length() > 40 ? child.getDescription().substring(0, 40)
-						: child.getDescription());
-			}
-			if (child.getExplanation() != null) {
-				child.setShortExplanation(child.getExplanation().length() > 60 ? child.getExplanation().substring(0, 60)
-						: child.getExplanation());
-			}
-		});
-	}
 
 	public BigDecimal getCurrentTotal(String month, String accountId, String type, String search, String categoryId) {
 		Specification<AccountTransaction> spec = buildTransactionSpec(month, accountId, type, search, categoryId,

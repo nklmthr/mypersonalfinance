@@ -25,8 +25,11 @@ public interface AccountTransactionMapper extends GenericMapper<AccountTransacti
 	@Mapping(target = "uploadedStatement", ignore = true)
 	@Mapping(target = "parent", ignore = true) 
 	@Mapping(target = "appUser", ignore = true)
+	
 	AccountTransaction toEntity(AccountTransactionDTO dto);
 
+	@Mapping(target="shortDescription", ignore = true)
+	@Mapping(target="shortExplanation", ignore = true)
 	List<AccountTransactionDTO> toDTOList(List<AccountTransaction> entities);
 
 	List<AccountTransaction> toEntityList(List<AccountTransactionDTO> dtos);

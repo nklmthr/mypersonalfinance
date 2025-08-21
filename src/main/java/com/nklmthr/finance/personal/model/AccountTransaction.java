@@ -13,12 +13,10 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.nklmthr.finance.personal.enums.TransactionType;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -53,15 +51,8 @@ public class AccountTransaction {
 	@Column(nullable = false, length = 1000)
 	private String description;
 
-	@Transient
-	private String shortDescription;
-	
-	
 	@Column(length = 2000)
 	private String explanation;
-	
-	@Transient
-	private String shortExplanation;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
