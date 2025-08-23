@@ -31,8 +31,7 @@ public class UploadedStatementService {
 
 	@Autowired
 	private UploadedStatementRepository uploadedStatementRepository;
-	@Autowired
-	private AccountTransactionService accountTransactionService;
+	
 	@Autowired
 	private AppUserService appUserService;
 

@@ -32,87 +32,88 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountTransactionController {
 
-    private final AccountTransactionService transactionService;
-    
-    private static final Logger logger = LoggerFactory.getLogger(AccountTransactionController.class);
+	private final AccountTransactionService transactionService;
 
-    @GetMapping
-    public Page<AccountTransactionDTO> getTransactions(@RequestParam(defaultValue = "0") int page,
-                                                       @RequestParam(defaultValue = "10") int size,
-                                                       @RequestParam(required = false) String month,
-                                                       @RequestParam(required = false) String accountId,
-                                                       @RequestParam(required = false) String type,
-                                                       @RequestParam(required = false) String categoryId,
-                                                       @RequestParam(required = false) String search) {
-        return transactionService.getFilteredTransactions(
-                PageRequest.of(page, size, Sort.by("date").descending()),
-                month, accountId, type, search, categoryId);
-    }
+	private static final Logger logger = LoggerFactory.getLogger(AccountTransactionController.class);
 
-    @GetMapping("/currentTotal")
-    public BigDecimal getCurrentTotal(@RequestParam(required = false) String month,
-                                      @RequestParam(required = false) String accountId,
-                                      @RequestParam(required = false) String type,
-                                      @RequestParam(required = false) String categoryId,
-                                      @RequestParam(required = false) String search) {
-        return transactionService.getCurrentTotal(month, accountId, type, search, categoryId);
-    }
+	@GetMapping
+	public Page<AccountTransactionDTO> getTransactions(@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String month,
+			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
+			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
+		logger.debug(
+				"Fetching transactions - page: {}, size: {}, month: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
+				page, size, month, accountId, type, categoryId, search);
+		return transactionService.getFilteredTransactions(PageRequest.of(page, size, Sort.by("date").descending()),
+				month, accountId, type, search, categoryId);
+	}
 
-    @GetMapping("/export")
-    public List<AccountTransactionDTO> exportTransactions(@RequestParam(required = false) String month,
-                                                          @RequestParam(required = false) String accountId,
-                                                          @RequestParam(required = false) String type,
-                                                          @RequestParam(required = false) String categoryId,
-                                                          @RequestParam(required = false) String search) {
-        return transactionService.getFilteredTransactionsForExport(month, accountId, type, categoryId, search);
-    }
+	@GetMapping("/currentTotal")
+	public BigDecimal getCurrentTotal(@RequestParam(required = false) String month,
+			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
+			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
+		logger.debug("Calculating current total - month: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
+				month, accountId, type, categoryId, search);
+		return transactionService.getCurrentTotal(month, accountId, type, search, categoryId);
+	}
 
-    @GetMapping("/{id}")
-    public ResponseEntity<AccountTransactionDTO> getById(@PathVariable String id) {
-        return transactionService.getById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
+	@GetMapping("/export")
+	public List<AccountTransactionDTO> exportTransactions(@RequestParam(required = false) String month,
+			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
+			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
+		logger.debug("Exporting transactions - month: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
+				month, accountId, type, categoryId, search);
+		return transactionService.getFilteredTransactionsForExport(month, accountId, type, categoryId, search);
+	}
 
-    @GetMapping("/{id}/children")
-    public List<AccountTransactionDTO> getChildren(@PathVariable String id) {
-        return transactionService.getChildren(id);
-    }
+	@GetMapping("/{id}")
+	public ResponseEntity<AccountTransactionDTO> getById(@PathVariable String id) {
+		logger.debug("Fetching transaction by ID: {}", id);
+		return transactionService.getById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
+	}
 
-    @PostMapping
-    public AccountTransactionDTO create(@RequestBody AccountTransactionDTO tx) {
-        return transactionService.save(tx);
-    }
+	@GetMapping("/{id}/children")
+	public List<AccountTransactionDTO> getChildren(@PathVariable String id) {
+		logger.debug("Fetching children for transaction ID: {}", id);
+		return transactionService.getChildren(id);
+	}
 
-    @PutMapping("/{id}")
-    public ResponseEntity<AccountTransactionDTO> update(@PathVariable String id,
-                                                        @RequestBody AccountTransactionDTO tx) {
-        return transactionService.updateTransaction(id, tx)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
+	@PostMapping
+	public AccountTransactionDTO create(@RequestBody AccountTransactionDTO tx) {
+		logger.debug("Creating new transaction: {}", tx);
+		return transactionService.save(tx);
+	}
 
-    @PostMapping("/transfer")
-    public ResponseEntity<?> createTransfer(@RequestBody TransferRequest request) {
-        try {
-            transactionService.createTransfer(request);
-            return ResponseEntity.ok(Map.of("message", "Transfer successful"));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Transfer failed: " + e.getMessage());
-        }
-    }
+	@PutMapping("/{id}")
+	public ResponseEntity<AccountTransactionDTO> update(@PathVariable String id,
+			@RequestBody AccountTransactionDTO tx) {
+		return transactionService.updateTransaction(id, tx).map(ResponseEntity::ok)
+				.orElse(ResponseEntity.notFound().build());
+	}
 
-    @PostMapping("/split")
-    public ResponseEntity<String> splitTransaction(@RequestBody List<SplitTransactionRequest> splitTransactions) {
-        return transactionService.splitTransaction(splitTransactions);
-    }
+	@PostMapping("/transfer")
+	public ResponseEntity<?> createTransfer(@RequestBody TransferRequest request) {
+		try {
+			logger.debug("Creating transfer: {}", request);
+			transactionService.createTransfer(request);
+			return ResponseEntity.ok(Map.of("message", "Transfer successful"));
+		} catch (Exception e) {
+			return ResponseEntity.badRequest().body("Transfer failed: " + e.getMessage());
+		}
+	}
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable String id) {
-   	
-        transactionService.delete(id);
-        return ResponseEntity.noContent().build();
-    }
+	@PostMapping("/split")
+	public ResponseEntity<String> splitTransaction(@RequestBody List<SplitTransactionRequest> splitTransactions) {
+		logger.debug("Splitting transaction into: {}", splitTransactions);
+		return transactionService.splitTransaction(splitTransactions);
+	}
+
+	@DeleteMapping("/{id}")
+	public ResponseEntity<Void> delete(@PathVariable String id) {
+		logger.debug("Deleting transaction with ID: {}", id);
+		transactionService.delete(id);
+		return ResponseEntity.noContent().build();
+	}
 
 //    @GetMapping("{id}/attachments/")
 //    public List<AttachmentDTO> getAttachments(@PathVariable String id) {
