@@ -33,7 +33,7 @@ public class AxisSavingDebitDataExtractionService extends AbstractDataExtraction
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
 		if (!schedulerEnabled) {
-			logger.info("Scheduler is disabled, skipping Axis CC data extraction");
+			logger.info("Scheduler is disabled, skipping AxisSavingDebitDataExtractionService");
 			return;
 		}
 		super.run();

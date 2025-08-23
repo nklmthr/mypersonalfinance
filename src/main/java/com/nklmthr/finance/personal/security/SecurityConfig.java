@@ -26,9 +26,10 @@ public class SecurityConfig {
 	@Bean
 	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 		http.cors(Customizer.withDefaults()).csrf(csrf -> csrf.disable())
-				.authorizeHttpRequests(
-						auth -> auth.requestMatchers("/api/public/**", "/oauth/authorize", "/oauth/callback", "/signup")
-								.permitAll().anyRequest().authenticated())
+				.authorizeHttpRequests(auth -> auth
+						.requestMatchers("/api/public/**", "/oauth/authorize", "/oauth/callback", "/signup", "/",
+								"/index.html", "/static/**", "/css/**", "/js/**", "/images/**")
+						.permitAll().anyRequest().authenticated())
 				.exceptionHandling(
 						exception -> exception.authenticationEntryPoint((request, response, authException) -> {
 							response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
