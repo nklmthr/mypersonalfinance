@@ -1,0 +1,7 @@
+mvn clean package spring-boot:repackage
+java -jar -Dspring.profiles.active=dev target/personal-finance-app-1.0.0.jar
+
+
+dev URL = export SPING_DATASOURCE_URL = $(bws secret get 8d559bc5-a46d-4ac3-8b35-b3420059e90c| jq -r '.value')
+qa URL = export SPING_DATASOURCE_URL = $(bws secret get f2a0f77a-aa1e-4add-9573-b342005a069f| jq -r '.value')
+prod URL = export SPING_DATASOURCE_URL = $(bws secret get 285b47e3-d397-473e-b677-b342005aa56d| jq -r '.value')
