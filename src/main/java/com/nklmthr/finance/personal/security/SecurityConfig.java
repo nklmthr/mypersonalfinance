@@ -34,6 +34,7 @@ public class SecurityConfig {
 	                "/oauth/authorize",
 	                "/oauth/callback",
 	                "/signup",
+	                "/login",
 	                "/",
 	                "/index.html",
 	                "/static/**",
