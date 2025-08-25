@@ -13,6 +13,7 @@ import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
@@ -48,6 +49,10 @@ public abstract class AbstractDataExtractionService {
 
 	@Autowired
 	private AppUserRepository appUserRepository;
+	
+	@Value("${gmail.lookback.days:7}")
+	private int gmailLookbackDays;
+	
 	private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
 	private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
 
@@ -199,7 +204,7 @@ public abstract class AbstractDataExtractionService {
 	protected List<String> getGMailAPIQuery() {
 		List<String> queries = new java.util.ArrayList<>();
 		LocalDate today = LocalDate.now();
-		LocalDate twoMonthAgo = today.minusDays(7);
+		LocalDate twoMonthAgo = today.minusDays(gmailLookbackDays);
 		for (String query : getEmailSubject()) {
 			queries.add(String.format("subject:(%s) from:(%s) after:%s before:%s", query, getSender(),
 					formatDate(twoMonthAgo), formatDate(today.plusDays(1))));
