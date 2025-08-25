@@ -34,7 +34,6 @@ public class SecurityConfig {
 	                "/oauth/authorize",
 	                "/oauth/callback",
 	                "/signup",
-	                "/login",
 	                "/",
 	                "/index.html",
 	                "/static/**",
@@ -51,6 +50,7 @@ public class SecurityConfig {
 	            })
 	        )
 	        .logout(logout -> logout.logoutUrl("/logout").permitAll())
+	        .csrf(csrf -> csrf.disable())
 	        .httpBasic(withDefaults()); // Optional: enable HTTP Basic auth for testing/dev
 
 	    // Note: No formLogin() here, because login is handled via your REST controller

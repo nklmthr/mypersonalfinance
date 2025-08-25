@@ -24,18 +24,17 @@ public class ResponseTimeFilter implements Filter {
 
 		if (request instanceof HttpServletRequest httpReq) {
 			String path = httpReq.getRequestURI();
-			logger.info("Filtering request for path: {}", path);
 			boolean isStatic = path.contains("/static/") || path.contains("/js/") || path.contains("/css/")
 					|| path.contains("/images/") || path.contains("/gmail");
 			long start = 0;
 
-			if (isStatic) {
+			if (!isStatic) {
 				start = System.currentTimeMillis();
-			}
+			} 
 			try {
 				chain.doFilter(request, response);
 			} finally {
-				if (isStatic) {
+				if (!isStatic) {
 					long duration = System.currentTimeMillis() - start;
 					logger.info("Request [{} {}] completed in {} ms", httpReq.getMethod(), path, duration);
 				}
