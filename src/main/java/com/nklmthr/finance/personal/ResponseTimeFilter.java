@@ -16,19 +16,32 @@ import jakarta.servlet.http.HttpServletRequest;
 @Component
 public class ResponseTimeFilter implements Filter {
 
-	private static final Logger log = LoggerFactory.getLogger(ResponseTimeFilter.class);
+	private static final Logger logger = LoggerFactory.getLogger(ResponseTimeFilter.class);
 
 	@Override
 	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
 			throws IOException, ServletException {
-		long start = System.currentTimeMillis();
-		try {
-			chain.doFilter(request, response);
-		} finally {
-			long duration = System.currentTimeMillis() - start;
-			if (request instanceof HttpServletRequest httpReq) {
-				log.info("Request [{} {}] completed in {} ms", httpReq.getMethod(), httpReq.getRequestURI(), duration);
+
+		if (request instanceof HttpServletRequest httpReq) {
+			String path = httpReq.getRequestURI();
+			logger.info("Filtering request for path: {}", path);
+			boolean isStatic = path.contains("/static/") || path.contains("/js/") || path.contains("/css/")
+					|| path.contains("/images/") || path.contains("/gmail");
+			long start = 0;
+
+			if (isStatic) {
+				start = System.currentTimeMillis();
 			}
+			try {
+				chain.doFilter(request, response);
+			} finally {
+				if (isStatic) {
+					long duration = System.currentTimeMillis() - start;
+					logger.info("Request [{} {}] completed in {} ms", httpReq.getMethod(), path, duration);
+				}
+			}
+		} else {
+			chain.doFilter(request, response);
 		}
 	}
 

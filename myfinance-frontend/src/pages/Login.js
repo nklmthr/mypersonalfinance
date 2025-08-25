@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../auth/api";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -12,14 +12,10 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post(
-        "/login",
-        new URLSearchParams({ username, password }),
-        {
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          withCredentials: true,
-        }
-      );
+      console.log("Attempting login with", { username, password });
+
+      await api.post("/auth/login", { username, password }); // <-- uses api instance
+
       console.log("Login success");
       localStorage.setItem("authToken", "true");
       navigate("/");
@@ -33,7 +29,9 @@ export default function Login() {
   return (
     <div className="flex h-screen bg-gray-100 items-center justify-center">
       <div className="bg-white p-10 shadow-lg rounded-lg w-full max-w-md">
-        <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">Login to myFinance</h2>
+        <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">
+          Login to myFinance
+        </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"

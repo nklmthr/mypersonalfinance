@@ -2,6 +2,7 @@
   "name": "myfinance-frontend",
   "version": "1.0.0",
   "private": true,
+  "homepage": "/",
   "proxy": "http://localhost:8080",
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -30,9 +31,9 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+	"build": "react-scripts build"
   },
   "browserslist": {
     "production": [

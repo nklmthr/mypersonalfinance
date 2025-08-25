@@ -25,24 +25,36 @@ public class SecurityConfig {
 
 	@Bean
 	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-		http.cors(Customizer.withDefaults()).csrf(csrf -> csrf.disable())
-				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/api/public/**", "/oauth/authorize", "/oauth/callback", "/signup", "/",
-								"/index.html", "/static/**", "/css/**", "/js/**", "/images/**")
-						.permitAll().anyRequest().authenticated())
-				.exceptionHandling(
-						exception -> exception.authenticationEntryPoint((request, response, authException) -> {
-							response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
-						}))
-				.formLogin(login -> login.loginProcessingUrl("/login")
-						.successHandler(
-								(request, response, authentication) -> response.setStatus(HttpServletResponse.SC_OK))
-						.failureHandler((request, response, exception) -> response
-								.sendError(HttpServletResponse.SC_UNAUTHORIZED))
-						.permitAll())
-				.logout(logout -> logout.logoutUrl("/logout").permitAll()).httpBasic(withDefaults());
+	    http
+	        .cors(Customizer.withDefaults())
+	        .csrf(csrf -> csrf.disable())  // Disable CSRF for APIs (use with caution)
+	        .authorizeHttpRequests(auth -> auth
+	            .requestMatchers(
+	                "/api/auth/login/**",
+	                "/oauth/authorize",
+	                "/oauth/callback",
+	                "/signup",
+	                "/",
+	                "/index.html",
+	                "/static/**",
+	                "/css/**",
+	                "/js/**",
+	                "/images/**"
+	            ).permitAll()
+	            .requestMatchers("/api/**").authenticated()
+	            .anyRequest().authenticated()
+	        )
+	        .exceptionHandling(exception -> exception
+	            .authenticationEntryPoint((request, response, authException) -> {
+	                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+	            })
+	        )
+	        .logout(logout -> logout.logoutUrl("/logout").permitAll())
+	        .httpBasic(withDefaults()); // Optional: enable HTTP Basic auth for testing/dev
 
-		return http.build();
+	    // Note: No formLogin() here, because login is handled via your REST controller
+
+	    return http.build();
 	}
 
 	@Bean
