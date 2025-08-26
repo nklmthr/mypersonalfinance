@@ -42,7 +42,7 @@ public class SecurityConfig {
 	                "/images/**"
 	            ).permitAll()
 	            .requestMatchers("/api/**").authenticated()
-	            .anyRequest().authenticated()
+	            .anyRequest().permitAll()
 	        )
 	        .exceptionHandling(exception -> exception
 	            .authenticationEntryPoint((request, response, authException) -> {

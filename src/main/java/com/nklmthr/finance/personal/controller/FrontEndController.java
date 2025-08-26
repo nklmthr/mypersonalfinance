@@ -6,18 +6,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 public class FrontEndController {
 
-	@GetMapping("/")
-    public String index() {
-        return "forward:/index.html";
-    }
-
-    @GetMapping("/{path:[^\\.]+}")
-    public String anySingle() {
-        return "forward:/index.html";
-    }
-
-    @GetMapping("/{path:[^\\.]+}/{subpath:[^\\.]+}")
-    public String anyDouble() {
-        return "forward:/index.html";
-    }
+	@GetMapping({"/{path:^(?!api$)[^\\.]+}", "/{path:^(?!api$)[^\\.]+}/{subpath:[^\\.]+}"})
+	public String forward() {
+	    return "forward:/index.html";
+	}
 }
