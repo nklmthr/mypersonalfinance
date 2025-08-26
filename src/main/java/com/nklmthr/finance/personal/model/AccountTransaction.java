@@ -7,10 +7,8 @@ import java.util.List;
 
 import org.hibernate.annotations.UuidGenerator;
 
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import com.nklmthr.finance.personal.enums.TransactionType;
 
 import jakarta.persistence.Column;
@@ -26,7 +24,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
 
 @Entity
 @Table(name = "account_transactions")
@@ -34,8 +31,6 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-@ToString(exclude = { "category", "uploadedStatement", "account", "parent", "children", "attachments", "appUser" })
 public class AccountTransaction {
 
 	@Id
@@ -76,21 +71,17 @@ public class AccountTransaction {
 	private LocalDateTime sourceTime;
 
 	@ManyToOne
-	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	private Account account;
 
 	@ManyToOne
 	@JoinColumn(name = "category_id")
-	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	private Category category;
 
 	@ManyToOne
 	@JoinColumn(name = "parent_id")
-	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	private AccountTransaction parent;
 
 	@OneToMany(mappedBy = "parent")
-	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 	@Builder.Default
 	private List<AccountTransaction> children = new ArrayList<>();
 

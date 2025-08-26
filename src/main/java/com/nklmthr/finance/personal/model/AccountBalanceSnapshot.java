@@ -32,7 +32,7 @@ public class AccountBalanceSnapshot {
 	@Column
 	private String id;
 
-	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@ManyToOne(optional = false)
 	@JoinColumn(name = "account_id", nullable = false)
 	private Account account;
 
@@ -42,7 +42,7 @@ public class AccountBalanceSnapshot {
 	@Column(nullable = false)
 	private BigDecimal balance;
 
-	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@ManyToOne(optional = false)
 	@JsonIgnore
 	private AppUser appUser;
 
