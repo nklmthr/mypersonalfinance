@@ -12,7 +12,10 @@ import com.nklmthr.finance.personal.model.AccountTransaction;
 public interface AccountTransactionMapper extends GenericMapper<AccountTransactionDTO, AccountTransaction> {
 
 	@Override
-	@Mapping(target = "parentId", source = "parent.id")
+	@Mapping(target = "parentId", source = "parent")
+	@Mapping(target="shortDescription", ignore = true)
+	@Mapping(target="shortExplanation", ignore = true)
+	@Mapping(target="children", ignore = true)
 	AccountTransactionDTO toDTO(AccountTransaction entity);
 
 	

@@ -77,13 +77,8 @@ public class AccountTransaction {
 	@JoinColumn(name = "category_id")
 	private Category category;
 
-	@ManyToOne
-	@JoinColumn(name = "parent_id")
-	private AccountTransaction parent;
-
-	@OneToMany(mappedBy = "parent")
-	@Builder.Default
-	private List<AccountTransaction> children = new ArrayList<>();
+	@Column(name= "parent_id")
+	private String parent;
 
 	@ManyToOne(optional = false)
 	@JsonIgnore

@@ -379,7 +379,9 @@ export default function Transactions() {
 	const [totalCount, setTotalCount] = useState(0);
 	const [modalContent, setModalContent] = useState(null);
 	const [searchParams] = useSearchParams();
-	const [filterMonth, setFilterMonth] = useState(searchParams.get("month") || "");
+	const [filterMonth, setFilterMonth] = useState(
+	  searchParams.get("month") || dayjs().format("YYYY-MM")
+	);
 	const [filterAccount, setFilterAccount] = useState(searchParams.get("accountId") || '');
 	const [filterType, setFilterType] = useState('ALL');
 	const [filterCategory, setFilterCategory] = useState(searchParams.get("categoryId") || '');

@@ -26,7 +26,9 @@ import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
 import com.nklmthr.finance.personal.dto.SplitTransactionRequest;
 import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.enums.TransactionType;
+import com.nklmthr.finance.personal.mapper.AccountMapper;
 import com.nklmthr.finance.personal.mapper.AccountTransactionMapper;
+import com.nklmthr.finance.personal.mapper.CategoryMapper;
 import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
@@ -56,6 +58,12 @@ public class AccountTransactionService {
 
 	@Autowired
 	AccountTransactionMapper accountTransactionMapper;
+	
+	@Autowired
+	AccountMapper accountMapper;
+	
+	@Autowired
+	CategoryMapper categoryMapper;
 
 	private static final Logger logger = LoggerFactory.getLogger(AccountTransactionService.class);
 
@@ -102,17 +110,14 @@ public class AccountTransactionService {
 
 		AccountTransaction parent = parentOpt.get();
 
-		List<AccountTransaction> children = accountTransactionRepository.findByAppUserAndParentId(appUser, parentId);
+		List<AccountTransaction> children = accountTransactionRepository.findByAppUserAndParent(appUser, parent.getId());
 		for (AccountTransaction child : children) {
 			parent.setAmount(parent.getAmount().add(child.getAmount()));
 			child.setParent(null);
-			parent.getChildren().remove(child);
 			accountTransactionRepository.delete(child);
 		}
-		BigDecimal parentAmount = parent.getAmount();
-		accountTransactionRepository.save(parent);
 		parent.setCategory(categoryService.getSplitTrnsactionCategory());
-
+		BigDecimal parentAmount = parent.getAmount();
 		BigDecimal totalSplitAmount = BigDecimal.ZERO;
 		for (SplitTransactionRequest st : splitTransactions) {
 			AccountTransaction child = new AccountTransaction();
@@ -120,10 +125,10 @@ public class AccountTransactionService {
 			child.setAmount(st.getAmount());
 			child.setDate(st.getDate());
 			child.setType(st.getType());
-			child.setAccount(accountRepository.findByAppUserAndId(appUser, st.getAccount().getId()).get());
+			child.setAccount(parent.getAccount());
 			child.setCategory(categoryService.getCategoryById(st.getCategory().getId()));
 			if (child.getParent() == null) {
-				child.setParent(parent);
+				child.setParent(parent.getId());
 			}
 			child.setAppUser(appUser);
 			parent.setAmount(parent.getAmount().subtract(st.getAmount()));
@@ -201,7 +206,7 @@ public class AccountTransactionService {
 	public List<AccountTransactionDTO> getChildren(String parentId) {
 		AppUser appUser = appUserService.getCurrentUser();
 		return accountTransactionMapper
-				.toDTOList(accountTransactionRepository.findByAppUserAndParentId(appUser, parentId));
+				.toDTOList(accountTransactionRepository.findByAppUserAndParent(appUser, parentId));
 	}
 
 	@Transactional
@@ -252,16 +257,18 @@ public class AccountTransactionService {
 	@Transactional
 	public void delete(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Deleting transaction ID: {} for user: {}", id, appUser.getUsername());
 		AccountTransaction existingTransaction = accountTransactionRepository.findByAppUserAndId(appUser, id)
 				.orElseThrow(
 						() -> new IllegalArgumentException("Transaction not found for user: " + appUser.getUsername()));
 		if (existingTransaction.getParent() != null) {
-			AccountTransaction parent = existingTransaction.getParent();
+			AccountTransaction parent = accountTransactionRepository.findByAppUserAndId(appUser, existingTransaction.getParent()).get();
 			parent.setAmount(parent.getAmount().add(existingTransaction.getAmount()));
-			parent.setDescription(parent.getDescription() + " | delete child:" + existingTransaction.getDescription());
+			logger.info("Updated parent transaction ID: {} amount to: {}", parent.getId(), parent.getAmount());
+			parent.setDescription(parent.getDescription() + " ||deleted:" + existingTransaction.getDescription()+"|"+existingTransaction.getAmount());
 			accountTransactionRepository.save(parent);
 		}
-		if (existingTransaction.getChildren() != null && !existingTransaction.getChildren().isEmpty()) {
+		if (accountTransactionRepository.findByParentAndAppUser(existingTransaction.getId(), appUser).size() > 0) {
 			throw new IllegalArgumentException(
 					"Cannot delete transaction with children. Please delete children first.");
 		}
@@ -392,10 +399,33 @@ public class AccountTransactionService {
 		Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
 				? buildTransactionSpec(month, accountId, type, search, categoryId, false)
 				: buildTransactionSpec(month, accountId, type, search, null, true);
+		
 		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
 		logger.info("Total transactions found: {}", page.getTotalElements());
-		List<AccountTransactionDTO> formatted = accountTransactionMapper
-				.toDTOList(page.getContent());
+		List<AccountTransactionDTO> formatted = page.getContent().stream()
+			    .map(tx -> {
+			        List<AccountTransactionDTO> children = accountTransactionRepository
+			                .findByAppUserAndParent(tx.getAppUser(), tx.getId())
+			                .stream()
+			                .map(accountTransactionMapper::toDTO)
+			                .toList();
+
+			        return new AccountTransactionDTO(
+			            tx.getId(),
+			            tx.getDate(),
+			            tx.getAmount(),
+			            tx.getDescription(),
+			            null, // shortDescription handled inside record
+			            tx.getExplanation(),
+			            null, // shortExplanation handled inside record
+			            tx.getType(),
+			            accountMapper.toDTO(tx.getAccount()),
+			            categoryMapper.toDTO(tx.getCategory()),
+			            tx.getParent(),
+			            children
+			        );
+			    })
+			    .toList();
 		return new PageImpl<>(formatted, pageable, page.getTotalElements());
 	}
 

@@ -27,70 +27,70 @@ import com.nklmthr.finance.personal.model.UploadedStatement;
 public interface AccountTransactionRepository
 		extends JpaRepository<AccountTransaction, String>, JpaSpecificationExecutor<AccountTransaction> {
 
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
-	List<AccountTransaction> findByAppUserAndParentId(AppUser appUser, String parentId);
-
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
-	List<AccountTransaction> findByAppUserAndAccountId(AppUser appUser, String accountId);
-
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
+    List<AccountTransaction> findByAppUserAndParent(AppUser appUser, String parent);
+	
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
+    List<AccountTransaction> findByAppUserAndAccountId(AppUser appUser, String accountId);
+	
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
 	@Query("SELECT t FROM AccountTransaction t WHERE t.appUser = :appUser AND FUNCTION('MONTH', t.date) = :month AND FUNCTION('YEAR', t.date) = :year")
 	List<AccountTransaction> findByAppUserAndMonthAndYear(@Param("appUser") AppUser appUser, @Param("month") int month,
 			@Param("year") int year);
 
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
 	List<AccountTransaction> findByAppUserAndSourceThreadId(AppUser appUser, String sourceThreadId);
 
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
 	Page<AccountTransaction> findAll(Specification<AccountTransaction> spec, Pageable pageable);
 
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
 	List<AccountTransaction> findAll(Specification<AccountTransaction> spec);
 
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
 	List<AccountTransaction> findAll(Specification<AccountTransaction> spec, Sort sort);
 
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
-	Optional<AccountTransaction> findByAppUserAndId(AppUser appUser, String id);
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
+    Optional<AccountTransaction> findByAppUserAndId(AppUser appUser, String id);
 
 	void deleteByAppUserAndId(AppUser appUser, String id);
 
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
 	List<AccountTransaction> findByAppUserAndUploadedStatement(AppUser appUser, UploadedStatement statement);
 
 	void deleteAllByAppUserAndIdIn(AppUser appUser, List<String> list);
 
-	@EntityGraph(attributePaths = { "category", "category.parent", 
-			"account", "account.accountType", "account.institution", "children", "children.category",
-			"children.category.parent" 
-	})
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
 	@Query("SELECT t FROM AccountTransaction t " + "WHERE t.appUser = :user " + "AND t.description = :description "
 			+ "AND t.type = :type " + "AND t.amount = :amount " + "AND ABS(TIMESTAMPDIFF(SECOND, t.date, :date)) <= 60")
 	List<AccountTransaction> findSimilarTransactionWithinOneMinute(@Param("user") AppUser user,
@@ -144,5 +144,7 @@ public interface AccountTransactionRepository
 			Pageable page){
 		return findAll(spec, page).map(AccountTransaction::getId);
 	}
+	
+	List<AccountTransaction> findByParentAndAppUser(String parent, AppUser appUser);
 
 }
