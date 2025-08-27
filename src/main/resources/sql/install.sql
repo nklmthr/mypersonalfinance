@@ -1,4 +1,4 @@
-INSERT INTO your_table_name (
+INSERT INTO app_user (
     id, created_at, email, enabled, gmail_access_token,
     gmail_refresh_token, gmail_token_expiry, password, role, username
 ) VALUES (
