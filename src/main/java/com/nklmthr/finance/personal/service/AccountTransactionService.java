@@ -431,8 +431,9 @@ public class AccountTransactionService {
 
 
 	public BigDecimal getCurrentTotal(String month, String accountId, String type, String search, String categoryId) {
-		Specification<AccountTransaction> spec = buildTransactionSpec(month, accountId, type, search, categoryId,
-				false);
+		Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
+				? buildTransactionSpec(month, accountId, type, search, categoryId, false)
+				: buildTransactionSpec(month, accountId, type, search, null, true);
 		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, Pageable.unpaged());
 		logger.info("Calculating current total for month: {}, accountId: {}, type: {}, search: {}, categoryId: {}",
 				month, accountId, type, search, categoryId);
