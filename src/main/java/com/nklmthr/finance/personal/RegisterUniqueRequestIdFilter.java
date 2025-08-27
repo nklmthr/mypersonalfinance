@@ -27,7 +27,7 @@ public class RegisterUniqueRequestIdFilter implements Filter {
 		if (request instanceof HttpServletRequest) {
 			HttpServletRequest httpRequest = (HttpServletRequest) request;
 			String path = httpRequest.getRequestURI();
-			if(path.contains("/static/") || path.contains("/gmail/")) {
+			if(path.contains("/static/")) {
 				chain.doFilter(request, response);
 				return;
 			}

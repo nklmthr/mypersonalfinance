@@ -25,7 +25,7 @@ public class ResponseTimeFilter implements Filter {
 		if (request instanceof HttpServletRequest httpReq) {
 			String path = httpReq.getRequestURI();
 			boolean isStatic = path.contains("/static/") || path.contains("/js/") || path.contains("/css/")
-					|| path.contains("/images/") || path.contains("/gmail");
+					|| path.contains("/images/");
 			long start = 0;
 
 			if (!isStatic) {

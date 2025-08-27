@@ -46,6 +46,7 @@ public class GmailAuthorizationController {
 	public void authorize(HttpServletResponse response) throws Exception {
 		AppUser currentUser = appUserService.getCurrentUser();
 		String url = gmailAuthHelper.getAuthorizationUrl(currentUser);
+		logger.info("Redirecting user {} to Gmail OAuth URL: {}", currentUser.getUsername(), url);
 		response.sendRedirect(url);
 	}
 
@@ -55,6 +56,8 @@ public class GmailAuthorizationController {
 		try {
 			AppUser user = appUserService.findByUsername(username);
 			gmailAuthHelper.exchangeCodeForTokens(user, code);
+			logger.info("Gmail authorization successful for user: {}", username);
+			logger.info("Redirecting to frontend URL: {}", frontendBaseUrl);
 			response.sendRedirect(frontendBaseUrl);
 		} catch (Exception e) {
 			response.sendError(HttpStatus.INTERNAL_SERVER_ERROR.value(), "Authorization failed: " + e.getMessage());
@@ -64,12 +67,14 @@ public class GmailAuthorizationController {
 	@GetMapping("/api/gmail/status")
 	public Map<String, Boolean> getGmailStatus(Principal principal) {
 		boolean connected = gmailAuthHelper.isUserConnected(principal.getName());
+		logger.info("Gmail connection status for user {}: {}", principal.getName(), connected);
 		return Map.of("connected", connected);
 	}
 
 	@GetMapping("/api/auth/status")
 	public ResponseEntity<?> status() {
 		AppUser user = appUserService.getCurrentUser();
+		logger.info("Authenticated user: {}", user.getUsername());
 		return ResponseEntity.ok(user.getUsername());
 	}
 
@@ -88,7 +93,7 @@ public class GmailAuthorizationController {
 		user.setEnabled(true);
 		user.setCreatedAt(LocalDateTime.now());
 		appUserService.save(user);
-
+		logger.info("User {} signed up successfully", user.getUsername());
 		return ResponseEntity.ok("Signup successful");
 	}
 
@@ -99,6 +104,7 @@ public class GmailAuthorizationController {
 		user.setGmailRefreshToken(null);
 		user.setGmailTokenExpiry(null);
 		appUserService.save(user);
+		logger.info("Gmail disconnected for user: {}", user.getUsername());
 		return ResponseEntity.ok(Map.of("disconnected", true));
 	}
 
@@ -106,7 +112,7 @@ public class GmailAuthorizationController {
 	public Map<String, Object> getProfile(Principal principal) {
 		String username = principal.getName();
 		AppUser user = appUserService.findByUsername(username);
-
+		logger.info("Fetching profile for user: {}", username);
 		return Map.of("username", user.getUsername(), "email", user.getEmail(), "roles", user.getRole().split("\\,"));
 	}
 
