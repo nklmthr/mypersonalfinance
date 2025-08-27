@@ -36,6 +36,7 @@ public class GmailAuthHelper {
 
 	public String getAuthorizationUrl(AppUser user) throws Exception {
 		GoogleAuthorizationCodeFlow flow = buildFlow(user);
+		logger.info("Generating authorization URL for user: {}, url: {} ", user.getUsername(), redirectUri);
 		return flow.newAuthorizationUrl().setRedirectUri(redirectUri).setAccessType("offline")
 				.setApprovalPrompt("force").setState(user.getUsername()).build();
 	}
@@ -50,20 +51,19 @@ public class GmailAuthHelper {
 	public GoogleAuthorizationCodeFlow buildFlow(AppUser appUser) throws Exception {
 		var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
 				new InputStreamReader(getClass().getResourceAsStream(CREDENTIALS_FILE_PATH)));
-
+		logger.debug("Building GoogleAuthorizationCodeFlow for user: {}", appUser.getUsername());
 		return new GoogleAuthorizationCodeFlow.Builder(GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY,
 				clientSecrets, SCOPES)
 				.setDataStoreFactory(new AppUserDataStoreFactory(appUser, appUserService.getRepository()))
 				.setAccessType("offline").build();
 	}
 
-	public boolean isUserConnected(String username) {
+	public boolean isUserConnected() {
 		try {
-			AppUser user = appUserService.findByUsername(username);
-			logger.info("Checking if user {} is connected to Gmail", username);
-			logger.info(user.getGmailTokenExpiry() + " : " + System.currentTimeMillis());
-			return user.getGmailAccessToken() != null && user.getGmailRefreshToken() != null
-					&& (user.getGmailTokenExpiry() == null || user.getGmailTokenExpiry() > System.currentTimeMillis());
+			AppUser user = appUserService.getCurrentUser();
+			boolean isConnected = buildFlow(user).loadCredential("user") != null;
+			logger.info("Checking if user {} is connected to Gmail: {}", user.getUsername(), isConnected);
+			return isConnected;
 		} catch (Exception e) {
 			return false;
 		}

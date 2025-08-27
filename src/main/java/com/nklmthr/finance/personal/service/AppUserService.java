@@ -31,7 +31,10 @@ public class AppUserService {
 			throw new RuntimeException("No authentication in context");
 		}
 		String username = auth.getName();
-		return appUserRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
+		AppUser user = appUserRepository.findByUsername(username)
+	            .orElseThrow(() -> new RuntimeException("User not found"));
+	    currentUserCache.set(user); 
+	    return user;
 	}
 
 	public AppUser findByUsername(String username) {

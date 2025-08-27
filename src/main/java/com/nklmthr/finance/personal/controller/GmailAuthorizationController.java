@@ -54,7 +54,7 @@ public class GmailAuthorizationController {
 	public void oauthCallback(@RequestParam("code") String code, @RequestParam("state") String username,
 			HttpServletResponse response) throws IOException {
 		try {
-			AppUser user = appUserService.findByUsername(username);
+			AppUser user = appUserService.getCurrentUser();
 			gmailAuthHelper.exchangeCodeForTokens(user, code);
 			logger.info("Gmail authorization successful for user: {}", username);
 			logger.info("Redirecting to frontend URL: {}", frontendBaseUrl);
@@ -65,9 +65,8 @@ public class GmailAuthorizationController {
 	}
 
 	@GetMapping("/api/gmail/status")
-	public Map<String, Boolean> getGmailStatus(Principal principal) {
-		boolean connected = gmailAuthHelper.isUserConnected(principal.getName());
-		logger.info("Gmail connection status for user {}: {}", principal.getName(), connected);
+	public Map<String, Boolean> getGmailStatus() {
+		boolean connected = gmailAuthHelper.isUserConnected();
 		return Map.of("connected", connected);
 	}
 
@@ -98,8 +97,8 @@ public class GmailAuthorizationController {
 	}
 
 	@PostMapping("/api/gmail/disconnect")
-	public ResponseEntity<?> disconnectGmail(Principal principal) {
-		AppUser user = appUserService.findByUsername(principal.getName());
+	public ResponseEntity<?> disconnectGmail() {
+		AppUser user = appUserService.getCurrentUser();
 		user.setGmailAccessToken(null);
 		user.setGmailRefreshToken(null);
 		user.setGmailTokenExpiry(null);
@@ -109,10 +108,9 @@ public class GmailAuthorizationController {
 	}
 
 	@GetMapping("/api/user/profile")
-	public Map<String, Object> getProfile(Principal principal) {
-		String username = principal.getName();
-		AppUser user = appUserService.findByUsername(username);
-		logger.info("Fetching profile for user: {}", username);
+	public Map<String, Object> getProfile() {
+		AppUser user = appUserService.getCurrentUser();
+		logger.info("Fetching profile for user: {}", user.getUsername());
 		return Map.of("username", user.getUsername(), "email", user.getEmail(), "roles", user.getRole().split("\\,"));
 	}
 
