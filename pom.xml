@@ -6,7 +6,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.nklmthr</groupId>
 	<artifactId>personal-finance-app</artifactId>
-	<version>1.0.0</version>
+	<version>1.0.1</version>
 	<name>Personal Finance App</name>
 	<description>Spring Boot backend for managing personal finance</description>
 	<packaging>jar</packaging>
