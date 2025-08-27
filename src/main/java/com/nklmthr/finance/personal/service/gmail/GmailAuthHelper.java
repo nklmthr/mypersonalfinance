@@ -36,7 +36,8 @@ public class GmailAuthHelper {
 
 	public String getAuthorizationUrl(AppUser user) throws Exception {
 		GoogleAuthorizationCodeFlow flow = buildFlow(user);
-		return flow.newAuthorizationUrl().setRedirectUri(redirectUri).setState(user.getUsername()).build();
+		return flow.newAuthorizationUrl().setRedirectUri(redirectUri).setAccessType("offline")
+				.setApprovalPrompt("force").setState(user.getUsername()).build();
 	}
 
 	public void exchangeCodeForTokens(AppUser user, String code) throws Exception {
@@ -59,8 +60,8 @@ public class GmailAuthHelper {
 	public boolean isUserConnected(String username) {
 		try {
 			AppUser user = appUserService.findByUsername(username);
-			logger.info("Checking if user {} is connected to Gmail", username+" : "+ user);
-			logger.info(user.getGmailTokenExpiry()+" : "+ System.currentTimeMillis());
+			logger.info("Checking if user {} is connected to Gmail", username + " : " + user);
+			logger.info(user.getGmailTokenExpiry() + " : " + System.currentTimeMillis());
 			return user.getGmailAccessToken() != null && user.getGmailRefreshToken() != null
 					&& (user.getGmailTokenExpiry() == null || user.getGmailTokenExpiry() > System.currentTimeMillis());
 		} catch (Exception e) {
