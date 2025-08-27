@@ -21,10 +21,10 @@ public class AppUserService {
 
 	public AppUser getCurrentUser() {
         if (currentUserCache.get() != null) {
-			logger.info("Returning cached current user: " + currentUserCache.get().getUsername());
+			logger.debug("Returning cached current user: " + currentUserCache.get().getUsername());
             return currentUserCache.get();
         }
-		logger.info("Fetching current user from security context");
+		logger.debug("Fetching current user from security context");
 		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 		if (auth == null) {
 			logger.error("No authentication in context");

@@ -11,7 +11,7 @@ import com.nklmthr.finance.personal.model.Category;
 
 public interface CategoryRepository extends JpaRepository<Category, String> {
 
-	List<Category> findByAppUserAndParentId(AppUser appUser, String parentId);
+	List<Category> findByAppUserAndParent(AppUser appUser, String parentId);
 
 	Optional<Category> findByAppUserAndName(AppUser appUser, String name);
 

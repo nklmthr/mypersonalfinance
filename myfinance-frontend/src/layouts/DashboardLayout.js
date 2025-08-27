@@ -8,32 +8,13 @@ import {
   FolderIcon,
   CreditCardIcon,
   Squares2X2Icon,
-  ArrowRightOnRectangleIcon,
   UserCircleIcon,
   Bars3Icon,
   XMarkIcon,
-  EnvelopeIcon,
 } from "@heroicons/react/24/outline";
-import api from "./../auth/api"
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(null);
-  const [gmailConnected, setGmailConnected] = useState(false);
-
-  useEffect(() => {
-    const checkGmailStatus = async () => {
-      try {
-        const res = await api.get("/gmail/status", { withCredentials: true }); // ⬅️ missing `await` added
-        console.log("Gmail connected?", res.data.connected);
-        setGmailConnected(res.data.connected === true);
-      } catch (err) {
-        console.error("Failed to check Gmail status:", err);
-        setGmailConnected(false); // fallback on failure
-      }
-    };
-
-    checkGmailStatus();
-  }, []);
 
   const handleNavClick = () => {
     if (window.innerWidth < 768) setSidebarOpen(false);

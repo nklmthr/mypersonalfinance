@@ -20,9 +20,7 @@ public class UserService implements UserDetailsService {
 	public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
 		AppUser appUser = appUserRepository.findByUsername(username)
 				.orElseThrow(() -> new UsernameNotFoundException("User not found"));
-		System.out.println("Encoded password: " + appUser.getPassword());
-		logger.info("Loaded user: {}", appUser.getUsername());
-		logger.debug("Encoded password: {}", appUser.getPassword());
+		logger.debug("Loaded user: {}", appUser.getUsername());
 		return User.withUsername(appUser.getUsername()).password(appUser.getPassword()).roles(appUser.getRole())
 				.build();
 	}

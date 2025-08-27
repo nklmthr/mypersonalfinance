@@ -16,7 +16,7 @@ public class CategoryDTO {
 	public CategoryDTO(Category category) {
 		this.id = category.getId();
 		this.name = category.getName();
-		this.parentId = category.getParent() != null ? category.getParent().getId() : null;
+		this.parentId = category.getParent() != null ? category.getParent() : null;
 		this.systemCategory = category.isSystemCategory();
 	}
 

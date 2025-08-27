@@ -31,9 +31,8 @@ public class Category {
 	@Column(nullable = false)
 	private String name;
 
-	@ManyToOne(fetch = FetchType.EAGER)
-	@JoinColumn(name = "parent_id")
-	private Category parent;
+	@Column(name="parent_id")
+	private String parent;
 
 	@Column(name = "system_category", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
 	private boolean systemCategory = false;

@@ -1,18 +1,19 @@
 package com.nklmthr.finance.personal.security;
 
-import static org.springframework.security.config.Customizer.withDefaults;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -23,50 +24,38 @@ public class SecurityConfig {
 	@Autowired
 	private UserService userService;
 
+	@Autowired
+	private JwtAuthenticationFilter jwtAuthenticationFilter;
+
 	@Bean
 	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-	    http
-	        .cors(Customizer.withDefaults())
-	        .csrf(csrf -> csrf.disable())  // Disable CSRF for APIs (use with caution)
-	        .authorizeHttpRequests(auth -> auth
-	            .requestMatchers(
-	                "/api/auth/login/**",
-	                "/oauth/authorize",
-	                "/oauth/callback",
-	                "/signup",
-	                "/",
-	                "/index.html",
-	                "/static/**",
-	                "/css/**",
-	                "/js/**",
-	                "/images/**"
-	            ).permitAll()
-	            .requestMatchers("/api/**").authenticated()
-	            .anyRequest().permitAll()
-	        )
-	        .exceptionHandling(exception -> exception
-	            .authenticationEntryPoint((request, response, authException) -> {
-	                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
-	            })
-	        )
-	        .logout(logout -> logout.logoutUrl("/logout").permitAll())
-	        .csrf(csrf -> csrf.disable())
-	        .httpBasic(withDefaults()); // Optional: enable HTTP Basic auth for testing/dev
+		http.cors(cors -> cors.disable()).csrf(csrf -> csrf.disable())
+				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.authorizeHttpRequests(auth -> auth
+						.requestMatchers("/api/auth/login/**", "/signup", "/", "/index.html", "/static/**", "/css/**",
+								"/js/**", "/images/**")
+						.permitAll().requestMatchers("/api/**").authenticated().anyRequest().permitAll())
+				.exceptionHandling(
+						exception -> exception.authenticationEntryPoint((request, response, authException) -> {
+							response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+						}));
 
-	    // Note: No formLogin() here, because login is handled via your REST controller
+		http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-	    return http.build();
+		return http.build();
 	}
 
 	@Bean
-	public AuthenticationManager authManager(HttpSecurity http) throws Exception {
-		return http.getSharedObject(AuthenticationManagerBuilder.class).userDetailsService(userService)
-				.passwordEncoder(passwordEncoder()).and().build();
+	public AuthenticationProvider authenticationProvider() {
+		DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+		provider.setUserDetailsService(userService);
+		provider.setPasswordEncoder(passwordEncoder());
+		return provider;
 	}
 
-	public static void main(String[] args) {
-		SecurityConfig s = new SecurityConfig();
-		System.out.println(s.passwordEncoder().encode("P@ssword"));
+	@Bean
+	public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+		return config.getAuthenticationManager();
 	}
 
 	@Bean

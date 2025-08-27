@@ -10,11 +10,11 @@ import com.nklmthr.finance.personal.model.Category;
 public interface CategoryMapper extends GenericMapper<CategoryDTO, Category> {
 
 	@Override
-	@Mapping(target = "parentId", source = "parent.id")
+	@Mapping(target = "parentId", source = "parent")
 	@Mapping(target = "children", ignore = true)
 	CategoryDTO toDTO(Category entity);
 
 	@Mapping(target = "appUser", ignore = true)
-	@Mapping(target = "parent.id", source = "parentId")
+	@Mapping(target = "parent", source = "parentId")
 	Category toEntity(CategoryDTO dto);
 }

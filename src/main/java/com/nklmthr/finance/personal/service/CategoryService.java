@@ -1,11 +1,8 @@
 package com.nklmthr.finance.personal.service;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -15,6 +12,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.dto.CategoryDTO;
+import com.nklmthr.finance.personal.mapper.CategoryMapper;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.repository.CategoryRepository;
@@ -25,145 +23,148 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CategoryService {
 
-	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CategoryService.class);
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CategoryService.class);
 
-	@Autowired
-	private AppUserService appUserService;
+    @Autowired
+    private final AppUserService appUserService;
 
-	@Autowired
-	private CategoryRepository categoryRepository;
+    @Autowired
+    private final CategoryRepository categoryRepository;
+    
+    @Autowired
+    private final CategoryMapper categoryMapper;
 
-	// ----------------- Public Web Accessors -------------------
+    // ----------------- Public API -------------------
 
-	@Cacheable("allCategories")
-	public List<CategoryDTO> getAllCategories() {
-		logger.info("Fetching all categories for user: {}", appUserService.getCurrentUser().getUsername());
-		return getAllCategories(appUserService.getCurrentUser());
-	}
+    // Overload: without user param (for controllers)
+    public List<CategoryDTO> getAllCategories() {
+        return getAllCategories(appUserService.getCurrentUser());
+    }
 
-	@Cacheable(value = "categoryById", key = "#id")
-	public Category getCategoryById(String id) {
-		logger.info("Fetching category by id: {} for user: {}", id, appUserService.getCurrentUser().getUsername());
-		return getCategoryById(appUserService.getCurrentUser(), id);
-	}
+    @Cacheable(value = "allCategories", key = "#appUser.id")
+    public List<CategoryDTO> getAllCategories(AppUser appUser) {
+        logger.info("Fetching all categories for user: {}", appUser.getUsername());
+        List<Category> allCategories = categoryRepository.findByAppUser(appUser, Sort.by("name").ascending());
+        logger.info("Found {} categories for user: {}", allCategories.size(), appUser.getUsername());
+        return categoryMapper.toDTOList(allCategories);
+        
+    }
 
-	@Caching(evict = { @CacheEvict(value = "allCategories", allEntries = true),
-			@CacheEvict(value = "categoryById", key = "#id"),
-			@CacheEvict(value = "categoryChildrenById", allEntries = true),
-			@CacheEvict(value = "categoryDescendentsById", allEntries = true),
-			@CacheEvict(value = "categoryNonClassified", allEntries = true),
-			@CacheEvict(value = "categoryTransfer", allEntries = true),
-			@CacheEvict(value = "categorySplitTransaction", allEntries = true) })
-	public Category saveCategory(Category category) {
+    // Overload
+    public Category getCategoryById(String id) {
+        return getCategoryById(appUserService.getCurrentUser(), id);
+    }
 
-		AppUser user = appUserService.getCurrentUser();
-		category.setAppUser(user);
-		logger.info("Saving category: {} for user: {}", category.getName(), user.getUsername());
-		return categoryRepository.save(category);
-	}
+    @Cacheable(value = "categoryById", key = "#appUser.id + '_' + #id")
+    public Category getCategoryById(AppUser appUser, String id) {
+        logger.info("Fetching category by id: {} for user: {}", id, appUser.getUsername());
+        return categoryRepository.findByAppUserAndId(appUser, id).orElse(null);
+    }
 
-	@Caching(evict = { @CacheEvict(value = "allCategories", allEntries = true),
-			@CacheEvict(value = "categoryById", key = "#id"),
-			@CacheEvict(value = "categoryChildrenById", allEntries = true),
-			@CacheEvict(value = "categoryDescendentsById", allEntries = true),
-			@CacheEvict(value = "categoryNonClassified", allEntries = true),
-			@CacheEvict(value = "categoryTransfer", allEntries = true),
-			@CacheEvict(value = "categorySplitTransaction", allEntries = true) })
-	public void deleteCategory(String id) {
-		logger.info("Deleting category with id: {} for user: {}", id, appUserService.getCurrentUser().getUsername());
-		deleteCategory(appUserService.getCurrentUser(), id);
-	}
+    // Overload
+    public Category saveCategory(Category category) {
+        return saveCategory(appUserService.getCurrentUser(), category);
+    }
 
-	@Cacheable(value = "categoryChildrenById", key = "#id")
-	public List<Category> getChildren(String parentId) {
-		logger.info("Fetching children categories for parentId: {} for user: {}", parentId,
-				appUserService.getCurrentUser().getUsername());
-		return getChildren(appUserService.getCurrentUser(), parentId);
-	}
+    @Caching(evict = {
+        @CacheEvict(value = "allCategories", key = "#appUser.id"),
+        @CacheEvict(value = "categoryById", key = "#appUser.id + '_' + #category.id"),
+        @CacheEvict(value = "categoryChildrenById", key = "#appUser.id", allEntries = true),
+        @CacheEvict(value = "categoryDescendentsById", key = "#appUser.id", allEntries = true),
+        @CacheEvict(value = "categoryNonClassified", key = "#appUser.id"),
+        @CacheEvict(value = "categoryTransfer", key = "#appUser.id"),
+        @CacheEvict(value = "categorySplitTransaction", key = "#appUser.id")
+    })
+    public Category saveCategory(AppUser appUser, Category category) {
+        category.setAppUser(appUser);
+        logger.info("Saving category: {} for user: {}", category.getName(), appUser.getUsername());
+        return categoryRepository.save(category);
+    }
 
-	@Cacheable(value = "categoryNonClassified")
-	public Category getNonClassifiedCategory() {
-		logger.info("Fetching non-classified category for user: {}", appUserService.getCurrentUser().getUsername());
-		return getNonClassifiedCategory(appUserService.getCurrentUser());
-	}
+    // Overload
+    public void deleteCategory(String id) {
+        deleteCategory(appUserService.getCurrentUser(), id);
+    }
 
-	@Cacheable(value = "categoryDescendentsById", key = "#categoryId")
-	public Set<String> getAllDescendantCategoryIds(String categoryId) {
-		logger.info("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId,
-				appUserService.getCurrentUser().getUsername());
-		return getAllDescendantCategoryIds(appUserService.getCurrentUser(), categoryId);
-	}
+    @Caching(evict = {
+        @CacheEvict(value = "allCategories", key = "#appUser.id"),
+        @CacheEvict(value = "categoryById", key = "#appUser.id + '_' + #id"),
+        @CacheEvict(value = "categoryChildrenById", key = "#appUser.id", allEntries = true),
+        @CacheEvict(value = "categoryDescendentsById", key = "#appUser.id", allEntries = true),
+        @CacheEvict(value = "categoryNonClassified", key = "#appUser.id"),
+        @CacheEvict(value = "categoryTransfer", key = "#appUser.id"),
+        @CacheEvict(value = "categorySplitTransaction", key = "#appUser.id")
+    })
+    public void deleteCategory(AppUser appUser, String id) {
+        logger.info("Deleting category with id: {} for user: {}", id, appUser.getUsername());
+        categoryRepository.deleteByAppUserAndId(appUser, id);
+    }
 
-	@Cacheable(value = "categoryTransfer")
-	public Category getTransferCategory() {
-		logger.info("Fetching TRANSFERS category for user: {}", appUserService.getCurrentUser().getUsername());
-		return categoryRepository.findByAppUserAndName(appUserService.getCurrentUser(), "TRANSFERS")
-				.orElseThrow(() -> new RuntimeException("TRANSFERS category not found"));
-	}
+    // Overload
+    public List<Category> getChildren(String parentId) {
+        return getChildren(appUserService.getCurrentUser(), parentId);
+    }
 
-	private List<CategoryDTO> getAllCategories(AppUser appUser) {
-		logger.info("Fetching all categories for user: {}", appUser.getUsername());
-		List<Category> allCategories = categoryRepository.findByAppUser(appUser, Sort.by("name").ascending());
+    @Cacheable(value = "categoryChildrenById", key = "#appUser.id + '_' + #parentId")
+    public List<Category> getChildren(AppUser appUser, String parentId) {
+        logger.info("Fetching children categories for parentId: {} for user: {}", parentId, appUser.getUsername());
+        return categoryRepository.findByAppUserAndParent(appUser, parentId);
+    }
 
-		Map<String, CategoryDTO> dtoMap = new HashMap<>();
-		for (Category category : allCategories) {
-			dtoMap.put(category.getId(), new CategoryDTO(category));
-		}
+    // Overload
+    public Category getNonClassifiedCategory() {
+        return getNonClassifiedCategory(appUserService.getCurrentUser());
+    }
 
-		for (CategoryDTO dto : dtoMap.values()) {
-			if (dto.getParentId() != null && dtoMap.containsKey(dto.getParentId())) {
-				dtoMap.get(dto.getParentId()).getChildren().add(dto);
-			}
-		}
+    @Cacheable(value = "categoryNonClassified", key = "#appUser.id")
+    public Category getNonClassifiedCategory(AppUser appUser) {
+        logger.info("Fetching non-classified category for user: {}", appUser.getUsername());
+        return categoryRepository.findByAppUserAndName(appUser, "Not Classified")
+                .orElseThrow(() -> new RuntimeException("Default category not found"));
+    }
 
-		logger.info("Found {} categories for user {}", dtoMap.size(), appUser.getUsername());
+    // Overload
+    public Set<String> getAllDescendantCategoryIds(String categoryId) {
+        return getAllDescendantCategoryIds(appUserService.getCurrentUser(), categoryId);
+    }
 
-		return dtoMap.values().stream().filter(dto -> dto.getParentId() == null).collect(Collectors.toList());
-	}
-
-	private Category getCategoryById(AppUser appUser, String id) {
-		logger.debug("Fetching category by id: {} for user: {}", id, appUser.getUsername());
-		return categoryRepository.findByAppUserAndId(appUser, id).orElse(null);
-	}
-
-	private void deleteCategory(AppUser appUser, String id) {
-		logger.info("Deleting category with id: {} for user: {}", id, appUser.getUsername());
-		categoryRepository.deleteByAppUserAndId(appUser, id);
-	}
-
-	private List<Category> getChildren(AppUser appUser, String parentId) {
-		logger.debug("Fetching children categories for parentId: {} for user: {}", parentId, appUser.getUsername());
-		return categoryRepository.findByAppUserAndParentId(appUser, parentId);
-	}
-
-	public Category getNonClassifiedCategory(AppUser appUser) {
-		logger.debug("Fetching non-classified category for user: {}", appUser.getUsername());
-		return categoryRepository.findByAppUserAndName(appUser, "Not Classified")
-				.orElseThrow(() -> new RuntimeException("Default category not found"));
-	}
-
-	private Set<String> getAllDescendantCategoryIds(AppUser appUser, String categoryId) {
-		logger.debug("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId,
-				appUser.getUsername());
-		Set<String> descendantIds = new HashSet<>();
-		collectChildCategoryIds(appUser, categoryId, descendantIds);
-		return descendantIds;
-	}
+    @Cacheable(value = "categoryDescendentsById", key = "#appUser.id + '_' + #categoryId")
+    public Set<String> getAllDescendantCategoryIds(AppUser appUser, String categoryId) {
+        logger.info("Fetching all descendant category IDs for categoryId: {} for user: {}", categoryId, appUser.getUsername());
+        Set<String> descendantIds = new HashSet<>();
+        collectChildCategoryIds(appUser, categoryId, descendantIds);
+        return descendantIds;
+    }
 
 	private void collectChildCategoryIds(AppUser appUser, String categoryId, Set<String> descendantIds) {
 		descendantIds.add(categoryId);
-		List<Category> children = categoryRepository.findByAppUserAndParentId(appUser, categoryId);
+		List<Category> children = categoryRepository.findByAppUserAndParent(appUser, categoryId);
 		for (Category child : children) {
 			collectChildCategoryIds(appUser, child.getId(), descendantIds);
 		}
 	}
 
-	@Cacheable(value = "categorySplitTransaction")
-	public Category getSplitTrnsactionCategory() {
-		AppUser appUser = appUserService.getCurrentUser();
-		logger.debug("Fetching SPLIT category for user: {}", appUser.getUsername());
-		return categoryRepository.findByAppUserAndName(appUser, "SPLIT")
-				.orElseThrow(() -> new RuntimeException("Default category not found"));
-	}
+    // Overload
+    public Category getTransferCategory() {
+        return getTransferCategory(appUserService.getCurrentUser());
+    }
 
+    @Cacheable(value = "categoryTransfer", key = "#appUser.id")
+    public Category getTransferCategory(AppUser appUser) {
+        logger.info("Fetching TRANSFERS category for user: {}", appUser.getUsername());
+        return categoryRepository.findByAppUserAndName(appUser, "TRANSFERS")
+                .orElseThrow(() -> new RuntimeException("TRANSFERS category not found"));
+    }
+
+    // Overload
+    public Category getSplitTrnsactionCategory() {
+        return getSplitTrnsactionCategory(appUserService.getCurrentUser());
+    }
+
+    @Cacheable(value = "categorySplitTransaction", key = "#appUser.id")
+    public Category getSplitTrnsactionCategory(AppUser appUser) {
+        logger.debug("Fetching SPLIT category for user: {}", appUser.getUsername());
+        return categoryRepository.findByAppUserAndName(appUser, "SPLIT")
+                .orElseThrow(() -> new RuntimeException("Default category not found"));
+    }
 }
