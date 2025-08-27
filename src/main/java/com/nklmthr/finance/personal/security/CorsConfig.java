@@ -14,10 +14,10 @@ public class CorsConfig {
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration config = new CorsConfiguration();
-		config.setAllowedOrigins(List.of("http://localhost:8080", "http://localhost:3000", "https://warthog-ruling-aardvark.ngrok-free.app")); // Adjust as needed
+		config.setAllowedOrigins(List.of("http://localhost:8080", "http://localhost:3000", "https://warthog-ruling-aardvark.ngrok-free.app"));
 		config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 		config.setAllowedHeaders(List.of("*"));
-		config.setAllowCredentials(true); // Critical for withCredentials
+		config.setAllowCredentials(true); 
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 		source.registerCorsConfiguration("/**", config);
