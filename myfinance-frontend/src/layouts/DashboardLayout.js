@@ -39,10 +39,6 @@ export default function DashboardLayout({ children }) {
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
-  const handleConnectGmail = () => {
-    window.location.href = `${process.env.REACT_APP_BACKEND_URL}/oauth/authorize`;
-  };
-
   return (
     <div className="flex h-screen bg-blue-50 text-gray-800 relative">
       {/* Sidebar */}
@@ -113,35 +109,6 @@ export default function DashboardLayout({ children }) {
               <UserCircleIcon className="h-5 w-5" />
               Profile
             </Link>
-
-			{gmailConnected === null ? null : gmailConnected ? (
-			  <div
-			    className="flex items-center gap-2 text-green-700 text-sm px-3 py-2 rounded border border-green-300 bg-green-50"
-			    title="Your Gmail account is connected"
-			  >
-			    <img
-			      src="/gmail-icon.png"
-			      alt="Gmail Connected"
-			      className="h-5 w-5"
-			    />
-			    Connected
-			  </div>
-			) : (
-			  <button
-			    className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition text-sm"
-			    onClick={handleConnectGmail}
-			    title="Connect your Gmail account"
-			  >
-			    <img
-			      src="/gmail-notconnected-icon.png"
-			      alt="Gmail Not Connected"
-			      className="h-5 w-5"
-			    />
-			    Connect Gmail
-			  </button>
-			)}
-
-
             <Link to="/logout" className="text-sm font-medium text-red-600 hover:underline">
               Logout
             </Link>

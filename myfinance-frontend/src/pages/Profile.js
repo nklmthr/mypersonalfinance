@@ -26,7 +26,7 @@ export default function ProfilePage() {
   };
 
   const handleConnectGmail = () => {
-	    window.location.href = `${process.env.REACT_APP_BACKEND_URL}/oauth/authorize`;
+	    window.location.href = `/oauth/authorize`;
   }
 
   const handleDisconnectGmail = async () => {
