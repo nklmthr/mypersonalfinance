@@ -7,11 +7,13 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -57,8 +59,10 @@ public abstract class AbstractDataExtractionService {
 	private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
 
 	public void run() {
-		logger.info("\n\nStart: {}\n", this.getClass().getSimpleName());
 		try {
+			String requestId = UUID.randomUUID().toString();
+	        MDC.put("requestId", requestId);
+			logger.info("\n\nStart: {}\n", this.getClass().getSimpleName());
 			for (AppUser appUser : appUserRepository.findAll()) {
 				logger.info("Processing for user: {}", appUser.getUsername());
 				var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
@@ -132,6 +136,7 @@ public abstract class AbstractDataExtractionService {
 			logger.error("Error during {} execution", this.getClass().getSimpleName(), e);
 		} finally {
 			logger.info("Finish: {} in ms", this.getClass().getSimpleName());
+			MDC.remove("requestId");
 		}
 	}
 
