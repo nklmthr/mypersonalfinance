@@ -29,7 +29,6 @@ public class AppUser {
 	@Column(unique = true, nullable = false)
 	private String username;
 
-	@JsonIgnore
 	@Column(nullable = false)
 	private String password; // BCrypt hashed
 
@@ -37,7 +36,6 @@ public class AppUser {
 	@JsonIgnore
 	private String role; // e.g., USER, ADMIN
 
-	@JsonIgnore
 	@Column(nullable = false)
 	private String email;
 

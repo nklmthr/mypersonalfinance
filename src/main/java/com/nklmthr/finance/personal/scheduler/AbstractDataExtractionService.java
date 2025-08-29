@@ -67,17 +67,17 @@ public abstract class AbstractDataExtractionService {
 				logger.info("Processing for user: {}", appUser.getUsername());
 				var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
 						new InputStreamReader(getClass().getResourceAsStream(CREDENTIALS_FILE_PATH)));
-				AppUserDataStoreFactory factory = new AppUserDataStoreFactory(appUser, appUserRepository);
+				AppUserDataStoreFactory factory = new AppUserDataStoreFactory(appUserRepository);
 				GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
 						GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY, clientSecrets,
 						List.of(GmailScopes.GMAIL_READONLY)).setDataStoreFactory(factory).setAccessType("offline")
 						.build();
 
-				Credential credential = flow.loadCredential("user");
+				Credential credential = flow.loadCredential(appUser.getUsername());
 				if (credential == null || StringUtils.isBlank(credential.getAccessToken())
 						|| StringUtils.isAllBlank(credential.getRefreshToken())) {
 					logger.warn("Gmail not connected for user: " + appUser.getUsername());
-					return; // Skip this user if token missing
+					continue;
 				}
 				Gmail gmailService = gmailServiceProvider.getGmailService(appUser);
 

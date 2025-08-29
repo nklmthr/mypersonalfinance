@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.gmail.Gmail;
@@ -19,24 +20,38 @@ import com.nklmthr.finance.personal.repository.AppUserRepository;
 @Component
 public class GmailServiceProvider {
 
-	private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
+    private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
 
-	@Autowired
-	private AppUserRepository appUserRepository;
+    @Autowired
+    private AppUserRepository appUserRepository;
 
-	public Gmail getGmailService(AppUser appUser) throws Exception {
-		String userKey = "user";
+    public Gmail getGmailService(AppUser appUser) throws Exception {
+        // Use username as key (better than hardcoded "user")
+        String userKey = appUser.getUsername();
 
-		var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
-				new InputStreamReader(getClass().getResourceAsStream("/credentials.json")));
+        // Load credentials.json from resources
+        GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(
+                JSON_FACTORY,
+                new InputStreamReader(getClass().getResourceAsStream("/credentials.json"))
+        );
 
-		var flow = new GoogleAuthorizationCodeFlow.Builder(GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY,
-				clientSecrets, List.of(GmailScopes.GMAIL_READONLY)).setAccessType("offline")
-				.setDataStoreFactory(new AppUserDataStoreFactory(appUser, appUserRepository)).build();
+        NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
 
-		var credential = flow.loadCredential(userKey);
+        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                httpTransport,
+                JSON_FACTORY,
+                clientSecrets,
+                List.of(GmailScopes.GMAIL_READONLY)
+        )
+        .setAccessType("offline")
+        .setDataStoreFactory(new AppUserDataStoreFactory(appUserRepository))
+        .build();
 
-		return new Gmail.Builder(GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY, credential)
-				.setApplicationName("Finance App").build();
-	}
+        // Load credentials for this user
+        var credential = flow.loadCredential(userKey);
+
+        return new Gmail.Builder(httpTransport, JSON_FACTORY, credential)
+                .setApplicationName("Finance App")
+                .build();
+    }
 }

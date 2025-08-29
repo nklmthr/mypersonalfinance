@@ -10,7 +10,7 @@ export default function Logout() {
     localStorage.removeItem("username");  // Optional: if you're storing username
     
     // Redirect to login
-    navigate("/login");
+    navigate("/");
   }, [navigate]);
 
   return null;

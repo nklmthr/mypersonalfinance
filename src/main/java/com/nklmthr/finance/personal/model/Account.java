@@ -35,15 +35,15 @@ public class Account {
 	@Column(nullable = false)
 	private BigDecimal balance;
 
-	@ManyToOne(optional = false, fetch = FetchType.EAGER)
+	@ManyToOne(optional = false)
 	@JoinColumn(name = "institution_id", nullable = false)
 	private Institution institution;
 
-	@ManyToOne(optional = false, fetch = FetchType.EAGER)
+	@ManyToOne(optional = false)
 	@JoinColumn(name = "account_type_id", nullable = false)
 	private AccountType accountType;
 
-	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@ManyToOne(optional = false)
 	@JoinColumn(name = "app_user_id", nullable = false)
 	@JsonIgnore
 	private AppUser appUser;

@@ -34,7 +34,7 @@ public class Institution {
 	@Column(length = 1000)
 	private String description;
 
-	@ManyToOne(optional = false, fetch = FetchType.LAZY)
+	@ManyToOne(optional = false)
 	@JsonIgnore
 	private AppUser appUser;
 

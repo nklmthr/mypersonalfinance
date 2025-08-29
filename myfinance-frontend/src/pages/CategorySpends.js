@@ -1,20 +1,27 @@
 import React, { useState, useEffect } from "react";
 import dayjs from "dayjs";
 import api from "../auth/api";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function CategorySpendSummary() {
 	const [data, setData] = useState([]);
 	const [expanded, setExpanded] = useState({});
-
+	const navigate = useNavigate();
 	const last6Months = [...Array(6)].map((_, i) =>
-	  dayjs().subtract(i, "month").format("YYYY-MM")
+		dayjs().subtract(i, "month").format("YYYY-MM")
 	);
 
 	useEffect(() => {
 		api.get("/category-spends") // <-- update to your actual backend endpoint
 			.then((res) => setData(res.data))
-			.catch((err) => console.error("Failed to fetch category spending", err));
+			.catch((err) => {
+				if (err.response?.status === 401) {
+					localStorage.removeItem("authToken");
+					navigate("/");   
+				} else {
+					console.error("Failed to fetch user profile:", err);
+				}
+			});
 	}, []);
 
 	const toggle = (id) => {

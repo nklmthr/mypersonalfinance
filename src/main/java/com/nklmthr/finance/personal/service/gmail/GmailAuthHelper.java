@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.auth.oauth2.TokenResponse;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
@@ -36,7 +37,7 @@ public class GmailAuthHelper {
 
 	public String getAuthorizationUrl(AppUser user) throws Exception {
 		GoogleAuthorizationCodeFlow flow = buildFlow(user);
-		logger.info("Generating authorization URL for user: {}, url: {} ", user.getUsername(), redirectUri);
+		logger.info("Generating authorization URL for user: {}, redirectUri: {}", user.getUsername(), redirectUri);
 		return flow.newAuthorizationUrl().setRedirectUri(redirectUri).setAccessType("offline")
 				.setApprovalPrompt("force").setState(user.getUsername()).build();
 	}
@@ -44,29 +45,37 @@ public class GmailAuthHelper {
 	public void exchangeCodeForTokens(AppUser user, String code) throws Exception {
 		GoogleAuthorizationCodeFlow flow = buildFlow(user);
 		TokenResponse tokenResponse = flow.newTokenRequest(code).setRedirectUri(redirectUri).execute();
+
 		logger.info("Exchanging code for tokens for user: {}", user.getUsername());
-		flow.createAndStoreCredential(tokenResponse, "user");
+
+		// Store credential under username (unique per user)
+		flow.createAndStoreCredential(tokenResponse, user.getUsername());
 	}
 
 	public GoogleAuthorizationCodeFlow buildFlow(AppUser appUser) throws Exception {
 		var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
 				new InputStreamReader(getClass().getResourceAsStream(CREDENTIALS_FILE_PATH)));
+
 		logger.debug("Building GoogleAuthorizationCodeFlow for user: {}", appUser.getUsername());
+
 		return new GoogleAuthorizationCodeFlow.Builder(GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY,
 				clientSecrets, SCOPES)
-				.setDataStoreFactory(new AppUserDataStoreFactory(appUser, appUserService.getRepository()))
+				.setDataStoreFactory(new AppUserDataStoreFactory(appUserService.getRepository()))
 				.setAccessType("offline").build();
 	}
 
 	public boolean isUserConnected() {
 		try {
 			AppUser user = appUserService.getCurrentUser();
-			boolean isConnected = buildFlow(user).loadCredential("user") != null;
+			Credential credential = buildFlow(user).loadCredential(user.getUsername());
+
+			boolean isConnected = credential != null && credential.getAccessToken() != null;
+
 			logger.info("Checking if user {} is connected to Gmail: {}", user.getUsername(), isConnected);
 			return isConnected;
 		} catch (Exception e) {
+			logger.warn("Error checking Gmail connection", e);
 			return false;
 		}
 	}
-
 }

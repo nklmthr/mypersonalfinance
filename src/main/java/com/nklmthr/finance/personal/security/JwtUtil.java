@@ -17,39 +17,62 @@ import io.jsonwebtoken.security.Keys;
 
 @Component
 public class JwtUtil {
-	@Value("${jwt.secret}") 
-	private String secret;
 
-	@Value("${jwt.expiration:300000}")
-	private long jwtExpiration;
+    @Value("${jwt.secret}") 
+    private String secret;
 
-	private static final Logger logger = LoggerFactory.getLogger(JwtUtil.class);
+    @Value("${jwt.expiration:300000}") // default 5 mins
+    private long jwtExpiration;
 
-	private Key getSigningKey() {
-		byte[] keyBytes = Decoders.BASE64.decode(secret);
-		Key key = Keys.hmacShaKeyFor(keyBytes);
-		logger.debug("Using JWT signing key: {}", Base64.getEncoder().encodeToString(key.getEncoded()));
-		return key;
-	}
+    // Refresh window: when remaining time < this, issue a new token
+    @Value("${jwt.refresh-window:120000}") // default 2 mins
+    private long refreshWindow;
 
-	public String generateToken(String username) {
-		return Jwts.builder().setSubject(username).setIssuedAt(new Date())
-				.setExpiration(new Date(System.currentTimeMillis() + jwtExpiration)).signWith(getSigningKey())
-				.compact();
-	}
+    private static final Logger logger = LoggerFactory.getLogger(JwtUtil.class);
 
-	public String extractUsername(String token) {
-		return extractAllClaims(token).getSubject();
-	}
+    private Key getSigningKey() {
+        byte[] keyBytes = Decoders.BASE64.decode(secret);
+        Key key = Keys.hmacShaKeyFor(keyBytes);
+        logger.debug("Using JWT signing key: {}", Base64.getEncoder().encodeToString(key.getEncoded()));
+        return key;
+    }
 
-	public boolean validateToken(String token, UserDetails user) {
-		final String username = extractUsername(token);
-		Date expiration = extractAllClaims(token).getExpiration();
-		logger.debug("Token expiration date: {}", expiration);
-		return (username.equals(user.getUsername()) && expiration.after(new Date()));
-	}
+    public String generateToken(String username) {
+        return Jwts.builder()
+                .setSubject(username)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
 
-	private Claims extractAllClaims(String token) {
-		return Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token).getBody();
-	}
+    public String extractUsername(String token) {
+        return extractAllClaims(token).getSubject();
+    }
+
+    public Date extractExpiration(String token) {
+        return extractAllClaims(token).getExpiration();
+    }
+
+    public boolean validateToken(String token, UserDetails user) {
+        final String username = extractUsername(token);
+        Date expiration = extractExpiration(token);
+        logger.debug("Token expiration date: {}", expiration);
+        return (username.equals(user.getUsername()) && expiration.after(new Date()));
+    }
+
+    public boolean shouldRefreshToken(String token) {
+        Date exp = extractExpiration(token);
+        long remaining = exp.getTime() - System.currentTimeMillis();
+        logger.debug("Token remaining ms: {}", remaining);
+        return remaining < refreshWindow;
+    }
+
+    private Claims extractAllClaims(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
 }

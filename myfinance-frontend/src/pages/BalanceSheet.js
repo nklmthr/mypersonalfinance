@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { parse, format } from "date-fns";
 import api from "../auth/api";
+import { useNavigate } from "react-router-dom";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
 
@@ -11,6 +12,7 @@ export default function BalanceSheetPage() {
 	const [rowsByClassification, setRowsByClassification] = useState({});
 	const [summaryByMonth, setSummaryByMonth] = useState({});
 	const [loading, setLoading] = useState(false);
+	const navigate = useNavigate();
 	NProgress.configure({ showSpinner: false });
 	const fetchBalanceSheet = () => {
 		setLoading(true);
@@ -83,8 +85,11 @@ export default function BalanceSheetPage() {
 		} catch (error) {
 			if (error.response && error.response.status === 409) {
 				alert("❗ Snapshot already exists in the last 2 weeks.");
+			} else if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/");   // 👈 force redirect to login
 			} else {
-				alert("Failed to create snapshot.");
+				console.error("Failed to fetch user profile:", err);
 			}
 		} finally {
 			setLoading(false);
@@ -122,7 +127,7 @@ export default function BalanceSheetPage() {
 			</div>
 
 			<div className="overflow-x-auto relative">
-			  <table className="min-w-full border-collapse border text-sm text-left">
+				<table className="min-w-full border-collapse border text-sm text-left">
 					<thead>
 						<tr className="bg-gray-100 text-nowrap">
 							<th className="border px-4 py-2 sticky left-0 bg-white z-10">Classification</th>
@@ -136,7 +141,7 @@ export default function BalanceSheetPage() {
 					<tbody>
 						{Object.entries(rowsByClassification).map(([classification, balances]) => (
 							<tr key={classification}>
-							<td className="border px-4 py-2 font-medium sticky left-0 bg-gray-50 z-10 bg-white">{classification}</td>
+								<td className="border px-4 py-2 font-medium sticky left-0 bg-gray-50 z-10 bg-white">{classification}</td>
 								{months.map((month) => (
 									<td key={month} className="border px-4 py-2 text-right">
 										{balances[month] !== undefined ? formatCurrency(balances[month]) : "-"}

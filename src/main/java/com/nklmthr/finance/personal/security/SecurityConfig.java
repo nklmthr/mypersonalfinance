@@ -32,9 +32,8 @@ public class SecurityConfig {
 		http.cors(cors -> cors.disable()).csrf(csrf -> csrf.disable())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/api/auth/login/**", "/signup", "/", "/index.html", "/static/**", "/css/**",
-								"/js/**", "/images/**")
-						.permitAll().requestMatchers("/api/**").authenticated().anyRequest().permitAll())
+						.requestMatchers(SecurityConstants.WHITELIST_ARRAY)
+						.permitAll().requestMatchers("/api/**").authenticated())
 				.exceptionHandling(
 						exception -> exception.authenticationEntryPoint((request, response, authException) -> {
 							response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");

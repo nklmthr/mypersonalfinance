@@ -17,11 +17,11 @@ export default function Accounts() {
 
 	const [newAccount, setNewAccount] = useState({
 		name: "",
-		balance: "", // ✅ string to avoid input glitches
+		balance: "",
 		institutionId: "",
 		accountTypeId: "",
 	});
-	
+
 	useEffect(() => {
 		const fetchDropdownData = async () => {
 			try {
@@ -32,7 +32,12 @@ export default function Accounts() {
 				setInstitutions(instRes.data);
 				setAccountTypes(typeRes.data);
 			} catch (err) {
-				console.error("Failed to load dropdown data", err);
+				if (err.response?.status === 401) {
+					localStorage.removeItem("authToken");
+					navigate("/");
+				} else {
+					console.error("Failed to fetch user profile:", err);
+				}
 			}
 		};
 		fetchDropdownData();
@@ -42,7 +47,7 @@ export default function Accounts() {
 	const [editData, setEditData] = useState({
 		id: null,
 		name: "",
-		balance: "", 
+		balance: "",
 		institutionId: "",
 		accountTypeId: "",
 	});
@@ -63,7 +68,12 @@ export default function Accounts() {
 			const res = await api.get("/accounts/filter", { params });
 			setAccounts(res.data);
 		} catch (err) {
-			console.error("Fetch accounts error:", err);
+			if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/");
+			} else {
+				console.error("Failed to fetch user profile:", err);
+			}
 		}
 		finally {
 			NProgress.done();
@@ -85,7 +95,12 @@ export default function Accounts() {
 			setShowAddModal(false);
 			fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
 		} catch (err) {
-			console.error("Add error:", err);
+			if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/");
+			} else {
+				console.error("Failed to fetch user profile:", err);
+			}
 		}
 		finally {
 			NProgress.done();
@@ -118,7 +133,12 @@ export default function Accounts() {
 			setShowEditModal(false);
 			fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
 		} catch (err) {
-			console.error("Update error:", err);
+			if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/");
+			} else {
+				console.error("Failed to fetch user profile:", err);
+			}
 		}
 		finally {
 			NProgress.done();
@@ -136,10 +156,12 @@ export default function Accounts() {
 		} catch (err) {
 			if (err.response && err.response.status === 409) {
 				alert(err.response.data || "Cannot delete: Transactions exist for this account.");
+			} else if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/");
 			} else {
-				alert("An unexpected error occurred.");
+				console.error("Failed to fetch user profile:", err);
 			}
-			console.error("Delete error:", err);
 		}
 		finally {
 			NProgress.done();
@@ -285,13 +307,13 @@ export default function Accounts() {
 			</div>
 
 			{showAddModal && <AccountModal />}
-			{showEditModal && <AccountModal isEdit key={editData.id || "new"}/>}
+			{showEditModal && <AccountModal isEdit key={editData.id || "new"} />}
 			{loading && (
 				<div className="fixed inset-0 bg-white bg-opacity-40 z-50 flex items-center justify-center">
 					<div className="loader ease-linear rounded-full border-4 border-t-4 border-blue-500 h-10 w-10 animate-spin"></div>
 				</div>
 			)}
 		</div>
-		
+
 	);
 }

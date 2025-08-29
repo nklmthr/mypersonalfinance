@@ -1,9 +1,9 @@
 package com.nklmthr.finance.personal.controller;
 
 import java.io.IOException;
-import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,15 +18,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.nklmthr.finance.personal.dto.SignupRequest;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.security.SecurityConfig;
 import com.nklmthr.finance.personal.service.AppUserService;
 import com.nklmthr.finance.personal.service.gmail.GmailAuthHelper;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping
+@RequestMapping("/api")
 public class GmailAuthorizationController {
 
 	Logger logger = LoggerFactory.getLogger(GmailAuthorizationController.class);
@@ -36,11 +39,10 @@ public class GmailAuthorizationController {
 	@Autowired
 	private AppUserService appUserService;
 
-	@Autowired
-	private SecurityConfig securityConfig;
-
 	@Value("${app.frontend.base-url}")
 	private String frontendBaseUrl;
+
+	
 
 	@GetMapping("/oauth/authorize")
 	public void authorize(HttpServletResponse response) throws Exception {
@@ -64,54 +66,37 @@ public class GmailAuthorizationController {
 		}
 	}
 
-	@GetMapping("/api/gmail/status")
+	@GetMapping("/gmail/status")
 	public Map<String, Boolean> getGmailStatus() {
 		boolean connected = gmailAuthHelper.isUserConnected();
 		return Map.of("connected", connected);
 	}
 
-	@GetMapping("/api/auth/status")
-	public ResponseEntity<?> status() {
-		AppUser user = appUserService.getCurrentUser();
-		logger.info("Authenticated user: {}", user.getUsername());
-		return ResponseEntity.ok(user.getUsername());
-	}
+	
 
-	@PostMapping("/signup")
-	public ResponseEntity<?> signup(@RequestBody AppUser appUser) {
-		logger.info("Received signup request for user: {}", appUser.getUsername());
-		if (appUserService.findByUsername(appUser.getUsername()) != null) {
-			return ResponseEntity.status(HttpStatus.CONFLICT).body("Username already exists");
-		}
-
-		AppUser user = new AppUser();
-		user.setUsername(appUser.getUsername());
-		user.setEmail(appUser.getEmail());
-		user.setPassword(securityConfig.passwordEncoder().encode(appUser.getPassword()));
-		user.setRole("USER");
-		user.setEnabled(true);
-		user.setCreatedAt(LocalDateTime.now());
-		appUserService.save(user);
-		logger.info("User {} signed up successfully", user.getUsername());
-		return ResponseEntity.ok("Signup successful");
-	}
-
-	@PostMapping("/api/gmail/disconnect")
+	@PostMapping("/gmail/disconnect")
 	public ResponseEntity<?> disconnectGmail() {
 		AppUser user = appUserService.getCurrentUser();
-		user.setGmailAccessToken(null);
-		user.setGmailRefreshToken(null);
-		user.setGmailTokenExpiry(null);
-		appUserService.save(user);
-		logger.info("Gmail disconnected for user: {}", user.getUsername());
-		return ResponseEntity.ok(Map.of("disconnected", true));
+
+		try {
+			GoogleAuthorizationCodeFlow flow = gmailAuthHelper.buildFlow(user);
+			flow.getCredentialDataStore().delete(user.getUsername());
+
+			user.setGmailAccessToken(null);
+			user.setGmailRefreshToken(null);
+			user.setGmailTokenExpiry(null);
+			appUserService.save(user);
+
+			logger.info("Gmail disconnected for user: {}", user.getUsername());
+			return ResponseEntity.ok(Map.of("disconnected", true));
+		} catch (Exception e) {
+			logger.error("Failed to disconnect Gmail for user {}", user.getUsername(), e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body(Map.of("error", "Failed to disconnect Gmail"));
+		}
 	}
 
-	@GetMapping("/api/user/profile")
-	public Map<String, Object> getProfile() {
-		AppUser user = appUserService.getCurrentUser();
-		logger.info("Fetching profile for user: {}", user.getUsername());
-		return Map.of("username", user.getUsername(), "email", user.getEmail(), "roles", user.getRole().split("\\,"));
-	}
+	
+	
 
 }

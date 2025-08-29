@@ -63,7 +63,7 @@ public class BalanceSheetService {
 
 		LocalDate fromDate = date.minusDays(7);
 		LocalDate toDate = date.plusDays(7);
-		logger.info("Generating balance sheet for user: " + appUser.getUsername() + " for month: " + monthLabel
+		logger.debug("Generating balance sheet for user: " + appUser.getUsername() + " for month: " + monthLabel
 				+ " from: " + fromDate + " to: " + toDate);
 		List<AccountBalanceSnapshot> snapshots = accountBalanceSnapshotRepository.findByAppUserAndSnapshotRange(appUser,
 				fromDate.atStartOfDay(), toDate.atStartOfDay());

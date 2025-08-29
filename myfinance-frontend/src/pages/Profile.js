@@ -1,114 +1,139 @@
 import React, { useEffect, useState } from "react";
 import api from "./../auth/api";
-import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 export default function ProfilePage() {
-  const [user, setUser] = useState(null);
-  const [gmailConnected, setGmailConnected] = useState(false);
-  const [loading, setLoading] = useState(false);
+	const [user, setUser] = useState(null);
+	const [gmailConnected, setGmailConnected] = useState(false);
+	const [loading, setLoading] = useState(false);
+	const navigate = useNavigate();
+	const fetchProfile = async () => {
+		try {
+			const res = await api.get("/user/profile");
+			setUser(res.data);
+		} catch (err) {
+			if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/login");   // 👈 force redirect to login
+			} else {
+				console.error("Failed to fetch user profile:", err);
+			}
+		}
+	};
 
-  const fetchProfile = async () => {
-    try {
-      const res = await api.get("/user/profile"); // ← Adjust if needed
-      setUser(res.data);
-    } catch (err) {
-      console.error("Failed to fetch user profile:", err);
-    }
-  };
+	const fetchGmailStatus = async () => {
+		try {
+			const res = await api.get("/gmail/status");
+			setGmailConnected(res.data.connected);
+		} catch (err) {
+			if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/");
+			} else {
+				console.error("Failed to check Gmail status:", err);
+			}
+		}
+	};
 
-  const fetchGmailStatus = async () => {
-    try {
-      const res = await api.get("/gmail/status");
-      setGmailConnected(res.data.connected);
-    } catch (err) {
-      console.error("Failed to check Gmail status:", err);
-    }
-  };
+	const handleConnectGmail = async () => {
+		try {
+			window.location.href = `${window.location.origin}/api/oauth/authorize`;
+		} catch (err) {
+			if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/");
+			} else {
+				alert("Failed to initiate Gmail connection");
+				console.error(err);
+			}
+		};
+	}
 
-  const handleConnectGmail = () => {
-	    window.location.href = `/oauth/authorize`;
-  }
+	const handleDisconnectGmail = async () => {
+		try {
+			setLoading(true);
+			await api.post("/gmail/disconnect");
+			setGmailConnected(false);
+			alert("Gmail disconnected");
+		} catch (err) {
+			if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/");
+			} else {
+				alert("Failed to disconnect Gmail");
+				console.error(err);
+			}
+		} finally {
+			setLoading(false);
+		}
+	};
 
-  const handleDisconnectGmail = async () => {
-    try {
-      setLoading(true);
-      await api.post("/gmail/disconnect");
-      setGmailConnected(false);
-      alert("Gmail disconnected");
-    } catch (err) {
-      alert("Failed to disconnect Gmail");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+	useEffect(() => {
+		fetchProfile();
+		fetchGmailStatus();
+	}, []);
 
-  useEffect(() => {
-    fetchProfile();
-    fetchGmailStatus();
-  }, []);
+	return (
+		<div className="max-w-3xl mx-auto px-4 py-6">
+			<h2 className="text-2xl font-bold text-blue-700 mb-6">👤 Profile</h2>
 
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      <h2 className="text-2xl font-bold text-blue-700 mb-6">👤 Profile</h2>
+			{/* User Details */}
+			<div className="bg-white shadow rounded p-6 space-y-4 border border-blue-100">
+				{user ? (
+					<>
+						<div>
+							<strong className="text-gray-700">Username:</strong>{" "}
+							<span className="text-gray-800">{user.username}</span>
+						</div>
+						<div>
+							<strong className="text-gray-700">Email:</strong>{" "}
+							<span className="text-gray-800">{user.email}</span>
+						</div>
+						{user.roles && (
+							<div>
+								<strong className="text-gray-700">Roles:</strong>{" "}
+								<span className="text-gray-800">{user.roles.join(", ")}</span>
+							</div>
+						)}
+					</>
+				) : (
+					<div className="text-gray-500">Loading user info...</div>
+				)}
+			</div>
 
-      {/* User Details */}
-      <div className="bg-white shadow rounded p-6 space-y-4 border border-blue-100">
-        {user ? (
-          <>
-            <div>
-              <strong className="text-gray-700">Username:</strong>{" "}
-              <span className="text-gray-800">{user.username}</span>
-            </div>
-            <div>
-              <strong className="text-gray-700">Email:</strong>{" "}
-              <span className="text-gray-800">{user.email}</span>
-            </div>
-            {user.roles && (
-              <div>
-                <strong className="text-gray-700">Roles:</strong>{" "}
-                <span className="text-gray-800">{user.roles.join(", ")}</span>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-gray-500">Loading user info...</div>
-        )}
-      </div>
+			{/* Gmail Connection */}
+			<div className="mt-8 bg-white shadow rounded p-6 border border-blue-100 space-y-4">
+				<div className="flex justify-between items-center">
+					<div>
+						<h3 className="text-lg font-semibold text-blue-700">📧 Gmail Integration</h3>
+						<p className="text-sm text-gray-600">
+							{gmailConnected
+								? "Your Gmail account is connected."
+								: "You have not connected your Gmail account."}
+						</p>
+					</div>
 
-      {/* Gmail Connection */}
-      <div className="mt-8 bg-white shadow rounded p-6 border border-blue-100 space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-semibold text-blue-700">📧 Gmail Integration</h3>
-            <p className="text-sm text-gray-600">
-              {gmailConnected
-                ? "Your Gmail account is connected."
-                : "You have not connected your Gmail account."}
-            </p>
-          </div>
+					{gmailConnected ? (
+						<button
+							disabled={loading}
+							onClick={handleDisconnectGmail}
+							className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
+						>
+							{loading ? "Disconnecting..." : "Disconnect Gmail"}
+						</button>
+					) : (
+						<button
+							onClick={handleConnectGmail}
+							className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
+						>
+							Connect Gmail
+						</button>
+					)}
+				</div>
+			</div>
 
-          {gmailConnected ? (
-            <button
-              disabled={loading}
-              onClick={handleDisconnectGmail}
-              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
-            >
-              {loading ? "Disconnecting..." : "Disconnect Gmail"}
-            </button>
-          ) : (
-            <button
-              onClick={handleConnectGmail}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm"
-            >
-              Connect Gmail
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Placeholder for password change */}
-      {/* Uncomment when backend is ready
+			{/* Placeholder for password change */}
+			{/* Uncomment when backend is ready
       <div className="mt-8 bg-white shadow rounded p-6 border border-blue-100">
         <h3 className="text-lg font-semibold text-blue-700 mb-4">🔒 Change Password</h3>
         <form className="space-y-4">
@@ -133,6 +158,6 @@ export default function ProfilePage() {
         </form>
       </div>
       */}
-    </div>
-  );
+		</div>
+	);
 }

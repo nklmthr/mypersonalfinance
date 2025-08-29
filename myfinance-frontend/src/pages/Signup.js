@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
-
+import api from "./../auth/api";
 export default function Signup() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -14,15 +13,15 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      await axios.post(
-        "/signup", // 🔁 or just "/api/public/signup" if using proxy
+      await api.post(
+        "/signup", 
         { username, email, password },
         {
           headers: { "Content-Type": "application/json" },
         }
       );
       alert("Signup successful. Please log in.");
-      navigate("/login");
+      navigate("/");
     } catch (error) {
       if (error.response?.status === 409) {
         alert("Username already exists");
