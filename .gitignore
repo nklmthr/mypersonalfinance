@@ -33,3 +33,4 @@ src/main/resources/application-qa.properties
 src/main/resources/application-prod.properties
 src/main/resources/instructions.txt
 src/main/resources/credentials.json
+/builds/logs
