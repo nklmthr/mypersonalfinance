@@ -21,6 +21,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Entity
 @Table(name = "account_transactions")
@@ -28,6 +29,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString
 public class AccountTransaction {
 
 	@Id
@@ -68,10 +70,13 @@ public class AccountTransaction {
 	private LocalDateTime sourceTime;
 
 	@ManyToOne
+	@JoinColumn(name = "account_id", nullable = false)
+	@ToString.Exclude
 	private Account account;
 
 	@ManyToOne
 	@JoinColumn(name = "category_id")
+	@ToString.Exclude
 	private Category category;
 
 	@Column(name= "parent_id")
@@ -79,11 +84,12 @@ public class AccountTransaction {
 
 	@ManyToOne(optional = false)
 	@JsonIgnore
+	@ToString.Exclude
 	private AppUser appUser;
 
 	@ManyToOne
 	@JoinColumn(name = "uploaded_statement_id")
-	@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+	@ToString.Exclude
 	private UploadedStatement uploadedStatement;
 
 //	@OneToMany(mappedBy = "accountTransaction", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

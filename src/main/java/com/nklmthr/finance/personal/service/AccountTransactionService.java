@@ -326,21 +326,6 @@ public class AccountTransactionService {
 		return isTransactionAlreadyPresent(newTransaction, appUser);
 	}
 
-	@Transactional
-	public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month, String accountId, String type,
-			String categoryId, String search) {
-		logger.info(
-				"Fetching transactions for export for month: {}, accountId: {}, type: {}, search: {}, categoryId: {}",
-				month, accountId, type, search, categoryId);
-		Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
-				? buildTransactionSpec(month, accountId, type, search, categoryId, true)
-				: buildTransactionSpec(month, accountId, type, search, null, false);
-		List<AccountTransaction> list = accountTransactionRepository.findAll(spec,
-				Sort.by(Sort.Direction.DESC, "date"));
-		logger.info("Total transactions found for export: {}", list.size());
-		return accountTransactionMapper.toDTOList(list);
-	}
-
 	public List<AccountTransactionDTO> getTransactionsByUploadedStatement(UploadedStatement statement) {
 		AppUser appUser = appUserService.getCurrentUser();
 		if (statement == null || statement.getId() == null) {
@@ -390,6 +375,21 @@ public class AccountTransactionService {
 		}
 		spec = spec.and(AccountTransactionSpecifications.belongsToUser(appUser));
 		return spec;
+	}
+	
+	@Transactional
+	public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month, String accountId, String type,
+			String categoryId, String search) {
+		logger.info(
+				"Fetching transactions for export for month: {}, accountId: {}, type: {}, search: {}, categoryId: {}",
+				month, accountId, type, search, categoryId);
+		Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
+				? buildTransactionSpec(month, accountId, type, search, categoryId, true)
+				: buildTransactionSpec(month, accountId, type, search, null, false);
+		List<AccountTransaction> list = accountTransactionRepository.findAll(spec,
+				Sort.by(Sort.Direction.DESC, "date"));
+		logger.info("Total transactions found for export: {}", list.size());
+		return accountTransactionMapper.toDTOList(list);
 	}
 
 	public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, String month, String accountId,

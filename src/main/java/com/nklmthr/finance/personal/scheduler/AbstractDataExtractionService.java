@@ -171,30 +171,33 @@ public abstract class AbstractDataExtractionService {
 	}
 
 	private String extractTextFromMessagePart(MessagePart part) {
-		if (part == null)
-			return null;
+	    if (part == null) return null;
 
-		String mimeType = part.getMimeType();
-		if ("text/plain".equalsIgnoreCase(mimeType) && part.getBody() != null && part.getBody().getData() != null) {
-			return decodeBase64(part.getBody().getData());
-		}
+	    String mimeType = part.getMimeType();
+	    if ("text/plain".equalsIgnoreCase(mimeType) && part.getBody() != null && part.getBody().getData() != null) {
+	        return decodeBase64(part.getBody().getData());
+	    }
 
-		if ("text/html".equalsIgnoreCase(mimeType) && part.getBody() != null && part.getBody().getData() != null) {
-			String html = decodeBase64(part.getBody().getData());
-			return Jsoup.parse(html).text(); // strip HTML tags
-		}
+	    if ("text/html".equalsIgnoreCase(mimeType) && part.getBody() != null && part.getBody().getData() != null) {
+	        String html = decodeBase64(part.getBody().getData());
+	        return Jsoup.parse(html).text(); // strip HTML tags
+	    }
 
-		// Recursively search subparts
-		if (part.getParts() != null) {
-			for (MessagePart subPart : part.getParts()) {
-				String subResult = extractTextFromMessagePart(subPart);
-				if (StringUtils.isNotBlank(subResult))
-					return subResult;
-			}
-		}
+	    if (part.getParts() != null && !part.getParts().isEmpty()) {
+	        StringBuilder sb = new StringBuilder();
+	        for (MessagePart subPart : part.getParts()) {
+	            String subResult = extractTextFromMessagePart(subPart);
+	            if (StringUtils.isNotBlank(subResult)) {
+	                if (sb.length() > 0) sb.append("\n");
+	                sb.append(subResult);
+	            }
+	        }
+	        return sb.toString();
+	    }
 
-		return null;
+	    return null;
 	}
+
 
 	private String decodeBase64(String data) {
 		try {
