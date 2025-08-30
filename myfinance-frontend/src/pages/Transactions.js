@@ -440,18 +440,36 @@ export default function Transactions() {
 	const [pageSize, setPageSize] = useState(10);
 	const [totalCount, setTotalCount] = useState(0);
 	const [modalContent, setModalContent] = useState(null);
-	const [searchParams] = useSearchParams();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [filterMonth, setFilterMonth] = useState(
 		searchParams.get("month") || dayjs().format("YYYY-MM")
 	);
+	const updateUrlParams = (overrides = {}) => {
+	  const params = new URLSearchParams(searchParams);
+
+	  // Apply overrides (new values for filters)
+	  Object.entries(overrides).forEach(([key, value]) => {
+	    if (value && value !== "ALL") {
+	      params.set(key, value);
+	    } else {
+	      params.delete(key); // remove empty/default values from URL
+	    }
+	  });
+
+	  setSearchParams(params);
+	};
 	const [filterAccount, setFilterAccount] = useState(
 		searchParams.get("accountId") || ""
 	);
-	const [filterType, setFilterType] = useState("ALL");
+	const [filterType, setFilterType] = useState(
+	  searchParams.get("type") || "ALL"
+	);
 	const [filterCategory, setFilterCategory] = useState(
 		searchParams.get("categoryId") || ""
 	);
-	const [search, setSearch] = useState("");
+	const [search, setSearch] = useState(
+	  searchParams.get("search") || ""
+	);
 	const debouncedSearch = useDebounce(search, 500);
 
 	NProgress.configure({ showSpinner: false });
@@ -989,13 +1007,13 @@ export default function Transactions() {
 				<input
 					type="month"
 					value={filterMonth}
-					onChange={(e) => setFilterMonth(e.target.value)}
+					onChange={(e) => {setFilterMonth(e.target.value); updateUrlParams({ month: e.target.value });}}
 					className="border px-2 py-1 rounded text-sm"
 				/>
 
 				<select
 					value={filterAccount}
-					onChange={(e) => setFilterAccount(e.target.value)}
+					onChange={(e) => {setFilterAccount(e.target.value); updateUrlParams({ accountId: e.target.value });}}
 					className="border px-2 py-1 rounded text-sm"
 				>
 					<option value="">All Accounts</option>
@@ -1008,7 +1026,7 @@ export default function Transactions() {
 
 				<select
 					value={filterCategory}
-					onChange={(e) => setFilterCategory(e.target.value)}
+					onChange={(e) => {setFilterCategory(e.target.value); updateUrlParams({ categoryId: e.target.value });}}
 					className="border px-2 py-1 rounded text-sm"
 				>
 					<option value="">All Categories</option>
@@ -1021,7 +1039,7 @@ export default function Transactions() {
 
 				<select
 					value={filterType}
-					onChange={(e) => setFilterType(e.target.value)}
+					onChange={(e) => {setFilterType(e.target.value); updateUrlParams({ type: e.target.value });}}
 					className="border px-2 py-1 rounded text-sm"
 				>
 					<option value="ALL">All Types</option>
@@ -1031,7 +1049,7 @@ export default function Transactions() {
 
 				<input
 					value={search}
-					onChange={(e) => setSearch(e.target.value)}
+					onChange={(e) => {setSearch(e.target.value); updateUrlParams({ search: e.target.value }); setPage(0);}}
 					placeholder="Search"
 					className="border px-2 py-1 rounded text-sm"
 				/>
