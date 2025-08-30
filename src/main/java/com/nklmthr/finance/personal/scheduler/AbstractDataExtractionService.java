@@ -62,7 +62,7 @@ public abstract class AbstractDataExtractionService {
 		try {
 			String requestId = UUID.randomUUID().toString();
 	        MDC.put("requestId", requestId);
-			logger.info("\n\nStart: {}\n", this.getClass().getSimpleName());
+			logger.info("Start: {}", this.getClass().getSimpleName());
 			for (AppUser appUser : appUserRepository.findAll()) {
 				logger.info("Processing for user: {}", appUser.getUsername());
 				var clientSecrets = GoogleClientSecrets.load(JSON_FACTORY,
@@ -135,7 +135,7 @@ public abstract class AbstractDataExtractionService {
 		} catch (Exception e) {
 			logger.error("Error during {} execution", this.getClass().getSimpleName(), e);
 		} finally {
-			logger.info("Finish: {} in ms", this.getClass().getSimpleName());
+			logger.info("Finish: {} in ms\n\n", this.getClass().getSimpleName());
 			MDC.remove("requestId");
 		}
 	}
