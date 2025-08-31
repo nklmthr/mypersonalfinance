@@ -33,7 +33,7 @@ public class AmazonReturnRefundExtractionService extends AbstractDataExtractionS
 
 	@Override
 	protected List<String> getEmailSubject() {
-		return List.of("Your refund for ");
+		return List.of("Your refund for ", "Your return of");
 	}
 
 	@Override
@@ -43,41 +43,57 @@ public class AmazonReturnRefundExtractionService extends AbstractDataExtractionS
 
 	@Override
 	protected AccountTransaction extractTransactionData(AccountTransaction accountTransaction, String emailContent,
-			AppUser appUser) {
-		logger.debug("Extracting transaction data from email content: {}", emailContent);
-		Pattern amountPattern = Pattern.compile("(?:Rs\\.?|₹)\\s*([\\d,]+(?:\\.\\d{1,2})?)");
-		Pattern orderPattern = Pattern.compile("Order\\s*#\\s*([\\d-]+)");
-		Pattern refundModePattern = Pattern.compile("refunded to your\\s+(.*?ending in \\d{4})");
-		Pattern itemPattern = Pattern.compile("Item returned:\\s*\\d+\\s+(.*?)\\s+Quantity:", Pattern.DOTALL);
-		Matcher m;
-		m = amountPattern.matcher(emailContent);
-		if (m.find()) {
-			String amt = m.group(1).replace(",", "");
-			accountTransaction.setAmount(new BigDecimal(amt));
-		}
-		m = orderPattern.matcher(emailContent);
-		if (m.find()) {
-			accountTransaction.setDescription(m.group(1).trim());
-		}
-		m = refundModePattern.matcher(emailContent);
-		if (m.find()) {
-			String mode = m.group(1).trim();
-			if (mode.contains("9057")) {
-				accountTransaction.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon", appUser));
-			} else {
-				accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
-			}
-		}
-		m = itemPattern.matcher(emailContent);
-		if (m.find()) {
-			String rawItem = m.group(1).trim();
-		    String cleanedItem = rawItem.replaceAll("\\(https?://[^)]+\\)", "").trim();
-		    cleanedItem = cleanedItem.replaceAll("\\[|\\]", "").trim();
-		    accountTransaction.setExplanation(cleanedItem);
-		}
-		accountTransaction.setType(TransactionType.CREDIT);
-		logger.debug("Extracted transaction: {}", accountTransaction);
-		return accountTransaction;
+	                                                    AppUser appUser) {
+	    logger.debug("Extracting transaction data from email content: {}", emailContent);
+	    if(!emailContent.contains("Your return request is confirmed.")) {
+	        logger.info("Email indicates return accepted but no refund processed yet, skipping.");
+	        return null;
+	    }
+	    Pattern amountPattern = Pattern.compile("(?:Refund subtotal|Total estimated refund:|(?:Rs\\.?|₹))\\s*([\\d,]+(?:\\.\\d{1,2})?)");
+	    Pattern orderPattern = Pattern.compile("Order\\s*#\\s*([\\d-]+)");
+	    Pattern refundModePattern = Pattern.compile("(?:refunded to your|will be refunded to your)\\s+(.*?ending in \\d{4})");
+	    Pattern itemPattern = Pattern.compile("Item to be returned:\\s*\\d+\\s+(.*?)\\s+Quantity:", Pattern.DOTALL);
+
+	    Matcher m;
+
+	    m = amountPattern.matcher(emailContent);
+	    if (m.find()) {
+	        String amt = m.group(1).replace(",", "");
+	        accountTransaction.setAmount(new BigDecimal(amt));
+	    }
+
+	    m = orderPattern.matcher(emailContent);
+	    if (m.find()) {
+	        accountTransaction.setDescription(m.group(1).trim());
+	    }
+
+	    m = refundModePattern.matcher(emailContent);
+	    if (m.find()) {
+	        String mode = m.group(1).trim();
+	        logger.debug("Detected refund mode: {}", mode);
+	        if (mode.contains("9057")) {
+	            accountTransaction.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon", appUser));
+	        } else {
+	            accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
+	        }
+	        logger.debug("Set account based on refund mode: {}", accountTransaction.getAccount().getName());
+	    } else {
+	        logger.warn("No refund mode detected, assigning default Amazon Pay account");
+	        accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
+	    }
+
+	    m = itemPattern.matcher(emailContent);
+	    if (m.find()) {
+	        String rawItem = m.group(1).trim();
+	        String cleanedItem = rawItem.replaceAll("\\(https?://[^)]+\\)", "").trim();
+	        cleanedItem = cleanedItem.replaceAll("\\[|\\]", "").trim();
+	        accountTransaction.setExplanation(cleanedItem);
+	    }
+
+	    accountTransaction.setType(TransactionType.CREDIT);
+	    logger.debug("Extracted transaction: {}", accountTransaction);
+	    return accountTransaction;
 	}
+
 
 }

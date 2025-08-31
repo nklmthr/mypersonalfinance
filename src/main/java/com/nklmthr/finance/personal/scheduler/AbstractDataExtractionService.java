@@ -129,6 +129,9 @@ public abstract class AbstractDataExtractionService {
 								accountTransactionService.save(accountTransaction, appUser);
 							}
 						}
+						else {
+							logger.warn("extractTransactionData returned null, skipping message ID: {}", mess.getId());
+						}
 					}
 				}
 			}
