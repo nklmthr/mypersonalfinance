@@ -39,7 +39,7 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 
 	@Override
 	protected List<String> getEmailSubject() {
-		return List.of("Transaction alert on Axis Bank Credit Card no. XX0434",
+		return List.of("Transaction alert on Axis Bank Credit Card no. XX0434", "spent on credit card no. XX0434",
 				"Transaction alert on Axis Bank Credit Card no. XX7002", "Axis Bank Credit Card Transaction Alert");
 	}
 
@@ -49,32 +49,46 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 	}
 
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
-		try {
-			// Amount (e.g., "INR 5090" or "INR 5,090.00")
-			Pattern amountPattern = Pattern.compile("for INR ([\\d,]+\\.?\\d*)");
-			Matcher amountMatcher = amountPattern.matcher(emailContent);
-			if (amountMatcher.find()) {
-				String amountStr = amountMatcher.group(1).replace(",", "");
-				tx.setAmount(new BigDecimal(amountStr));
-			}
+	    try {
+	        logger.info("AxisCCDataExtractionService content: {}", emailContent);
+	        BigDecimal amount = null;
+	        Pattern amountNewPattern = Pattern.compile("Transaction Amount:\\s*INR\\s*([\\d,]+\\.?\\d*)");
+	        Matcher amountNewMatcher = amountNewPattern.matcher(emailContent);
+	        if (amountNewMatcher.find()) {
+	            amount = new BigDecimal(amountNewMatcher.group(1).replace(",", ""));
+	        } else {
+	            Pattern amountOldPattern = Pattern.compile("for INR ([\\d,]+\\.?\\d*)");
+	            Matcher amountOldMatcher = amountOldPattern.matcher(emailContent);
+	            if (amountOldMatcher.find()) {
+	                amount = new BigDecimal(amountOldMatcher.group(1).replace(",", ""));
+	            }
+	        }
+	        tx.setAmount(amount);
+	        String description = null;
+	        Pattern merchantNewPattern = Pattern.compile("Merchant Name:\\s*([A-Za-z0-9 &\\-]+)");
+	        Matcher merchantNewMatcher = merchantNewPattern.matcher(emailContent);
+	        if (merchantNewMatcher.find()) {
+	            description = merchantNewMatcher.group(1).trim();
+	        } else {
+	            Pattern merchantOldPattern = Pattern.compile("at ([A-Za-z0-9 &\\-]+?) on \\d{2}-\\d{2}-\\d{4}");
+	            Matcher merchantOldMatcher = merchantOldPattern.matcher(emailContent);
+	            if (merchantOldMatcher.find()) {
+	                description = merchantOldMatcher.group(1).trim();
+	            }
+	        }
+	        tx.setDescription(description);
+	        tx.setType(TransactionType.DEBIT);
+	        if (emailContent.contains("0434")) {
+	            tx.setAccount(accountService.getAccountByName("AXIS-CCA-Airtel", appUser));
+	        } else if (emailContent.contains("7002")) {
+	            tx.setAccount(accountService.getAccountByName("Axis-Citi-PremierMiles", appUser));
+	        }
 
-			// Merchant name (e.g., "at Kharva Ente", "at SUBHA MEDIC")
-			Pattern merchantPattern = Pattern.compile("at ([A-Za-z0-9 &\\-]+?) on \\d{2}-\\d{2}-\\d{4}");
-			Matcher merchantMatcher = merchantPattern.matcher(emailContent);
-			if (merchantMatcher.find()) {
-				String merchant = merchantMatcher.group(1).trim();
-				tx.setDescription(merchant);
-			}
-
-			tx.setType(TransactionType.DEBIT);
-			tx.setAccount(emailContent.contains("0434") ? accountService.getAccountByName("AXIS-CCA-Airtel", appUser)
-					: accountService.getAccountByName("Axis-Citi-PremierMiles", appUser));
-
-		} catch (Exception e) {
-			logger.error("Error parsing Axis CC transaction", e);
-		}
-
-		return tx;
+	    } catch (Exception e) {
+	        logger.error("Error parsing Axis CC transaction", e);
+	    }
+	    return tx;
 	}
+
 
 }
