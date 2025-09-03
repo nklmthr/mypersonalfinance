@@ -50,7 +50,7 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 	    try {
-	        logger.info("AxisCCDataExtractionService content: {}", emailContent);
+	        logger.debug("AxisCCDataExtractionService content: {}", emailContent);
 	        BigDecimal amount = null;
 	        Pattern amountNewPattern = Pattern.compile("Transaction Amount:\\s*INR\\s*([\\d,]+\\.?\\d*)");
 	        Matcher amountNewMatcher = amountNewPattern.matcher(emailContent);
