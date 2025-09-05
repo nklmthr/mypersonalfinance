@@ -23,7 +23,8 @@ public class SecurityConstants {
         "/categories",
         "/institutions",
         "/account-types",
-        "/api/oauth/**"
+        "/gmail/oauth/callback/**",
+        "/error" 
     };
 
     // Optional: List form for use in custom filters

@@ -32,12 +32,19 @@ public class SecurityConfig {
 		http.cors(cors -> cors.disable()).csrf(csrf -> csrf.disable())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers(SecurityConstants.WHITELIST_ARRAY)
-						.permitAll().requestMatchers("/api/**").authenticated())
-				.exceptionHandling(
-						exception -> exception.authenticationEntryPoint((request, response, authException) -> {
-							response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
-						}));
+						// 1. Allow all whitelisted endpoints
+						.requestMatchers(SecurityConstants.WHITELIST_ARRAY).permitAll()
+
+						// 2. Require auth for API endpoints
+						.requestMatchers("/api/**").authenticated()
+
+						// 3. Require auth for Gmail authorize URL
+						.requestMatchers("/gmail/authorize-url").authenticated()
+
+						// 4. Deny everything else explicitly
+						.anyRequest().denyAll())
+				.exceptionHandling(exception -> exception.authenticationEntryPoint((request, response,
+						authException) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized")));
 
 		http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

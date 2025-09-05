@@ -19,11 +19,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.nklmthr.finance.personal.dto.SignupRequest;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.security.JwtUtil;
 import com.nklmthr.finance.personal.security.SecurityConfig;
 import com.nklmthr.finance.personal.service.AppUserService;
+import com.nklmthr.finance.personal.service.gmail.GmailAuthHelper;
 
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
@@ -45,6 +47,10 @@ public class AuthController {
 
 	@Autowired
 	private JwtUtil jwtUtil;
+	
+	@Autowired
+	private GmailAuthHelper gmailAuthHelper;
+
 
 	private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
@@ -69,7 +75,7 @@ public class AuthController {
 	@PostMapping("/signup")
 	public ResponseEntity<?> signup(@Valid @RequestBody SignupRequest signupRequest) {
 		logger.info("Signup attempt for username: {}, password pattern: {}", signupRequest.getUsername(),
-				getPasswordPatternSummary(signupRequest.getPassword())); 
+				getPasswordPatternSummary(signupRequest.getPassword()));
 
 		if (appUserService.findByUsername(signupRequest.getUsername()) != null) {
 			return ResponseEntity.status(HttpStatus.CONFLICT).body("Username already exists");
@@ -88,7 +94,35 @@ public class AuthController {
 		logger.info("User {} signed up successfully", user.getUsername());
 		return ResponseEntity.ok("Signup successful");
 	}
-	
+
+	@GetMapping("/gmail/status")
+	public Map<String, Boolean> getGmailStatus() {
+		boolean connected = gmailAuthHelper.isUserConnected();
+		return Map.of("connected", connected);
+	}
+
+	@PostMapping("/gmail/disconnect")
+	public ResponseEntity<?> disconnectGmail() {
+		AppUser user = appUserService.getCurrentUser();
+
+		try {
+			GoogleAuthorizationCodeFlow flow = gmailAuthHelper.buildFlow(user);
+			flow.getCredentialDataStore().delete(user.getUsername());
+
+			user.setGmailAccessToken(null);
+			user.setGmailRefreshToken(null);
+			user.setGmailTokenExpiry(null);
+			appUserService.save(user);
+
+			logger.info("Gmail disconnected for user: {}", user.getUsername());
+			return ResponseEntity.ok(Map.of("disconnected", true));
+		} catch (Exception e) {
+			logger.error("Failed to disconnect Gmail for user {}", user.getUsername(), e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body(Map.of("error", "Failed to disconnect Gmail"));
+		}
+	}
+
 	@GetMapping("/user/profile")
 	public Map<String, Object> getProfile() {
 		AppUser user = appUserService.getCurrentUser();

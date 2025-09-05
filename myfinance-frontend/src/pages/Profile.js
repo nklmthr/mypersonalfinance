@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "./../auth/api";
+import axios from 'axios';
 import { useNavigate } from "react-router-dom";
 
 export default function ProfilePage() {
@@ -36,18 +37,24 @@ export default function ProfilePage() {
 	};
 
 	const handleConnectGmail = async () => {
-		try {
-			window.location.href = `${window.location.origin}/api/oauth/authorize`;
-		} catch (err) {
-			if (err.response?.status === 401) {
-				localStorage.removeItem("authToken");
-				navigate("/");
-			} else {
-				alert("Failed to initiate Gmail connection");
-				console.error(err);
-			}
-		};
+	  try {
+	    const token = localStorage.getItem('authToken');
+	    const res = await axios.get("/gmail/authorize-url", {
+	      withCredentials: true,
+	      headers: token ? { Authorization: `Bearer ${token}` } : {}
+	    });
+	    window.location.href = res.data.url;
+	  } catch (err) {
+	    if (err.response?.status === 401) {
+	      localStorage.removeItem("authToken");
+	      navigate("/");
+	    } else {
+	      alert("Failed to initiate Gmail connection");
+	      console.error(err);
+	    }
+	  }
 	}
+
 
 	const handleDisconnectGmail = async () => {
 		try {
