@@ -471,6 +471,7 @@ export default function Transactions() {
 	  searchParams.get("search") || ""
 	);
 	const debouncedSearch = useDebounce(search, 500);
+	const [refreshing, setRefreshing] = useState(false);
 
 	NProgress.configure({ showSpinner: false });
 
@@ -570,6 +571,36 @@ export default function Transactions() {
 		await fetchData();
 		NProgress.done();
 		setLoading(false);
+	};
+
+	const triggerDataExtraction = async () => {
+		if (!window.confirm("This will trigger all data extraction services to check for new transactions from your connected email accounts. Continue?")) {
+			return;
+		}
+		
+		setRefreshing(true);
+		NProgress.start();
+		try {
+			const response = await api.post('/data-extraction/trigger');
+			if (response.data.status === 'started') {
+				alert(`Data extraction started! Services running: ${response.data.services.length}\n\nCheck logs for progress. The page will refresh automatically in 30 seconds.`);
+				// Auto refresh the page after 30 seconds to show new transactions
+				setTimeout(() => {
+					fetchData();
+				}, 30000);
+			}
+		} catch (err) {
+			if (err.response?.status === 401) {
+				localStorage.removeItem("authToken");
+				navigate("/");
+			} else {
+				console.error("Failed to trigger data extraction:", err);
+				alert("Failed to trigger data extraction. Please check the logs.");
+			}
+		} finally {
+			NProgress.done();
+			setRefreshing(false);
+		}
 	};
 
 	// Build + flatten once per render and reuse everywhere
@@ -841,6 +872,8 @@ export default function Transactions() {
 		filterCategory,
 		filterType,
 		search,
+		triggerDataExtraction,
+		refreshing,
 	}) {
 		return (
 			<div className="flex items-center gap-2 mt-2">
@@ -874,6 +907,27 @@ export default function Transactions() {
 					className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
 				>
 					Add Transaction
+				</button>
+				<button
+					onClick={triggerDataExtraction}
+					disabled={refreshing}
+					className={`${refreshing 
+						? 'bg-gray-400 cursor-not-allowed' 
+						: 'bg-purple-600 hover:bg-purple-700'
+					} text-white px-3 py-1 rounded text-sm flex items-center gap-1`}
+					title="Trigger all data extraction services to fetch new transactions from email"
+				>
+					{refreshing ? (
+						<>
+							<span className="animate-spin">⟳</span>
+							Extracting...
+						</>
+					) : (
+						<>
+							<span>🔄</span>
+							Refresh Data
+						</>
+					)}
 				</button>
 				<button
 					onClick={async () => {
@@ -1164,6 +1218,8 @@ export default function Transactions() {
 					filterType={filterType}
 					search={debouncedSearch}
 					currentTotal={currentTotal}
+					triggerDataExtraction={triggerDataExtraction}
+					refreshing={refreshing}
 				/>
 			</div>
 
