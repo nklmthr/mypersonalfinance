@@ -611,62 +611,97 @@ export default function Transactions() {
 									title="View full description"
 									onClick={() =>
 										setModalContent({
-											title: "Transaction Details",
+											title: "Transaction Analysis & Comparison",
 											content: (
 												<div className="space-y-4">
-													{/* Primary Data (GPT-prioritized) */}
-													<div className="border-b pb-3">
-														<h4 className="font-semibold text-gray-700 mb-2">Transaction Details</h4>
-														<p className="mb-2">
-															<strong>Description:</strong> {tx.gptDescription || tx.description}
-															{tx.gptDescription && tx.gptDescription !== tx.description && (
-																<span className="text-xs bg-blue-100 text-blue-700 px-1 rounded ml-1">🤖 GPT</span>
-															)}
-														</p>
-														<p className="mb-2">
-															<strong>Amount:</strong> {tx.currency || "₹"}{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.type})
-															{tx.gptAmount && tx.gptAmount !== tx.amount && (
-																<div className="text-sm text-blue-600 mt-1">
-																	🤖 GPT Amount: {tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} {tx.gptType && tx.gptType !== tx.type && `(${tx.gptType})`}
-																</div>
-															)}
-														</p>
-														<p className="mb-2">
-															<strong>Explanation:</strong> {tx.gptExplanation || tx.explanation || "(None)"}
-															{tx.gptExplanation && tx.gptExplanation !== tx.explanation && (
-																<span className="text-xs bg-blue-100 text-blue-700 px-1 rounded ml-1">🤖 GPT</span>
-															)}
-														</p>
-														{tx.gptAccount && (
-															<p>
-																<strong>GPT Matched Account:</strong> {tx.gptAccount.name} ({tx.gptAccount.institution?.name})
-															</p>
-														)}
+													{/* Header with Transaction ID and Date */}
+													<div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded border">
+														<div className="flex justify-between items-center">
+															<div>
+																<h3 className="font-semibold text-gray-800">Transaction Details</h3>
+																<p className="text-xs text-gray-600">{new Date(tx.date).toLocaleString()}</p>
+															</div>
+															<div className="text-right">
+																<p className="text-sm text-gray-600">{tx.account?.name}</p>
+																<p className="text-xs text-gray-500">{tx.account?.institution?.name}</p>
+															</div>
+														</div>
 													</div>
 
-													{/* Alternative/Original Data (only show if different from primary) */}
-													{((tx.gptDescription && tx.gptDescription !== tx.description && tx.description) || 
-													  (tx.gptExplanation && tx.gptExplanation !== tx.explanation && tx.explanation) ||
-													  tx.currency) && (
-														<div className="bg-gray-50 p-3 rounded">
-															<h4 className="font-semibold text-gray-600 mb-2">Alternative Data</h4>
-															{tx.gptDescription && tx.gptDescription !== tx.description && tx.description && (
-																<p className="mb-2">
-																	<strong>Original Description:</strong> {tx.description}
-																</p>
-															)}
-															{tx.gptExplanation && tx.gptExplanation !== tx.explanation && tx.explanation && (
-																<p className="mb-2">
-																	<strong>Original Explanation:</strong> {tx.explanation}
-																</p>
-															)}
-															{tx.currency && (
-																<p>
-																	<strong>Currency:</strong> {tx.currency}
-																</p>
-															)}
+													{/* Description Comparison */}
+													<div className="grid grid-cols-2 gap-4">
+														<div className="space-y-2">
+															<h4 className="font-semibold text-gray-700 text-sm">📊 Original Description</h4>
+															<div className="bg-gray-50 p-3 rounded border min-h-[60px]">
+																<p className="text-sm">{tx.description || <span className="text-gray-400 italic">Not available</span>}</p>
+															</div>
 														</div>
-													)}
+														<div className="space-y-2">
+															<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Description</h4>
+															<div className="bg-blue-50 p-3 rounded border min-h-[60px]">
+																<p className="text-sm">{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}</p>
+															</div>
+														</div>
+													</div>
+
+													{/* Explanation Comparison */}
+													<div className="grid grid-cols-2 gap-4">
+														<div className="space-y-2">
+															<h4 className="font-semibold text-gray-700 text-sm">📊 Original Explanation</h4>
+															<div className="bg-gray-50 p-3 rounded border min-h-[60px]">
+																<p className="text-sm">{tx.explanation || <span className="text-gray-400 italic">Not available</span>}</p>
+															</div>
+														</div>
+														<div className="space-y-2">
+															<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Explanation</h4>
+															<div className="bg-blue-50 p-3 rounded border min-h-[60px]">
+																<p className="text-sm">{tx.gptExplanation || <span className="text-gray-400 italic">Not analyzed</span>}</p>
+															</div>
+														</div>
+													</div>
+
+													{/* Other Fields */}
+													<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+														<div className="space-y-3">
+															<h4 className="font-semibold text-gray-700 text-sm">💰 Amount & Type</h4>
+															<div className="bg-gray-50 p-3 rounded border">
+																<p className="text-sm mb-1">
+																	<strong>Original:</strong> 
+																	<span className={`font-semibold ml-1 ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+																		₹{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.type})
+																	</span>
+																</p>
+																{tx.gptAmount && (
+																	<p className="text-sm">
+																		<strong>GPT:</strong> 
+																		<span className={`font-semibold ml-1 ${tx.gptType === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+																			{tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.gptType || "N/A"})
+																		</span>
+																	</p>
+																)}
+															</div>
+														</div>
+														
+														{tx.gptAccount && (
+															<div className="space-y-3">
+																<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Matched Account</h4>
+																<div className="bg-blue-50 p-3 rounded border">
+																	<p className="text-sm font-medium">{tx.gptAccount.name}</p>
+																	<p className="text-xs text-gray-500">{tx.gptAccount.institution?.name}</p>
+																	<p className="text-xs text-gray-500">{tx.gptAccount.accountType?.name}</p>
+																</div>
+															</div>
+														)}
+														
+														{tx.currency && (
+															<div className="space-y-3">
+																<h4 className="font-semibold text-blue-700 text-sm">💱 Currency</h4>
+																<div className="bg-blue-50 p-3 rounded border">
+																	<p className="text-sm font-medium">{tx.currency}</p>
+																</div>
+															</div>
+														)}
+													</div>
 												</div>
 											),
 										})

@@ -72,16 +72,26 @@ public class AccountTransactionService {
 		AppUser appUser = appUserService.getCurrentUser();
 		logger.info("Creating transfer from transaction ID: {} to account ID: {}", request.getSourceTransactionId(),
 				request.getDestinationAccountId());
-		AccountTransaction debit = accountTransactionRepository.findById(request.getSourceTransactionId())
-				.orElseThrow(() -> new Exception("Source transaction not found"));
+		AccountTransaction debit = accountTransactionRepository.findByAppUserAndId(appUser, request.getSourceTransactionId())
+				.orElseThrow(() -> new IllegalArgumentException(
+						"Source transaction not found for user: " + appUser.getUsername()));
+		debit.setCategory(categoryService.getTransferCategory());
+		accountTransactionRepository.save(debit);
+		
 		Account toAccount = accountRepository.findByAppUserAndId(appUser, request.getDestinationAccountId()).get();
 		toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
-
-		debit.setCategory(categoryService.getTransferCategory());
-		debit.setAppUser(appUser);
-
+		
+		Account fromAccount = debit.getAccount();
+		fromAccount.setBalance(fromAccount.getBalance().subtract(debit.getAmount()));
+		
+		
+		accountRepository.save(fromAccount);
+		accountRepository.save(toAccount);
+		
 		AccountTransaction credit = new AccountTransaction();
 		credit.setAccount(toAccount);
+		credit.setCurrency(debit.getCurrency());
+		credit.setGptAccount(toAccount);
 		credit.setAmount(debit.getAmount());
 		credit.setDate(debit.getDate());
 		credit.setDescription(debit.getDescription());
@@ -89,8 +99,7 @@ public class AccountTransactionService {
 		credit.setType(TransactionType.CREDIT);
 		credit.setCategory(categoryService.getTransferCategory());
 		credit.setAppUser(appUser);
-
-		accountTransactionRepository.save(debit);
+				
 		accountTransactionRepository.save(credit);
 	}
 
@@ -127,6 +136,8 @@ public class AccountTransactionService {
 			child.setType(st.getType());
 			child.setAccount(parent.getAccount());
 			child.setCategory(categoryService.getCategoryById(st.getCategory().getId()));
+			child.setGptAccount(parent.getGptAccount());
+			child.setCurrency(parent.getCurrency());
 			if (child.getParent() == null) {
 				child.setParent(parent.getId());
 			}
@@ -168,7 +179,13 @@ public class AccountTransactionService {
 			txUpdateEntity.setHref(existingTx.getHref());
 			txUpdateEntity.setHrefText(existingTx.getHrefText());
 			txUpdateEntity.setSourceTime(existingTx.getSourceTime());
-
+			txUpdateEntity.setGptAccount(existingTx.getGptAccount());
+			txUpdateEntity.setGptAmount(existingTx.getGptAmount());
+			txUpdateEntity.setGptDescription(existingTx.getGptDescription());
+			txUpdateEntity.setGptExplanation(existingTx.getGptExplanation());
+			txUpdateEntity.setGptType(existingTx.getGptType());
+			txUpdateEntity.setCurrency(existingTx.getCurrency());
+			
 			if (oldType == TransactionType.DEBIT) {
 				oldAccount.setBalance(oldAccount.getBalance().add(oldAmount));
 			} else if (oldType == TransactionType.CREDIT) {
