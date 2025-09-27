@@ -47,4 +47,15 @@ public class Account {
 	@JsonIgnore
 	private AppUser appUser;
 
+	// Account identification attributes for transaction text matching
+	@Column(name = "account_number", length = 100)
+	private String accountNumber;
+
+	@Column(name = "account_keywords", length = 500)
+	private String accountKeywords; // Comma-separated keywords that might appear in transaction text
+
+	@Column(name = "account_aliases", length = 300)
+	private String accountAliases; // Comma-separated alternative names/abbreviations
+
+
 }

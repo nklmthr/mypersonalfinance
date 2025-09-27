@@ -29,6 +29,7 @@ import com.google.api.services.gmail.model.Message;
 import com.google.api.services.gmail.model.MessagePart;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.openai.OpenAIClient;
 import com.nklmthr.finance.personal.repository.AppUserRepository;
 import com.nklmthr.finance.personal.service.AccountService;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
@@ -54,6 +55,9 @@ public abstract class AbstractDataExtractionService {
 	
 	@Value("${gmail.lookback.days:7}")
 	private int gmailLookbackDays;
+	
+	@Autowired
+	private OpenAIClient openAIClient;
 	
 	private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
 	private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
@@ -105,6 +109,7 @@ public abstract class AbstractDataExtractionService {
 
 						String emailContent = extractPlainText(mess);
 						logger.debug("Extracted content for message ID {}: {}", mess.getId(), emailContent);
+						
 						if (StringUtils.isBlank(emailContent) || "[Empty content]".equals(emailContent)
 								|| "[Error extracting message]".equals(emailContent)) {
 							logger.warn("Skipping message with empty content.");
@@ -118,19 +123,15 @@ public abstract class AbstractDataExtractionService {
 						accountTransaction.setSourceThreadId(mess.getThreadId());
 						accountTransaction.setSourceTime(Instant.ofEpochMilli(mess.getInternalDate())
 								.atZone(ZoneId.systemDefault()).toLocalDateTime());
+						
 						accountTransaction.setDate(accountTransaction.getSourceTime());
-
 						accountTransaction = extractTransactionData(accountTransaction, emailContent, appUser);
-						if (accountTransaction != null) {
-							if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction, appUser)) {
-								logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
-							} else {
-								logger.info("Saving transaction: {}", accountTransaction);
-								accountTransactionService.save(accountTransaction, appUser);
-							}
-						}
-						else {
-							logger.warn("extractTransactionData returned null, skipping message ID: {}", mess.getId());
+						if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction, appUser)) {
+							logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
+						} else {
+							openAIClient.getGptResponse(emailContent, accountTransaction);
+							logger.info("Saving transaction: {}", accountTransaction);
+							accountTransactionService.save(accountTransaction, appUser);
 						}
 					}
 				}

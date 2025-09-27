@@ -6,16 +6,38 @@ import java.util.List;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 
-public record AccountTransactionDTO(String id, LocalDateTime date, BigDecimal amount, String description,
-		String shortDescription, String explanation, String shortExplanation, TransactionType type, AccountDTO account,
-		CategoryDTO category, String parentId, List<AccountTransactionDTO> children) {
+public record AccountTransactionDTO(
+	String id,
+	LocalDateTime date,
+	BigDecimal amount,
+	String description,
+	String shortDescription,
+	String explanation,
+	String shortExplanation,
+	TransactionType type,
+	AccountDTO account,
+	CategoryDTO category,
+	String parentId,
+	List<AccountTransactionDTO> children,
+	// GPT fields
+	BigDecimal gptAmount,
+	String gptDescription,
+	String gptExplanation,
+	TransactionType gptType,
+	String currency,
+	AccountDTO gptAccount
+) {
 	public String getShortDescription() {
-		return description != null ? description.length() > 40 ? description.substring(0, 40) + "..." : description
+		// Prioritize GPT description over original description
+		String primaryDescription = gptDescription != null && !gptDescription.trim().isEmpty() ? gptDescription : description;
+		return primaryDescription != null ? primaryDescription.length() > 40 ? primaryDescription.substring(0, 40) + "..." : primaryDescription
 				: null;
 	}
 
 	public String getShortExplanation() {
-		return explanation != null ? explanation.length() > 60 ? explanation.substring(0, 60) + "..." : explanation
+		// Prioritize GPT explanation over original explanation
+		String primaryExplanation = gptExplanation != null && !gptExplanation.trim().isEmpty() ? gptExplanation : explanation;
+		return primaryExplanation != null ? primaryExplanation.length() > 60 ? primaryExplanation.substring(0, 60) + "..." : primaryExplanation
 				: null;
 	}
 

@@ -410,20 +410,26 @@ public class AccountTransactionService {
 			                .map(accountTransactionMapper::toDTO)
 			                .toList();
 
-			        return new AccountTransactionDTO(
-			            tx.getId(),
-			            tx.getDate(),
-			            tx.getAmount(),
-			            tx.getDescription(),
-			            null, // shortDescription handled inside record
-			            tx.getExplanation(),
-			            null, // shortExplanation handled inside record
-			            tx.getType(),
-			            accountMapper.toDTO(tx.getAccount()),
-			            categoryMapper.toDTO(tx.getCategory()),
-			            tx.getParent(),
-			            children
-			        );
+		        return new AccountTransactionDTO(
+		            tx.getId(),
+		            tx.getDate(),
+		            tx.getAmount(),
+		            tx.getDescription(),
+		            null, // shortDescription handled inside record
+		            tx.getExplanation(),
+		            null, // shortExplanation handled inside record
+		            tx.getType(),
+		            accountMapper.toDTO(tx.getAccount()),
+		            categoryMapper.toDTO(tx.getCategory()),
+		            tx.getParent(),
+		            children,
+		            tx.getGptAmount(),
+		            tx.getGptDescription(),
+		            tx.getGptExplanation(),
+		            tx.getGptType(),
+		            tx.getCurrency(),
+		            accountMapper.toDTO(tx.getGptAccount())
+		        );
 			    })
 			    .toList();
 		return new PageImpl<>(formatted, pageable, page.getTotalElements());

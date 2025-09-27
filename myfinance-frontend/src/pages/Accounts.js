@@ -1,8 +1,108 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import api from "./../auth/api";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
 import { useNavigate } from "react-router-dom";
+
+const inputClass = "border px-3 py-2 rounded w-full text-sm";
+
+// Separate AccountModal component to prevent re-renders
+const AccountModal = React.memo(({ 
+	isEdit, 
+	data, 
+	setData, 
+	onSave, 
+	onCancel, 
+	institutions, 
+	accountTypes 
+}) => {
+	useEffect(() => {
+		const listener = (e) => {
+			if (e.key === "Escape") {
+				onCancel();
+			}
+			if (e.key === "Enter" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "SELECT") {
+				e.preventDefault();
+				onSave();
+			}
+		};
+		document.addEventListener("keydown", listener);
+		return () => document.removeEventListener("keydown", listener);
+	}, [onSave, onCancel]);
+
+	return (
+		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+			<div className="bg-white p-6 rounded w-full max-w-lg space-y-4">
+				<h3 className="text-lg font-semibold">{isEdit ? "Edit" : "Add"} Account</h3>
+				<form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-4">
+
+					<input
+						className={inputClass}
+						placeholder="Name"
+						value={data.name}
+						onChange={(e) => setData({ ...data, name: e.target.value })}
+					/>
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+						<select className={inputClass} value={data.institutionId} onChange={(e) => setData({ ...data, institutionId: e.target.value })}>
+							<option value="">Institution</option>
+							{institutions.map((inst) => (
+								<option key={inst.id} value={inst.id}>{inst.name}</option>
+							))}
+						</select>
+						<select className={inputClass} value={data.accountTypeId} onChange={(e) => setData({ ...data, accountTypeId: e.target.value })}>
+							<option value="">Account Type</option>
+							{accountTypes.map((type) => (
+								<option key={type.id} value={type.id}>{type.name}</option>
+							))}
+						</select>
+						<input
+							type="text"
+							inputMode="decimal"
+							autoFocus
+							className={inputClass}
+							placeholder="Balance"
+							value={data.balance}
+							onChange={(e) => setData({ ...data, balance: e.target.value })}
+						/>
+					</div>
+
+					{/* Account Identifier Fields */}
+					<div className="space-y-3 border-t pt-4">
+						<h4 className="text-sm font-medium text-gray-700 flex items-center">
+							<span className="mr-2">🤖</span> Transaction Matching Identifiers
+						</h4>
+						<input
+							className={inputClass}
+							placeholder="Account Number (e.g., XXXX1234, 5678)"
+							value={data.accountNumber}
+							onChange={(e) => setData({ ...data, accountNumber: e.target.value })}
+							title="Account/card numbers that appear in transaction text"
+						/>
+						<input
+							className={inputClass}
+							placeholder="Keywords (comma-separated, e.g., hdfc,bank,savings,netbanking)"
+							value={data.accountKeywords}
+							onChange={(e) => setData({ ...data, accountKeywords: e.target.value })}
+							title="Keywords that might appear in transaction text"
+						/>
+						<input
+							className={inputClass}
+							placeholder="Aliases (comma-separated, e.g., HDFC SAV,HDFC Savings)"
+							value={data.accountAliases}
+							onChange={(e) => setData({ ...data, accountAliases: e.target.value })}
+							title="Alternative names or abbreviations for this account"
+						/>
+					</div>
+
+					<div className="flex justify-end space-x-2">
+						<button type="button" onClick={onCancel} className="px-4 py-2 border rounded">Cancel</button>
+						<button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	);
+});
 
 export default function Accounts() {
 	const [accounts, setAccounts] = useState([]);
@@ -20,6 +120,9 @@ export default function Accounts() {
 		balance: "",
 		institutionId: "",
 		accountTypeId: "",
+		accountNumber: "",
+		accountKeywords: "",
+		accountAliases: "",
 	});
 
 	useEffect(() => {
@@ -50,6 +153,9 @@ export default function Accounts() {
 		balance: "",
 		institutionId: "",
 		accountTypeId: "",
+		accountNumber: "",
+		accountKeywords: "",
+		accountAliases: "",
 	});
 
 	NProgress.configure({ showSpinner: false });
@@ -81,7 +187,7 @@ export default function Accounts() {
 		}
 	};
 
-	const handleAdd = async () => {
+	const handleAdd = useCallback(async () => {
 		setLoading(true);
 		NProgress.start();
 		try {
@@ -90,8 +196,11 @@ export default function Accounts() {
 				balance: parseFloat(newAccount.balance), // ✅ parse on save
 				institution: { id: newAccount.institutionId },
 				accountType: { id: newAccount.accountTypeId },
+				accountNumber: newAccount.accountNumber || null,
+				accountKeywords: newAccount.accountKeywords || null,
+				accountAliases: newAccount.accountAliases || null,
 			});
-			setNewAccount({ name: "", balance: "", institutionId: "", accountTypeId: "" });
+			setNewAccount({ name: "", balance: "", institutionId: "", accountTypeId: "", accountNumber: "", accountKeywords: "", accountAliases: "" });
 			setShowAddModal(false);
 			fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
 		} catch (err) {
@@ -106,7 +215,7 @@ export default function Accounts() {
 			NProgress.done();
 			setLoading(false);
 		}
-	};
+	}, [newAccount, selectedAccountTypeId, selectedInstitutionId, navigate]);
 
 	const handleEditClick = (acc) => {
 		setEditData({
@@ -115,11 +224,14 @@ export default function Accounts() {
 			balance: acc.balance.toString(),
 			institutionId: acc.institution?.id || "",
 			accountTypeId: acc.accountType?.id || "",
+			accountNumber: acc.accountNumber || "",
+			accountKeywords: acc.accountKeywords || "",
+			accountAliases: acc.accountAliases || "",
 		});
 		setShowEditModal(true);
 	};
 
-	const handleEditSave = async () => {
+	const handleEditSave = useCallback(async () => {
 		setLoading(true);
 		NProgress.start();
 		try {
@@ -129,6 +241,9 @@ export default function Accounts() {
 				balance: parseFloat(editData.balance),
 				institution: { id: editData.institutionId },
 				accountType: { id: editData.accountTypeId },
+				accountNumber: editData.accountNumber || null,
+				accountKeywords: editData.accountKeywords || null,
+				accountAliases: editData.accountAliases || null,
 			});
 			setShowEditModal(false);
 			fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
@@ -144,7 +259,7 @@ export default function Accounts() {
 			NProgress.done();
 			setLoading(false);
 		}
-	};
+	}, [editData, selectedAccountTypeId, selectedInstitutionId, navigate]);
 
 	const handleDelete = async (id) => {
 		if (!window.confirm("Delete this account?")) return;
@@ -167,73 +282,6 @@ export default function Accounts() {
 			NProgress.done();
 			setLoading(false);
 		}
-	};
-
-	const inputClass = "border px-3 py-2 rounded w-full text-sm";
-
-	const AccountModal = ({ isEdit = false }) => {
-		const data = isEdit ? editData : newAccount;
-		const setData = isEdit ? setEditData : setNewAccount;
-		const saveFn = isEdit ? handleEditSave : handleAdd;
-
-		useEffect(() => {
-			const listener = (e) => {
-				if (e.key === "Escape") {
-					isEdit ? setShowEditModal(false) : setShowAddModal(false);
-				}
-				if (e.key === "Enter" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "SELECT") {
-					e.preventDefault();
-					saveFn();
-				}
-			};
-			document.addEventListener("keydown", listener);
-			return () => document.removeEventListener("keydown", listener);
-		}, []);
-
-
-		return (
-			<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-				<div className="bg-white p-6 rounded w-full max-w-lg space-y-4">
-					<h3 className="text-lg font-semibold">{isEdit ? "Edit" : "Add"} Account</h3>
-					<form onSubmit={(e) => { e.preventDefault(); saveFn(); }} className="space-y-4">
-
-						<input
-							className={inputClass}
-							placeholder="Name"
-							value={data.name}
-							onChange={(e) => setData({ ...data, name: e.target.value })}
-						/>
-						<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-							<select className={inputClass} value={data.institutionId} onChange={(e) => setData({ ...data, institutionId: e.target.value })}>
-								<option value="">Institution</option>
-								{institutions.map((inst) => (
-									<option key={inst.id} value={inst.id}>{inst.name}</option>
-								))}
-							</select>
-							<select className={inputClass} value={data.accountTypeId} onChange={(e) => setData({ ...data, accountTypeId: e.target.value })}>
-								<option value="">Account Type</option>
-								{accountTypes.map((type) => (
-									<option key={type.id} value={type.id}>{type.name}</option>
-								))}
-							</select>
-							<input
-								type="text"
-								inputMode="decimal"
-								autoFocus
-								className={inputClass}
-								placeholder="Balance"
-								value={data.balance}
-								onChange={(e) => setData({ ...data, balance: e.target.value })}
-							/>
-						</div>
-						<div className="flex justify-end space-x-2">
-							<button type="button" onClick={() => (isEdit ? setShowEditModal(false) : setShowAddModal(false))} className="px-4 py-2 border rounded">Cancel</button>
-							<button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
-						</div>
-					</form>
-				</div>
-			</div>
-		);
 	};
 
 	return (
@@ -274,6 +322,7 @@ export default function Accounts() {
 							<th className="px-4 py-2 border-b text-right">Balance</th>
 							<th className="px-4 py-2 border-b">Account Type</th>
 							<th className="px-4 py-2 border-b">Institution</th>
+							<th className="px-4 py-2 border-b">🤖 AI Identifiers</th>
 							<th className="px-4 py-2 border-b text-center">Update</th>
 							<th className="px-4 py-2 border-b text-center">Delete</th>
 						</tr>
@@ -282,18 +331,54 @@ export default function Accounts() {
 						{accounts.map((acc, index) => (
 							<tr key={acc.id} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
 								<td className="px-4 py-2 border-b">
-									<button
-										onClick={() => navigate(`/transactions?accountId=${acc.id}`)}
-										className="text-blue-600 hover:underline"
-									>
-										{acc.name}
-									</button>
+									<div className="flex items-center gap-2">
+										<button
+											onClick={() => navigate(`/transactions?accountId=${acc.id}`)}
+											className="text-blue-600 hover:underline"
+										>
+											{acc.name}
+										</button>
+										{(acc.accountNumber || acc.accountKeywords || acc.accountAliases) && (
+											<span 
+												className="text-xs bg-blue-100 text-blue-700 px-1 rounded" 
+												title={`AI Matching Configured: ${[
+													acc.accountNumber && 'Account Number',
+													acc.accountKeywords && 'Keywords', 
+													acc.accountAliases && 'Aliases'
+												].filter(Boolean).join(', ')}`}
+											>
+												🤖
+											</span>
+										)}
+									</div>
 								</td>
 								<td className="px-4 py-2 border-b text-right">
 									₹{acc.balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 								</td>
 								<td className="px-4 py-2 border-b">{acc.accountType?.name}</td>
 								<td className="px-4 py-2 border-b">{acc.institution?.name}</td>
+								<td className="px-4 py-2 border-b">
+									<div className="space-y-1 text-xs">
+										{acc.accountNumber && (
+											<div className="bg-blue-50 text-blue-700 px-2 py-1 rounded">
+												<strong>Number:</strong> {acc.accountNumber}
+											</div>
+										)}
+										{acc.accountKeywords && (
+											<div className="bg-green-50 text-green-700 px-2 py-1 rounded">
+												<strong>Keywords:</strong> {acc.accountKeywords.length > 30 ? acc.accountKeywords.substring(0, 30) + '...' : acc.accountKeywords}
+											</div>
+										)}
+										{acc.accountAliases && (
+											<div className="bg-purple-50 text-purple-700 px-2 py-1 rounded">
+												<strong>Aliases:</strong> {acc.accountAliases.length > 30 ? acc.accountAliases.substring(0, 30) + '...' : acc.accountAliases}
+											</div>
+										)}
+										{!acc.accountNumber && !acc.accountKeywords && !acc.accountAliases && (
+											<span className="text-gray-400 italic">Not configured</span>
+										)}
+									</div>
+								</td>
 								<td className="px-4 py-2 border-b text-center">
 									<button onClick={() => handleEditClick(acc)} className="text-blue-600 font-medium hover:underline">Edit</button>
 								</td>
@@ -306,8 +391,28 @@ export default function Accounts() {
 				</table>
 			</div>
 
-			{showAddModal && <AccountModal />}
-			{showEditModal && <AccountModal isEdit key={editData.id || "new"} />}
+			{showAddModal && (
+				<AccountModal 
+					isEdit={false}
+					data={newAccount}
+					setData={setNewAccount}
+					onSave={handleAdd}
+					onCancel={() => setShowAddModal(false)}
+					institutions={institutions}
+					accountTypes={accountTypes}
+				/>
+			)}
+			{showEditModal && (
+				<AccountModal 
+					isEdit={true}
+					data={editData}
+					setData={setEditData}
+					onSave={handleEditSave}
+					onCancel={() => setShowEditModal(false)}
+					institutions={institutions}
+					accountTypes={accountTypes}
+				/>
+			)}
 			{loading && (
 				<div className="fixed inset-0 bg-white bg-opacity-40 z-50 flex items-center justify-center">
 					<div className="loader ease-linear rounded-full border-4 border-t-4 border-blue-500 h-10 w-10 animate-spin"></div>

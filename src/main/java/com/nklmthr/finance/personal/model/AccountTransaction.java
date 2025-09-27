@@ -6,7 +6,6 @@ import java.time.LocalDateTime;
 import org.hibernate.annotations.UuidGenerator;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.nklmthr.finance.personal.enums.TransactionType;
 
 import jakarta.persistence.Column;
@@ -15,6 +14,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -99,5 +99,31 @@ public class AccountTransaction {
 
 	@Column
 	private String dataVersionId;
+	
+	@Column
+	private String currency;
+	
+	@Lob
+    @Column(columnDefinition = "MEDIUMTEXT")
+	@ToString.Exclude
+	private String rawData;
+	
+	@Column(precision = 19, scale = 4)
+	private BigDecimal gptAmount;
+
+	@Column(length = 1000)
+	private String gptDescription;
+
+	@Column(length = 2000)
+	private String gptExplanation;
+
+	@Enumerated(EnumType.STRING)
+	@Column(length = 50)
+	private TransactionType gptType;
+
+	@ManyToOne
+	@JoinColumn(name = "gpt_account_id", nullable = false)
+	@ToString.Exclude
+	private Account gptAccount;
 
 }

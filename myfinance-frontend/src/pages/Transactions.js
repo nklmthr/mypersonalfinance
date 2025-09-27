@@ -601,23 +601,73 @@ export default function Transactions() {
 				<div className="flex flex-col">
 					<div className="flex items-center gap-1 truncate font-medium text-gray-800">
 						<span className="truncate">{tx.shortDescription}</span>
-						{(tx.shortDescription !== tx.description ||
-							tx.shortExplanation !== tx.explanation) && (
+						{(tx.gptDescription || tx.gptExplanation || tx.gptAmount || tx.gptType || tx.currency || tx.gptAccount) && (
+							<span className="text-xs bg-blue-100 text-blue-700 px-1 rounded ml-1" title="GPT Analysis Available">🤖</span>
+						)}
+						{(tx.gptDescription || tx.gptExplanation || tx.gptAmount || tx.gptType || tx.currency || tx.gptAccount ||
+							(tx.gptDescription || tx.description) !== tx.shortDescription ||
+							(tx.gptExplanation || tx.explanation) !== tx.shortExplanation) && (
 								<button
 									title="View full description"
 									onClick={() =>
 										setModalContent({
-											title: "Details",
+											title: "Transaction Details",
 											content: (
-												<>
-													<p>
-														<strong>Description:</strong> {tx.description}
-													</p>
-													<p>
-														<strong>Explanation:</strong>{" "}
-														{tx.explanation || "(None)"}
-													</p>
-												</>
+												<div className="space-y-4">
+													{/* Primary Data (GPT-prioritized) */}
+													<div className="border-b pb-3">
+														<h4 className="font-semibold text-gray-700 mb-2">Transaction Details</h4>
+														<p className="mb-2">
+															<strong>Description:</strong> {tx.gptDescription || tx.description}
+															{tx.gptDescription && tx.gptDescription !== tx.description && (
+																<span className="text-xs bg-blue-100 text-blue-700 px-1 rounded ml-1">🤖 GPT</span>
+															)}
+														</p>
+														<p className="mb-2">
+															<strong>Amount:</strong> {tx.currency || "₹"}{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.type})
+															{tx.gptAmount && tx.gptAmount !== tx.amount && (
+																<div className="text-sm text-blue-600 mt-1">
+																	🤖 GPT Amount: {tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} {tx.gptType && tx.gptType !== tx.type && `(${tx.gptType})`}
+																</div>
+															)}
+														</p>
+														<p className="mb-2">
+															<strong>Explanation:</strong> {tx.gptExplanation || tx.explanation || "(None)"}
+															{tx.gptExplanation && tx.gptExplanation !== tx.explanation && (
+																<span className="text-xs bg-blue-100 text-blue-700 px-1 rounded ml-1">🤖 GPT</span>
+															)}
+														</p>
+														{tx.gptAccount && (
+															<p>
+																<strong>GPT Matched Account:</strong> {tx.gptAccount.name} ({tx.gptAccount.institution?.name})
+															</p>
+														)}
+													</div>
+
+													{/* Alternative/Original Data (only show if different from primary) */}
+													{((tx.gptDescription && tx.gptDescription !== tx.description && tx.description) || 
+													  (tx.gptExplanation && tx.gptExplanation !== tx.explanation && tx.explanation) ||
+													  tx.currency) && (
+														<div className="bg-gray-50 p-3 rounded">
+															<h4 className="font-semibold text-gray-600 mb-2">Alternative Data</h4>
+															{tx.gptDescription && tx.gptDescription !== tx.description && tx.description && (
+																<p className="mb-2">
+																	<strong>Original Description:</strong> {tx.description}
+																</p>
+															)}
+															{tx.gptExplanation && tx.gptExplanation !== tx.explanation && tx.explanation && (
+																<p className="mb-2">
+																	<strong>Original Explanation:</strong> {tx.explanation}
+																</p>
+															)}
+															{tx.currency && (
+																<p>
+																	<strong>Currency:</strong> {tx.currency}
+																</p>
+															)}
+														</div>
+													)}
+												</div>
 											),
 										})
 									}
@@ -628,6 +678,18 @@ export default function Transactions() {
 					</div>
 					<div className="text-xs text-gray-500 break-words">
 						{tx.shortExplanation}
+						{/* Show original description if GPT description is being used as primary */}
+						{tx.gptDescription && tx.gptDescription !== tx.description && tx.description && (
+							<div className="text-gray-400 mt-1">
+								Original: {tx.description.length > 40 ? tx.description.substring(0, 40) + "..." : tx.description}
+							</div>
+						)}
+						{/* Show original explanation if GPT explanation is being used as primary */}
+						{tx.gptExplanation && tx.gptExplanation !== tx.explanation && tx.explanation && (
+							<div className="text-gray-400 mt-1 italic">
+								Original: {tx.explanation.length > 50 ? tx.explanation.substring(0, 50) + "..." : tx.explanation}
+							</div>
+						)}
 					</div>
 				</div>
 
@@ -636,7 +698,7 @@ export default function Transactions() {
 						className={`font-semibold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"
 							}`}
 					>
-						₹
+						{tx.currency || "₹"}
 						{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString(
 							"en-IN",
 							{ minimumFractionDigits: 2 }
@@ -645,6 +707,12 @@ export default function Transactions() {
 					<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">
 						{tx.type}
 					</span>
+					{tx.gptAmount && tx.gptAmount !== tx.amount && (
+						<div className="text-xs text-blue-600 mt-1">
+							🤖 GPT: {tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+							{tx.gptType && tx.gptType !== tx.type && ` (${tx.gptType})`}
+						</div>
+					)}
 					<br />
 					<span className="text-xs text-gray-500">{tx.account?.name}</span>
 				</div>

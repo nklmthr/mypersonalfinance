@@ -86,7 +86,10 @@ public class AccountService {
         Account updatedAccount = accountMapper.toEntity(updatedAccountDTO);
         account.setName(updatedAccount.getName());
         account.setBalance(updatedAccount.getBalance());
-
+        account.setAccountNumber(updatedAccount.getAccountNumber());
+        account.setAccountKeywords(updatedAccount.getAccountKeywords());
+        account.setAccountAliases(updatedAccount.getAccountAliases());
+        
         if (updatedAccount.getInstitution() != null) {
             account.setInstitution(updatedAccount.getInstitution());
         }
@@ -142,6 +145,11 @@ public class AccountService {
                 .orElseThrow(() -> new RuntimeException("Account not found with name: " + accountName));
     }
 
+    public List<AccountDTO> getAllAccounts(AppUser appUser) {
+    			logger.info("Fetching all accounts for user: {}", appUser.getUsername());
+		return accountMapper.toDTOList(accountRepository.findAllByAppUser(appUser, Sort.by("name").ascending()));
+    }
+    
     public void save(AccountDTO accountDTO) {
         AppUser appUser = appUserService.getCurrentUser();
         Account account = accountMapper.toEntity(accountDTO);
