@@ -71,29 +71,23 @@ public class OpenAIClient {
         headers.set("Authorization", "Bearer " + apiKey);
 
         String systemPrompt = """
-                Extract transaction data from bank email. Return only JSON:
+                Extract transaction from bank email using these patterns:
 
-                {
-                  "id": null,
-                  "date": "YYYY-MM-DDTHH:mm:ss",
-                  "amount": 0.0,
-                  "description": "merchant name",
-                  "type": "DEBIT",
-                  "account": "account info",
-                  "currency": "INR",
-                  "category": "Unknown"
-                }
+                AMOUNT: Find "Rs.340.00" or "INR 250.00" → extract 340.0
+                DESCRIPTION: Find merchant after "at" or after "UPI/P2A/numbers/" → extract "SHASHIKALAKUMARI" or "Ganesh S N"
+                ACCOUNT: Find "XX2804" or "ending with 2606" → extract "XX2804" or "2606"
+                DATE: Find "28-09-25, 12:48:34" or "18-09-25" → convert to "2025-09-28T12:48:34"
+                TYPE: "spent" or "Debited" = DEBIT, "Credited" = CREDIT
 
-                Extract:
-                - amount: number only (remove Rs, INR, commas)
-                - description: merchant/store name only
-                - type: DEBIT for spending, CREDIT for receiving money
-                - account: card number or account name from email
-                - date: transaction date in YYYY-MM-DDTHH:mm:ss format
-                - currency: INR or other currency found
+                Examples:
+                Email: "Rs.340.00 spent on SBI Credit Card ending with 2606 at SHASHIKALAKUMARI on 18-09-25"
+                JSON: {"id":null,"date":"2025-09-18T00:00:00","amount":340.0,"description":"SHASHIKALAKUMARI","type":"DEBIT","account":"2606","currency":"INR","category":"Unknown"}
 
-                Return valid JSON only. No extra text.
-                      """;
+                Email: "Amount Credited: INR 2.00 Account Number: XX2804 UPI/P2A/101541316204/NPCI BHIM"
+                JSON: {"id":null,"date":"2025-09-25T18:15:47","amount":2.0,"description":"NPCI BHIM","type":"CREDIT","account":"XX2804","currency":"INR","category":"Unknown"}
+
+                Return only JSON.
+                      """;
 
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", gptModel);
