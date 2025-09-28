@@ -46,6 +46,20 @@ public class OpenAIClient {
     @Autowired
     private AccountService accountService;
 
+    public static void main(String[] args) {
+        OpenAIClient impl = new OpenAIClient();
+        impl.host = "http://localhost:1234";
+        impl.gptModel = "nuextract-v1.5";
+        impl.apiKey = "empty";
+        String emailText =
+                """
+                28-09-2025 Dear Nikhil Mathur, Here's the summary of your transaction: Amount Debited: INR 250.00 Account Number: XX2804 Date & Time: 28-09-25, 12:48:34 IST Transaction Info: UPI/P2A/563748979856/Ganesh S N If this transaction was not initiated by you: To block UPI: SMS BLOCKUPI <Customer ID> to +919951860002 from your registered mobile number. Call us at: 18001035577 (Toll Free) 18604195555 (Charges Applicable) Always open to help you. Regards, Axis Bank Ltd. ****This is a system generated communication and does not require signature. **** E003598217_09_2024 Reach us at: CHAT WEB Support Mobile app INTERNET BANKING WHATSAPP BRANCH LOCATOR Copyright Axis Bank Ltd. All rights reserved. Terms & Conditions apply. Please do not share your Internet Banking details, such as user ID/password or your Credit/Debit Card number/CVV/OTP with anyone, either over phone or through email. RBI never deals with individuals for Savings Account, Current Account, Credit Card, Debit Card, etc. Don't be victim to such offers coming to you on phone or email in the name of RBI. Do not click on Links from unknown/unsecure Sources that seek your confidential information. This email is confidential. It may also be legally privileged. If you are not the addressee, you may not copy, forward, disclose or use any part of it. Internet communications cannot be guaranteed to be timely, secure, error or virus-free. The sender does not accept liability for any errors or omissions. We maintain strict security standards and procedures to prevent unauthorised access to information about you. Know more >> Untitled 28-09-2025 Dear Nikhil Mathur, Here's the summary of your transaction: Amount Debited: INR 250.00 Account Number: XX2804 Date & Time: 28-09-25, 12:48:34 IST Transaction Info: UPI/P2A/563748979856/Ganesh S N If this transaction was not initiated by you: To block UPI: SMS BLOCKUPI <Customer ID> to +919951860002 from your registered mobile number. Call us at: 18001035577 (Toll Free) 18604195555 (Charges Applicable) Always open to help you. Regards, Axis Bank Ltd. ****This is a system generated communication and does not require signature. **** E003598217_09_2024 Reach us at: CHAT WEB Support Mobile app INTERNET BANKING WHATSAPP BRANCH LOCATOR Copyright Axis Bank Ltd. All rights reserved. Terms & Conditions apply. Please do not share your Internet Banking details, such as user ID/password or your Credit/Debit Card number/CVV/OTP with anyone, either over phone or through email. RBI never deals with individuals for Savings Account, Current Account, Credit Card, Debit Card, etc. Don't be victim to such offers coming to you on phone or email in the name of RBI. Do not click on Links from unknown/unsecure Sources that seek your confidential information. This email is confidential. It may also be legally privileged. If you are not the addressee, you may not copy, forward, disclose or use any part of it. Internet communications cannot be guaranteed to be timely, secure, error or virus-free. The sender does not accept liability for any errors or omissions. We maintain strict security standards and procedures to prevent unauthorised access to information about you. Know more >>
+                """;
+
+        String response = impl.callOpenAI(emailText);
+        System.out.println(response);
+    }
+
     /**
      * Calls the OpenAI/OSS model and returns a pure JSON string
      */
@@ -57,32 +71,29 @@ public class OpenAIClient {
         headers.set("Authorization", "Bearer " + apiKey);
 
         String systemPrompt = """
-            You are a financial data extraction expert.
-            Extract structured transaction details from raw bank/credit card email text.
+                Extract transaction data from bank email. Return only JSON:
 
-            ⚠️ Important:
-            - Always respond with valid JSON ONLY (no Markdown, no text outside JSON).
-            - The JSON must exactly match this schema:
+                {
+                  "id": null,
+                  "date": "YYYY-MM-DDTHH:mm:ss",
+                  "amount": 0.0,
+                  "description": "merchant name",
+                  "type": "DEBIT",
+                  "account": "account info",
+                  "currency": "INR",
+                  "category": "Unknown"
+                }
 
-            {
-              "id": null,
-              "date": "YYYY-MM-DDTHH:mm:ss",
-              "amount": 0.0,
-              "description": "...",
-              "type": "DEBIT | CREDIT",
-              "account": "...",
-              "currency": "...",
-              "category": "..."
-            }
+                Extract:
+                - amount: number only (remove Rs, INR, commas)
+                - description: merchant/store name only
+                - type: DEBIT for spending, CREDIT for receiving money
+                - account: card number or account name from email
+                - date: transaction date in YYYY-MM-DDTHH:mm:ss format
+                - currency: INR or other currency found
 
-            Rules:
-            - Use ISO 8601 format for date: YYYY-MM-DDTHH:mm:ss
-            - Amount must be numeric (no commas, no currency symbols).
-            - "description" must contain ONLY the merchant/beneficiary name followed by any UPI/reference/transaction IDs.
-            - If data is missing, set it as "Unknown".
-            - "account" must extract as much detail as possible including any card/account numbers.
-            - Any UPI/reference/transaction IDs should be appended at the end of description.
-        """;
+                Return valid JSON only. No extra text.
+                      """;
 
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", gptModel);
@@ -90,7 +101,40 @@ public class OpenAIClient {
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", prompt)
         ));
-        requestBody.put("response_format", Map.of("type", "json_schema"));
+
+        Map<String, Object> schema = new HashMap<>();
+        schema.put("name", "transaction_extraction");
+        schema.put("schema", Map.of(
+            "type", "object",
+            "properties", Map.of(
+                "id", Map.of("type", "string", "nullable", true),
+                "date", Map.of(
+                    "type", "string",
+                    "description", "ISO 8601 date"
+                ),
+                "amount", Map.of("type", "number"),
+                "description", Map.of(
+                    "type", "string",
+                    "description", "where money was spent"
+                ),
+                "type", Map.of(
+                    "type", "string",
+                    "enum", List.of("DEBIT", "CREDIT"),
+                    "description", "is the money spent (DEBIT) or recieved(CREDIT)"
+                ),
+                "account", Map.of("type", "string", "description", "identifying the account from which transaction is done like Axis, SBI, ICICI, CSB bank including any account numbers"),
+                "currency", Map.of("type", "string", "description", "Currency of the transaction like INR, EUR, USD"),
+                "category", Map.of("type", "string")
+            ),
+            "required", List.of("date", "amount", "description", "type", "account", "currency")
+        ));
+
+
+        Map<String, Object> responseFormat = new HashMap<>();
+        responseFormat.put("type", "json_schema");
+        responseFormat.put("json_schema", schema);
+
+        requestBody.put("response_format", responseFormat);
 
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
@@ -134,26 +178,21 @@ public class OpenAIClient {
             }
 
             // ---- Description ----
+            String rawGptDescription = null;
             JsonNode gptDescriptionNode = parsedContent.get("description");
-            accountTransaction.setGptDescription(
-                    gptDescriptionNode != null && !gptDescriptionNode.isNull() ? gptDescriptionNode.asText() : null
-            );
-
-            // ---- Type ----
-            JsonNode gptTypeNode = parsedContent.get("type");
-            if (gptTypeNode != null && !gptTypeNode.isNull()) {
-                try {
-                    accountTransaction.setGptType(TransactionType.valueOf(gptTypeNode.asText()));
-                } catch (IllegalArgumentException e) {
-                    logger.warn("Invalid GPT type: {}", gptTypeNode.asText());
-                    accountTransaction.setGptType(null);
-                }
+            if (gptDescriptionNode != null && !gptDescriptionNode.isNull()) {
+                rawGptDescription = gptDescriptionNode.asText();
             }
+
+            accountTransaction.setGptDescription(rawGptDescription);
+
+            TransactionType type = TransactionType.valueOf(parsedContent.get("type").asText());
+            accountTransaction.setGptType(type);
 
             // ---- Currency ----
             JsonNode currencyNode = parsedContent.get("currency");
             accountTransaction.setCurrency(
-                    currencyNode != null && !currencyNode.isNull() ? currencyNode.asText() : null
+                    currencyNode != null && !currencyNode.isNull() ? normalizeCurrency(currencyNode.asText()) : null
             );
 
             // ---- Account Matching ----
@@ -169,11 +208,19 @@ public class OpenAIClient {
                 matchAndSetAccount(accountDetail, accountTransaction);
             } else {
                 logger.info("No account detail extracted from GPT response, skipping fuzzy matching");
+                accountTransaction.setGptAccount(accountTransaction.getAccount());
             }
 
         } catch (Exception e) {
             logger.error("Error processing GPT JSON response", e);
         }
+    }
+
+    private String normalizeCurrency(String currency) {
+        if (currency == null) return null;
+        String c = currency.trim().toUpperCase();
+        if (c.matches("(?i).*INR.*|.*RUP.*|.*RS\\.?")) return "INR";
+        return currency;
     }
 
     /**
