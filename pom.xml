@@ -170,6 +170,27 @@
 	</dependencies>
 
 	<build>
+	<resources>
+        <!-- Copy all resources, but don't filter .properties -->
+        <resource>
+            <directory>src/main/resources</directory>
+            <filtering>true</filtering>
+            <excludes>
+                <exclude>**/*.properties</exclude>
+            </excludes>
+        </resource>
+        <resource>
+            <directory>src/main/resources</directory>
+            <filtering>false</filtering>
+            <includes>
+                <include>**/*.properties</include>
+            </includes>
+        </resource>
+        <resource>
+            <directory>myfinance-frontend/build</directory>
+            <filtering>false</filtering>
+        </resource>
+    </resources>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
