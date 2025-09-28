@@ -71,32 +71,22 @@ public class OpenAIClient {
         headers.set("Authorization", "Bearer " + apiKey);
 
         String systemPrompt = """
-                Extract from bank email. Find these exact patterns:
+                Extract transaction from bank email using these patterns:
 
-                AMOUNT: "Rs.340.00" or "INR 250.00" → number only
-                DESCRIPTION: Look for merchant name in these patterns:
-                - "at MERCHANT" → extract MERCHANT
-                - "UPI/P2A/numbers/NAME" → extract NAME (last part after /)
-                - "Info: MERCHANT" → extract MERCHANT
-                - "Transaction Info: UPI/P2A/numbers/NAME" → extract NAME
-                ACCOUNT: "XX2804" or "ending with 2606" or "Credit Card 0434" → extract identifier
-                TYPE: "spent"/"Debited" = DEBIT, "Credited" = CREDIT
-                DATE: "28-09-25, 12:48:34" → "2025-09-28T12:48:34"
+                AMOUNT: Find "Rs.340.00" or "INR 250.00" → extract 340.0
+                DESCRIPTION: Find merchant after "at" or after "UPI/P2A/numbers/" → extract "SHASHIKALAKUMARI" or "Ganesh S N"
+                ACCOUNT: Find "XX2804" or "ending with 2606" → extract "XX2804" or "2606"
+                DATE: Find "28-09-25, 12:48:34" or "18-09-25" → convert to "2025-09-28T12:48:34"
+                TYPE: "spent" or "Debited" = DEBIT, "Credited" = CREDIT
 
                 Examples:
-                1. "Rs.340.00 spent on SBI Credit Card ending with 2606 at SHASHIKALAKUMARI on 18-09-25"
-                   → {"id":null,"date":"2025-09-18T00:00:00","amount":340.0,"description":"SHASHIKALAKUMARI","type":"DEBIT","account":"2606","currency":"INR","category":"Unknown"}
+                Email: "Rs.340.00 spent on SBI Credit Card ending with 2606 at SHASHIKALAKUMARI on 18-09-25"
+                JSON: {"id":null,"date":"2025-09-18T00:00:00","amount":340.0,"description":"SHASHIKALAKUMARI","type":"DEBIT","account":"2606","currency":"INR","category":"Unknown"}
 
-                2. "Amount Debited: INR 250.00 Account Number: XX2804 Transaction Info: UPI/P2A/563748979856/Ganesh S N"
-                   → {"id":null,"date":"2025-09-28T12:48:34","amount":250.0,"description":"Ganesh S N","type":"DEBIT","account":"XX2804","currency":"INR","category":"Unknown"}
+                Email: "Amount Credited: INR 2.00 Account Number: XX2804 UPI/P2A/101541316204/NPCI BHIM"
+                JSON: {"id":null,"date":"2025-09-25T18:15:47","amount":2.0,"description":"NPCI BHIM","type":"CREDIT","account":"XX2804","currency":"INR","category":"Unknown"}
 
-                3. "INR 409.00 on Sep 24, 2025 Info: BLINK COMMERCE PVT LTD Credit Card XX9057"
-                   → {"id":null,"date":"2025-09-24T10:19:12","amount":409.0,"description":"BLINK COMMERCE PVT LTD","type":"DEBIT","account":"XX9057","currency":"INR","category":"Unknown"}
-
-                4. "refund for Rs.365.00 Visa Credit Card ending with 9057"
-                   → {"id":null,"date":"2025-09-24T00:00:00","amount":365.0,"description":"Amazon Refund","type":"CREDIT","account":"9057","currency":"INR","category":"Unknown"}
-
-                Return JSON only.
+                Return only JSON.
                       """;
 
         Map<String, Object> requestBody = new HashMap<>();
