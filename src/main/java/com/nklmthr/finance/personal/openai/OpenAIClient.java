@@ -90,7 +90,7 @@ public class OpenAIClient {
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", prompt)
         ));
-        requestBody.put("response_format", Map.of("type", "json_object"));
+        requestBody.put("response_format", Map.of("type", "json_schema"));
 
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
