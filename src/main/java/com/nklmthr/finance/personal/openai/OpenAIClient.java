@@ -30,14 +30,14 @@ import com.nklmthr.finance.personal.service.AccountService;
 @Service
 public class OpenAIClient {
 
-    @Value("${openai.gpt-os-20b.host}")
-    private String host;
+    @Value("${openai.gpt-model-openAIHost}")
+    private String openAIHost;
 
-    @Value("${gpt-model}")
-    private String gptModel;
+    @Value("${openai.gpt-model}")
+    private String openAIModel;
 
-    @Value("${openai.api.key}")
-    private String apiKey;
+    @Value("${openai.gpt-model-api-key}")
+    private String openAIApiKey;
 
     private static final Logger logger = LoggerFactory.getLogger(OpenAIClient.class);
     private static final FuzzyScore fuzzyScore = new FuzzyScore(Locale.ENGLISH);
@@ -48,9 +48,9 @@ public class OpenAIClient {
 
     public static void main(String[] args) {
         OpenAIClient impl = new OpenAIClient();
-        impl.host = "http://localhost:1234";
-        impl.gptModel = "nuextract-v1.5";
-        impl.apiKey = "empty";
+        impl.openAIHost = "http://localhost:1234";
+        impl.openAIModel = "nuextract-v1.5";
+        impl.openAIApiKey = "empty";
         String emailText =
                 """
                 28-09-2025 Dear Nikhil Mathur, Here's the summary of your transaction: Amount Debited: INR 250.00 Account Number: XX2804 Date & Time: 28-09-25, 12:48:34 IST Transaction Info: UPI/P2A/563748979856/Ganesh S N If this transaction was not initiated by you: To block UPI: SMS BLOCKUPI <Customer ID> to +919951860002 from your registered mobile number. Call us at: 18001035577 (Toll Free) 18604195555 (Charges Applicable) Always open to help you. Regards, Axis Bank Ltd. ****This is a system generated communication and does not require signature. **** E003598217_09_2024 Reach us at: CHAT WEB Support Mobile app INTERNET BANKING WHATSAPP BRANCH LOCATOR Copyright Axis Bank Ltd. All rights reserved. Terms & Conditions apply. Please do not share your Internet Banking details, such as user ID/password or your Credit/Debit Card number/CVV/OTP with anyone, either over phone or through email. RBI never deals with individuals for Savings Account, Current Account, Credit Card, Debit Card, etc. Don't be victim to such offers coming to you on phone or email in the name of RBI. Do not click on Links from unknown/unsecure Sources that seek your confidential information. This email is confidential. It may also be legally privileged. If you are not the addressee, you may not copy, forward, disclose or use any part of it. Internet communications cannot be guaranteed to be timely, secure, error or virus-free. The sender does not accept liability for any errors or omissions. We maintain strict security standards and procedures to prevent unauthorised access to information about you. Know more >> Untitled 28-09-2025 Dear Nikhil Mathur, Here's the summary of your transaction: Amount Debited: INR 250.00 Account Number: XX2804 Date & Time: 28-09-25, 12:48:34 IST Transaction Info: UPI/P2A/563748979856/Ganesh S N If this transaction was not initiated by you: To block UPI: SMS BLOCKUPI <Customer ID> to +919951860002 from your registered mobile number. Call us at: 18001035577 (Toll Free) 18604195555 (Charges Applicable) Always open to help you. Regards, Axis Bank Ltd. ****This is a system generated communication and does not require signature. **** E003598217_09_2024 Reach us at: CHAT WEB Support Mobile app INTERNET BANKING WHATSAPP BRANCH LOCATOR Copyright Axis Bank Ltd. All rights reserved. Terms & Conditions apply. Please do not share your Internet Banking details, such as user ID/password or your Credit/Debit Card number/CVV/OTP with anyone, either over phone or through email. RBI never deals with individuals for Savings Account, Current Account, Credit Card, Debit Card, etc. Don't be victim to such offers coming to you on phone or email in the name of RBI. Do not click on Links from unknown/unsecure Sources that seek your confidential information. This email is confidential. It may also be legally privileged. If you are not the addressee, you may not copy, forward, disclose or use any part of it. Internet communications cannot be guaranteed to be timely, secure, error or virus-free. The sender does not accept liability for any errors or omissions. We maintain strict security standards and procedures to prevent unauthorised access to information about you. Know more >>
@@ -68,7 +68,7 @@ public class OpenAIClient {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Authorization", "Bearer " + apiKey);
+        headers.set("Authorization", "Bearer " + openAIApiKey);
 
         String systemPrompt = """
                 Extract transaction from bank email using these patterns:
@@ -90,7 +90,7 @@ public class OpenAIClient {
                       """;
 
         Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("model", gptModel);
+        requestBody.put("model", openAIModel);
         requestBody.put("messages", List.of(
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", prompt)
@@ -133,7 +133,7 @@ public class OpenAIClient {
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
         ResponseEntity<String> response = restTemplate.exchange(
-                host + "/v1/chat/completions",
+                openAIHost + "/v1/chat/completions",
                 HttpMethod.POST,
                 requestEntity,
                 String.class

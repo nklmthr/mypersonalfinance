@@ -473,6 +473,20 @@ export default function Transactions() {
 	const debouncedSearch = useDebounce(search, 500);
 	const [refreshing, setRefreshing] = useState(false);
 
+	// ESC key handler for modal
+	useEffect(() => {
+		const handleEscKey = (e) => {
+			if (e.key === "Escape" && modalContent) {
+				setModalContent(null);
+			}
+		};
+		
+		if (modalContent) {
+			document.addEventListener("keydown", handleEscKey);
+			return () => document.removeEventListener("keydown", handleEscKey);
+		}
+	}, [modalContent]);
+
 	NProgress.configure({ showSpinner: false });
 
 	const toggleExpand = (id) => {

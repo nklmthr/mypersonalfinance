@@ -268,7 +268,12 @@ public class AccountTransactionService {
 	@Transactional
 	public AccountTransactionDTO save(AccountTransactionDTO transaction) {
 		AppUser appUser = appUserService.getCurrentUser();
-		return save(accountTransactionMapper.toEntity(transaction), appUser);
+		AccountTransaction entity = accountTransactionMapper.toEntity(transaction);
+		// For controller-created transactions, set gptAccount to the same as account
+		if (entity.getGptAccount() == null) {
+			entity.setGptAccount(entity.getAccount());
+		}
+		return save(entity, appUser);
 	}
 
 	@Transactional
