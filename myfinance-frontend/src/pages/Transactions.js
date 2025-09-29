@@ -82,60 +82,18 @@ function TransactionForm({
 				{/* Date */}
 				<div>
 					<label className="block text-sm font-medium mb-1">Date & Time</label>
-					<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-						{/* DateTime Picker */}
-						<div>
-							<input
-								type="datetime-local"
-								value={transaction.date ? transaction.date.substring(0, 16) : ""}
-								onChange={(e) =>
-									setTransaction((t) => ({ ...t, date: e.target.value }))
-								}
-								className="w-full border rounded px-3 py-2 text-sm"
-								title="Use calendar picker"
-							/>
-						</div>
-						{/* Text Input for flexible typing */}
-						<div>
-							<input
-								type="text"
-								placeholder="YYYY-MM-DD HH:MM or DD/MM/YYYY HH:MM"
-								value={transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : ""}
-								onChange={(e) => {
-									try {
-										// Try to parse various date formats
-										let parsedDate;
-										const value = e.target.value.trim();
-										
-										if (value.includes('/')) {
-											// DD/MM/YYYY HH:MM format
-											parsedDate = dayjs(value, "DD/MM/YYYY HH:mm");
-										} else if (value.includes('-')) {
-											// YYYY-MM-DD HH:MM format
-											parsedDate = dayjs(value, "YYYY-MM-DD HH:mm");
-										} else {
-											// Try default parsing
-											parsedDate = dayjs(value);
-										}
-										
-										if (parsedDate.isValid()) {
-											setTransaction((t) => ({ 
-												...t, 
-												date: parsedDate.format("YYYY-MM-DDTHH:mm:ss")
-											}));
-										}
-									} catch (error) {
-										// Invalid date, but don't clear the input to allow continued typing
-										console.log("Invalid date format:", e.target.value);
-									}
-								}}
-								className="w-full border rounded px-3 py-2 text-sm"
-								title="Type date manually (DD/MM/YYYY HH:MM or YYYY-MM-DD HH:MM)"
-							/>
-						</div>
-					</div>
+					<input
+						type="datetime-local"
+						value={transaction.date ? transaction.date.substring(0, 16) : ""}
+						onChange={(e) =>
+							setTransaction((t) => ({ ...t, date: e.target.value }))
+						}
+						className="w-full border rounded px-3 py-2"
+						required
+						title="You can type directly or use the calendar picker"
+					/>
 					<p className="text-xs text-gray-500 mt-1">
-						Use calendar picker or type manually (e.g., "28/09/2025 14:30" or "2025-09-28 14:30")
+						💡 Tip: You can type directly (e.g., "2025-09-28T14:30") or click the calendar icon
 					</p>
 				</div>
 
