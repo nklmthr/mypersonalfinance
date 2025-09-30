@@ -70,9 +70,73 @@ function TransactionForm({
 	const flattened = flattenCategories(treeCategories);
 
 	const submit = () => {
+		// Parse the date from local state before submitting
+		let finalDate = transaction.date;
+		
+		console.log("Submit - Original transaction.date:", transaction.date);
+		console.log("Submit - Current dateInputValue:", dateInputValue);
+		
+		if (dateInputValue.trim()) {
+			try {
+				let parsedDate;
+				const value = dateInputValue.trim();
+				
+				console.log("Attempting to parse date:", value);
+				
+				// Try DD/MM/YYYY HH:MM format first (most common)
+				if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}\s\d{1,2}:\d{2}$/)) {
+					console.log("Matching DD/MM/YYYY HH:MM format");
+					// Manual parsing for DD/MM/YYYY HH:MM
+					const [datePart, timePart] = value.split(' ');
+					const [day, month, year] = datePart.split('/');
+					const [hour, minute] = timePart.split(':');
+					parsedDate = dayjs(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute}:00`);
+				}
+				// Try DD/MM/YYYY format (without time)
+				else if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+					console.log("Matching DD/MM/YYYY format");
+					const [day, month, year] = value.split('/');
+					parsedDate = dayjs(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00`);
+				}
+				// Try YYYY-MM-DD HH:MM format
+				else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}\s\d{1,2}:\d{2}$/)) {
+					console.log("Matching YYYY-MM-DD HH:MM format");
+					const [datePart, timePart] = value.split(' ');
+					const [hour, minute] = timePart.split(':');
+					parsedDate = dayjs(`${datePart}T${hour.padStart(2, '0')}:${minute}:00`);
+				}
+				// Try YYYY-MM-DD format (without time)
+				else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
+					console.log("Matching YYYY-MM-DD format");
+					parsedDate = dayjs(`${value}T12:00:00`);
+				}
+				// Try natural language parsing as fallback
+				else {
+					console.log("Using natural language parsing");
+					parsedDate = dayjs(value);
+				}
+				
+				console.log("Parsed dayjs object:", parsedDate);
+				console.log("Is valid:", parsedDate.isValid());
+				
+				if (parsedDate.isValid()) {
+					finalDate = parsedDate.format("YYYY-MM-DDTHH:mm:ss");
+					console.log("Final formatted date:", finalDate);
+				} else {
+					console.log("Invalid parsed date, keeping original:", transaction.date);
+				}
+			} catch (error) {
+				console.log("Date parsing error on submit:", error);
+			}
+		} else {
+			console.log("Empty dateInputValue, using original date:", transaction.date);
+		}
+		
+		console.log("Final date being submitted:", finalDate);
 		onSubmit({
 			...transaction,
 			amount: parseFloat(transaction.amount),
+			date: finalDate,
 		});
 	};
 
@@ -108,20 +172,27 @@ function TransactionForm({
 								let parsedDate;
 								
 								// Try DD/MM/YYYY HH:MM format first (most common)
-								if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}$/)) {
-									parsedDate = dayjs(value, "DD/MM/YYYY HH:mm");
+								if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}\s\d{1,2}:\d{2}$/)) {
+									// Manual parsing for DD/MM/YYYY HH:MM
+									const [datePart, timePart] = value.split(' ');
+									const [day, month, year] = datePart.split('/');
+									const [hour, minute] = timePart.split(':');
+									parsedDate = dayjs(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute}:00`);
 								}
 								// Try DD/MM/YYYY format (without time)
 								else if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
-									parsedDate = dayjs(value, "DD/MM/YYYY").hour(12).minute(0);
+									const [day, month, year] = value.split('/');
+									parsedDate = dayjs(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00`);
 								}
 								// Try YYYY-MM-DD HH:MM format
-								else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2}$/)) {
-									parsedDate = dayjs(value, "YYYY-MM-DD HH:mm");
+								else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}\s\d{1,2}:\d{2}$/)) {
+									const [datePart, timePart] = value.split(' ');
+									const [hour, minute] = timePart.split(':');
+									parsedDate = dayjs(`${datePart}T${hour.padStart(2, '0')}:${minute}:00`);
 								}
 								// Try YYYY-MM-DD format (without time)
 								else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
-									parsedDate = dayjs(value, "YYYY-MM-DD").hour(12).minute(0);
+									parsedDate = dayjs(`${value}T12:00:00`);
 								}
 								// Try natural language parsing as fallback
 								else {
@@ -624,6 +695,8 @@ export default function Transactions() {
 			category: tx.categoryId ? { id: tx.categoryId } : null,
 			parent: tx.parentId ? { id: tx.parentId } : null,
 		};
+		console.log("Sending payload to backend:", payload);
+		console.log("Date being sent:", tx.date);
 		await api[method](url, payload);
 		await fetchData();
 		NProgress.done();
