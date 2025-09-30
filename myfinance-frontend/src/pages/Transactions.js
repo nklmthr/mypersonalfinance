@@ -83,17 +83,56 @@ function TransactionForm({
 				<div>
 					<label className="block text-sm font-medium mb-1">Date & Time</label>
 					<input
-						type="datetime-local"
-						value={transaction.date ? transaction.date.substring(0, 16) : ""}
-						onChange={(e) =>
-							setTransaction((t) => ({ ...t, date: e.target.value }))
-						}
+						type="text"
+						placeholder="DD/MM/YYYY HH:MM (e.g., 28/09/2025 14:30)"
+						value={transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : ""}
+						onChange={(e) => {
+							const value = e.target.value.trim();
+							if (!value) {
+								setTransaction((t) => ({ ...t, date: "" }));
+								return;
+							}
+
+							try {
+								let parsedDate;
+								
+								// Try DD/MM/YYYY HH:MM format first (most common)
+								if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}$/)) {
+									parsedDate = dayjs(value, "DD/MM/YYYY HH:mm");
+								}
+								// Try DD/MM/YYYY format (without time)
+								else if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+									parsedDate = dayjs(value, "DD/MM/YYYY").hour(12).minute(0);
+								}
+								// Try YYYY-MM-DD HH:MM format
+								else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{2}$/)) {
+									parsedDate = dayjs(value, "YYYY-MM-DD HH:mm");
+								}
+								// Try YYYY-MM-DD format (without time)
+								else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
+									parsedDate = dayjs(value, "YYYY-MM-DD").hour(12).minute(0);
+								}
+								// Try natural language parsing as fallback
+								else {
+									parsedDate = dayjs(value);
+								}
+								
+								if (parsedDate.isValid()) {
+									setTransaction((t) => ({ 
+										...t, 
+										date: parsedDate.format("YYYY-MM-DDTHH:mm:ss")
+									}));
+								}
+							} catch (error) {
+								// Allow continued typing even if parsing fails
+								console.log("Date parsing error:", error);
+							}
+						}}
 						className="w-full border rounded px-3 py-2"
 						required
-						title="You can type directly or use the calendar picker"
 					/>
 					<p className="text-xs text-gray-500 mt-1">
-						💡 Tip: You can type directly (e.g., "2025-09-28T14:30") or click the calendar icon
+						💡 Formats: "28/09/2025 14:30", "28/09/2025", "2025-09-28 14:30", or natural language
 					</p>
 				</div>
 
