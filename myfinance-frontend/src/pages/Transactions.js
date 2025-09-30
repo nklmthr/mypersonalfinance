@@ -85,8 +85,8 @@ function TransactionForm({
 					<input
 						type="text"
 						placeholder="DD/MM/YYYY HH:MM (e.g., 28/09/2025 14:30)"
-						value={transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : ""}
-						onChange={(e) => {
+						defaultValue={transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : ""}
+						onBlur={(e) => {
 							const value = e.target.value.trim();
 							if (!value) {
 								setTransaction((t) => ({ ...t, date: "" }));
@@ -122,10 +122,21 @@ function TransactionForm({
 										...t, 
 										date: parsedDate.format("YYYY-MM-DDTHH:mm:ss")
 									}));
+									// Update the input to show the formatted date
+									e.target.value = parsedDate.format("DD/MM/YYYY HH:mm");
+								} else {
+									// Show error styling or reset to original value
+									e.target.style.borderColor = "red";
+									setTimeout(() => {
+										e.target.style.borderColor = "";
+									}, 2000);
 								}
 							} catch (error) {
-								// Allow continued typing even if parsing fails
 								console.log("Date parsing error:", error);
+								e.target.style.borderColor = "red";
+								setTimeout(() => {
+									e.target.style.borderColor = "";
+								}, 2000);
 							}
 						}}
 						className="w-full border rounded px-3 py-2"
