@@ -50,6 +50,16 @@ function TransactionForm({
 	categories,
 	mode,
 }) {
+	// Local state for date input to handle typing vs validation
+	const [dateInputValue, setDateInputValue] = useState(
+		transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : ""
+	);
+
+	// Update local date input when transaction changes (for edit mode)
+	useEffect(() => {
+		setDateInputValue(transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : "");
+	}, [transaction.date]);
+
 	useEffect(() => {
 		const handler = (e) => e.key === "Escape" && onCancel();
 		document.addEventListener("keydown", handler);
@@ -85,7 +95,8 @@ function TransactionForm({
 					<input
 						type="text"
 						placeholder="DD/MM/YYYY HH:MM (e.g., 28/09/2025 14:30)"
-						defaultValue={transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : ""}
+						value={dateInputValue}
+						onChange={(e) => setDateInputValue(e.target.value)}
 						onBlur={(e) => {
 							const value = e.target.value.trim();
 							if (!value) {
@@ -122,8 +133,8 @@ function TransactionForm({
 										...t, 
 										date: parsedDate.format("YYYY-MM-DDTHH:mm:ss")
 									}));
-									// Update the input to show the formatted date
-									e.target.value = parsedDate.format("DD/MM/YYYY HH:mm");
+									// Update the local state to show the formatted date
+									setDateInputValue(parsedDate.format("DD/MM/YYYY HH:mm"));
 								} else {
 									// Show error styling or reset to original value
 									e.target.style.borderColor = "red";
