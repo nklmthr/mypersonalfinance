@@ -99,7 +99,7 @@ public class AccountTransactionService {
 		credit.setType(TransactionType.CREDIT);
 		credit.setCategory(categoryService.getTransferCategory());
 		credit.setAppUser(appUser);
-				
+		credit.setGptAccount(toAccount);
 		accountTransactionRepository.save(credit);
 	}
 

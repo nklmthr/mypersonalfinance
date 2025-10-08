@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
@@ -21,6 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.nklmthr.finance.personal.dto.SignupRequest;
+import com.nklmthr.finance.personal.dto.AuthRequest;
+import com.nklmthr.finance.personal.dto.AuthResponse;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.security.JwtUtil;
 import com.nklmthr.finance.personal.security.SecurityConfig;
@@ -28,8 +31,7 @@ import com.nklmthr.finance.personal.service.AppUserService;
 import com.nklmthr.finance.personal.service.gmail.GmailAuthHelper;
 
 import jakarta.validation.Valid;
-import lombok.AllArgsConstructor;
-import lombok.Data;
+ 
 
 @RestController
 @RequestMapping("/api")
@@ -55,14 +57,19 @@ public class AuthController {
 	private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
 	@PostMapping("/auth/login")
-	public ResponseEntity<?> login(@RequestBody AuthRequest request) {
-		Authentication authentication = authenticationManager
-				.authenticate(new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+	public ResponseEntity<?> login(@RequestBody @Valid AuthRequest request) {
+		try {
+			Authentication authentication = authenticationManager
+					.authenticate(new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
 
-		SecurityContextHolder.getContext().setAuthentication(authentication);
+			SecurityContextHolder.getContext().setAuthentication(authentication);
 
-		String token = jwtUtil.generateToken(request.getUsername());
-		return ResponseEntity.ok(new AuthResponse(token));
+			String token = jwtUtil.generateToken(request.getUsername());
+			return ResponseEntity.ok(new AuthResponse(token));
+		} catch (AuthenticationException ex) {
+			logger.warn("Failed login attempt for username: {}", request.getUsername());
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid credentials"));
+		}
 	}
 
 	@GetMapping("/auth/status")
@@ -78,7 +85,7 @@ public class AuthController {
 				getPasswordPatternSummary(signupRequest.getPassword()));
 
 		if (appUserService.findByUsername(signupRequest.getUsername()) != null) {
-			return ResponseEntity.status(HttpStatus.CONFLICT).body("Username already exists");
+			return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Username already exists"));
 		}
 
 		AppUser user = new AppUser();
@@ -127,7 +134,9 @@ public class AuthController {
 	public Map<String, Object> getProfile() {
 		AppUser user = appUserService.getCurrentUser();
 		logger.info("Fetching profile for user: {}", user.getUsername());
-		return Map.of("username", user.getUsername(), "email", user.getEmail(), "roles", user.getRole().split("\\,"));
+		String roleString = user.getRole();
+		String[] roles = roleString != null && !roleString.isEmpty() ? roleString.split("\\,") : new String[] { "USER" };
+		return Map.of("username", user.getUsername(), "email", user.getEmail(), "roles", roles);
 	}
 
 	private String getPasswordPatternSummary(String password) {
@@ -150,16 +159,4 @@ public class AuthController {
 		return String.format("len=%d, lower=%d, upper=%d, digits=%d, special=%d", password.length(), lower, upper,
 				digits, special);
 	}
-}
-
-@Data
-class AuthRequest {
-	private String username;
-	private String password;
-}
-
-@Data
-@AllArgsConstructor
-class AuthResponse {
-	private String token;
 }
