@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -32,7 +33,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountTransactionController {
 
-	private final AccountTransactionService transactionService;
+	@Autowired
+	private AccountTransactionService transactionService;
 
 	private static final Logger logger = LoggerFactory.getLogger(AccountTransactionController.class);
 
