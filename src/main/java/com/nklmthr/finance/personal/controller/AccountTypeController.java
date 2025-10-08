@@ -2,6 +2,7 @@ package com.nklmthr.finance.personal.controller;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,7 +23,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountTypeController {
 
-    private final AccountTypeService accountTypeService;
+    @Autowired
+    private AccountTypeService accountTypeService;
 
     @PostMapping
     public ResponseEntity<AccountTypeDTO> create(@RequestBody AccountTypeDTO accountTypeDTO) {
