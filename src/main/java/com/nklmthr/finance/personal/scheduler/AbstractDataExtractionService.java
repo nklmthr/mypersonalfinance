@@ -126,6 +126,13 @@ public abstract class AbstractDataExtractionService {
 						
 						accountTransaction.setDate(accountTransaction.getSourceTime());
 						accountTransaction = extractTransactionData(accountTransaction, emailContent, appUser);
+						
+						// Check if extraction was successful
+						if (accountTransaction == null) {
+							logger.warn("Failed to extract transaction data from email content, skipping message ID: {}", mess.getId());
+							continue;
+						}
+						
 						if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction, appUser)) {
 							logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
 						} else {
