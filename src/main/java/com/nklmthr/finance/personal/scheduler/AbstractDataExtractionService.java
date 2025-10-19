@@ -133,8 +133,10 @@ public abstract class AbstractDataExtractionService {
 							continue;
 						}
 						
-						if (accountTransactionService.isTransactionAlreadyPresent(accountTransaction, appUser)) {
+						var duplicateOpt = accountTransactionService.findDuplicate(accountTransaction, appUser);
+						if (duplicateOpt.isPresent()) {
 							logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
+							accountTransactionService.mergeSourceInfoIfNeeded(duplicateOpt.get(), accountTransaction);
 						} else {
 							openAIClient.getGptResponse(emailContent, accountTransaction);
 							logger.info("Saving transaction: {}", accountTransaction);

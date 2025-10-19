@@ -67,6 +67,12 @@ public class AccountTransactionService {
 
 	private static final Logger logger = LoggerFactory.getLogger(AccountTransactionService.class);
 
+	// Data version constants
+	private static final String DATA_VERSION_V11 = "V1.1";
+	private static final String DATA_VERSION_V20 = "V2.0";
+	// Fuzzy match time window in seconds
+	private static final long MATCH_TIME_WINDOW_SECONDS = 60;
+
 	@Transactional
 	public void createTransfer(TransferRequest request) throws Exception {
 		AppUser appUser = appUserService.getCurrentUser();
@@ -234,12 +240,18 @@ public class AccountTransactionService {
 		}
 		if (transaction.getType() == null) {
 			throw new IllegalArgumentException("Transaction type cannot be null");
+		} else if (transaction.getAmount() == null) {
+			throw new IllegalArgumentException("Transaction amount cannot be null");
 		} else {
 			if (transaction.getType().equals(TransactionType.DEBIT)) {
 				account.setBalance(account.getBalance().subtract(transaction.getAmount()));
 			} else {
 				account.setBalance(account.getBalance().add(transaction.getAmount()));
 			}
+		}
+		// Ensure data version for newly created transactions
+		if (transaction.getDataVersionId() == null) {
+			transaction.setDataVersionId(DATA_VERSION_V20);
 		}
 		transaction.setAppUser(appUser);
 		accountRepository.save(account);
@@ -299,37 +311,65 @@ public class AccountTransactionService {
 
 	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction, AppUser appUser) {
+		return findDuplicate(newTransaction, appUser)
+				.map(existing -> {
+					mergeSourceInfoIfNeeded(existing, newTransaction);
+					return true;
+				})
+				.orElse(false);
+	}
+
+	@Transactional
+	public Optional<AccountTransaction> findDuplicate(AccountTransaction newTransaction, AppUser appUser) {
+		// Null-safety guards
+		if (newTransaction == null || newTransaction.getSourceThreadId() == null) {
+			return Optional.empty();
+		}
+
 		List<AccountTransaction> existingAccTxnList = accountTransactionRepository
 				.findByAppUserAndSourceThreadId(appUser, newTransaction.getSourceThreadId());
 
-		if (existingAccTxnList.isEmpty()) {
-			newTransaction.setDataVersionId("V2.0");
-			return false;
+		if (existingAccTxnList == null || existingAccTxnList.isEmpty()) {
+			return Optional.empty();
 		}
 
+		// Exact sourceId match first
 		for (AccountTransaction existingTxn : existingAccTxnList) {
-			if (existingTxn.getSourceId() != null && existingTxn.getSourceId().equals(newTransaction.getSourceId())) {
-				return true;
+			String existingSourceId = existingTxn.getSourceId();
+			String newSourceId = newTransaction.getSourceId();
+			if (existingSourceId != null && existingSourceId.equals(newSourceId)) {
+				return Optional.of(existingTxn);
 			}
 		}
 
+		// Fuzzy match
 		for (AccountTransaction existingTxn : existingAccTxnList) {
-			boolean isDateClose = Math
-					.abs(ChronoUnit.SECONDS.between(existingTxn.getDate(), newTransaction.getDate())) <= 30;
-			boolean isAmountEqual = existingTxn.getAmount().compareTo(newTransaction.getAmount()) == 0;
-			boolean isDescriptionEqual = existingTxn.getDescription().equalsIgnoreCase(newTransaction.getDescription());
-			boolean isTypeEqual = existingTxn.getType().equals(newTransaction.getType());
+			boolean isDateClose = false;
+			if (existingTxn.getDate() != null && newTransaction.getDate() != null) {
+				isDateClose = Math.abs(ChronoUnit.SECONDS.between(existingTxn.getDate(), newTransaction.getDate())) <= MATCH_TIME_WINDOW_SECONDS;
+			}
+			boolean isAmountEqual = existingTxn.getAmount() != null && newTransaction.getAmount() != null
+					&& existingTxn.getAmount().compareTo(newTransaction.getAmount()) == 0;
+			String existingDesc = normalizeDescription(existingTxn.getDescription());
+			String newDesc = normalizeDescription(newTransaction.getDescription());
+			boolean isDescriptionEqual = StringUtils.isNotBlank(existingDesc) && existingDesc.equals(newDesc);
+			boolean isTypeEqual = existingTxn.getType() != null && existingTxn.getType().equals(newTransaction.getType());
+			boolean isAccountOk = true; // Only enforce when both present
+			if (existingTxn.getAccount() != null && newTransaction.getAccount() != null) {
+				isAccountOk = StringUtils.equals(existingTxn.getAccount().getId(), newTransaction.getAccount().getId());
+			}
+			boolean isCurrencyOk = true; // Only enforce when both present
+			if (existingTxn.getCurrency() != null && newTransaction.getCurrency() != null) {
+				isCurrencyOk = existingTxn.getCurrency().equals(newTransaction.getCurrency());
+			}
 
-			boolean isMatch = isDateClose && isAmountEqual && isDescriptionEqual && isTypeEqual;
+			boolean isMatch = isDateClose && isAmountEqual && isDescriptionEqual && isTypeEqual && isAccountOk && isCurrencyOk;
 			if (isMatch) {
-				if (existingTxn.getDataVersionId() == null || !existingTxn.getDataVersionId().equals("V1.1")) {
-					updateTransactionWithSourceInfo(existingTxn, newTransaction);
-				}
-				return true;
+				return Optional.of(existingTxn);
 			}
 		}
-		newTransaction.setDataVersionId("V2.0");
-		return false;
+
+		return Optional.empty();
 	}
 
 	@Transactional
@@ -337,15 +377,30 @@ public class AccountTransactionService {
 		existingTxn.setSourceId(newTransaction.getSourceId());
 		existingTxn.setSourceThreadId(newTransaction.getSourceThreadId());
 		existingTxn.setSourceTime(newTransaction.getSourceTime());
-		existingTxn.setDate(newTransaction.getDate());
-		existingTxn.setDataVersionId("V1.1");
+		// Do not overwrite the existing transaction date here
+		existingTxn.setDataVersionId(DATA_VERSION_V11);
 		accountTransactionRepository.save(existingTxn);
+	}
+
+	@Transactional
+	public void mergeSourceInfoIfNeeded(AccountTransaction existingTxn, AccountTransaction newTransaction) {
+		if (existingTxn == null || newTransaction == null) return;
+		if (existingTxn.getDataVersionId() == null || !existingTxn.getDataVersionId().equals(DATA_VERSION_V11)) {
+			updateTransactionWithSourceInfo(existingTxn, newTransaction);
+		}
 	}
 
 	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction) {
 		AppUser appUser = appUserService.getCurrentUser();
 		return isTransactionAlreadyPresent(newTransaction, appUser);
+	}
+
+	private String normalizeDescription(String input) {
+		if (input == null) return "";
+		String trimmed = input.trim();
+		if (trimmed.isEmpty()) return "";
+		return trimmed.replaceAll("\\s+", " ").toLowerCase();
 	}
 
 	public List<AccountTransactionDTO> getTransactionsByUploadedStatement(UploadedStatement statement) {

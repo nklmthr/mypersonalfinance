@@ -71,23 +71,15 @@ public class OpenAIClient {
         headers.set("Authorization", "Bearer " + openAIApiKey);
 
         String systemPrompt = """
+                You are a strict JSON generator. Return ONLY a single JSON object, no explanations, no markdown, no code fences.
                 Extract transaction from bank email using these patterns:
-
-                AMOUNT: Find "Rs.340.00" or "INR 250.00" → extract 340.0
-                DESCRIPTION: Find merchant after "at" or after "UPI/P2A/numbers/" → extract "SHASHIKALAKUMARI" or "Ganesh S N"
-                ACCOUNT: Find "XX2804" or "ending with 2606" → extract "XX2804" or "2606"
-                DATE: Find "28-09-25, 12:48:34" or "18-09-25" → convert to "2025-09-28T12:48:34"
-                TYPE: "spent" or "Debited" = DEBIT, "Credited" = CREDIT
-
-                Examples:
-                Email: "Rs.340.00 spent on SBI Credit Card ending with 2606 at SHASHIKALAKUMARI on 18-09-25"
-                JSON: {"id":null,"date":"2025-09-18T00:00:00","amount":340.0,"description":"SHASHIKALAKUMARI","type":"DEBIT","account":"2606","currency":"INR","category":"Unknown"}
-
-                Email: "Amount Credited: INR 2.00 Account Number: XX2804 UPI/P2A/101541316204/NPCI BHIM"
-                JSON: {"id":null,"date":"2025-09-25T18:15:47","amount":2.0,"description":"NPCI BHIM","type":"CREDIT","account":"XX2804","currency":"INR","category":"Unknown"}
-
-                Return only JSON.
-                      """;
+                - AMOUNT: Find examples like "Rs.340.00" or "INR 250.00" → extract 340.0
+                - DESCRIPTION: Merchant after "at" or after "UPI/P2A/numbers/" → e.g. "SHASHIKALAKUMARI" or "Ganesh S N"
+                - ACCOUNT: "XX2804" or "ending with 2606" → extract "XX2804" or "2606"
+                - DATE: e.g. "28-09-25, 12:48:34" or "18-09-25" → convert to ISO-8601 "2025-09-28T12:48:34"
+                - TYPE: "spent"/"Debited" = DEBIT, "Credited" = CREDIT
+                Output must be a single JSON object matching the required fields.
+                """;
 
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", openAIModel);
@@ -96,39 +88,33 @@ public class OpenAIClient {
                 Map.of("role", "user", "content", prompt)
         ));
 
+        // Use json_schema as required by OSS server (accepts 'json_schema' or 'text')
         Map<String, Object> schema = new HashMap<>();
         schema.put("name", "transaction_extraction");
         schema.put("schema", Map.of(
             "type", "object",
             "properties", Map.of(
                 "id", Map.of("type", "string", "nullable", true),
-                "date", Map.of(
-                    "type", "string",
-                    "description", "ISO 8601 date"
-                ),
+                "date", Map.of("type", "string", "description", "ISO 8601 date"),
                 "amount", Map.of("type", "number"),
-                "description", Map.of(
-                    "type", "string",
-                    "description", "where money was spent"
-                ),
-                "type", Map.of(
-                    "type", "string",
-                    "enum", List.of("DEBIT", "CREDIT"),
-                    "description", "is the money spent (DEBIT) or recieved(CREDIT)"
-                ),
+                "description", Map.of("type", "string", "description", "where money was spent"),
+                "type", Map.of("type", "string", "enum", List.of("DEBIT", "CREDIT"), "description", "is the money spent (DEBIT) or recieved(CREDIT)"),
                 "account", Map.of("type", "string", "description", "identifying the account from which transaction is done like Axis, SBI, ICICI, CSB bank including any account numbers"),
                 "currency", Map.of("type", "string", "description", "Currency of the transaction like INR, EUR, USD"),
                 "category", Map.of("type", "string")
             ),
             "required", List.of("date", "amount", "description", "type", "account", "currency")
         ));
-
+        schema.put("strict", true);
 
         Map<String, Object> responseFormat = new HashMap<>();
         responseFormat.put("type", "json_schema");
         responseFormat.put("json_schema", schema);
-
         requestBody.put("response_format", responseFormat);
+
+        // Make responses deterministic and bounded
+        requestBody.put("temperature", 0);
+        requestBody.put("max_tokens", 512);
 
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
@@ -141,10 +127,40 @@ public class OpenAIClient {
 
         try {
             JsonNode root = mapper.readTree(response.getBody());
-            return root.path("choices").get(0).path("message").path("content").asText();
+            // Prefer tool/function arguments if provided (some servers use this)
+            JsonNode toolArgs = root.path("choices").path(0).path("message").path("tool_calls").path(0).path("function").path("arguments");
+            if (!toolArgs.isMissingNode() && !toolArgs.isNull()) {
+                return toolArgs.toString();
+            }
+            String content = root.path("choices").path(0).path("message").path("content").asText();
+            return sanitizeToJson(content);
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse OpenAI response", e);
         }
+    }
+
+    /**
+     * Attempts to coerce an LLM response into a pure JSON object string.
+     * - Strips markdown code fences
+     * - Trims whitespace
+     * - Extracts the first {...} JSON object if extra text is present
+     */
+    private String sanitizeToJson(String content) {
+        if (content == null) return "{}";
+        String trimmed = content.trim();
+        // Strip common code fences like ```json ... ``` or ``` ... ```
+        if (trimmed.startsWith("```")) {
+            trimmed = trimmed.replaceAll("^```[a-zA-Z0-9]*\\n?", "").replaceAll("```$", "").trim();
+        }
+        // If still not a pure JSON object, try to extract the first {...}
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+            int start = trimmed.indexOf('{');
+            int end = trimmed.lastIndexOf('}');
+            if (start >= 0 && end > start) {
+                trimmed = trimmed.substring(start, end + 1);
+            }
+        }
+        return trimmed;
     }
 
     /**
@@ -156,7 +172,7 @@ public class OpenAIClient {
             accountTransaction.setRawData(emailContent);
 
             String response = callOpenAI(emailContent);
-            logger.info("OpenAI Response JSON: {}", response);
+            logger.info("OpenAI Response (raw/cleaned): {}", response);
 
             JsonNode parsedContent = mapper.readTree(response);
 
