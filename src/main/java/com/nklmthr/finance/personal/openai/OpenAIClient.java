@@ -54,25 +54,7 @@ public class OpenAIClient {
 
     public static void main(String[] args) {
         OpenAIClient impl = new OpenAIClient();
-		String envHost = System.getenv().getOrDefault("OPENAI_BASE_URL", "https://api.openai.com");
-		String envModel = System.getenv().getOrDefault("OPENAI_MODEL", "gpt-4o-mini");
-		String envKey = "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";
-		if (envKey == null || envKey.isBlank()) {
-			// Fallbacks commonly used in this project and local shells
-			envKey = System.getenv("prod_myFinance_key");
-		}
-		if (envKey == null || envKey.isBlank()) {
-			// Allow Java system properties too
-			envKey = System.getProperty("OPENAI_API_KEY", System.getProperty("prod_myFinance_key", ""));
-		}
-		if (envKey == null || envKey.isBlank()) {
-			System.err.println("OPENAI_API_KEY not set. Set env var OPENAI_API_KEY (or prod_myFinance_key) before running.");
-			return;
-		}
-		impl.openAIHost = envHost;
-		impl.openAIModel = envModel;
-		impl.openAIApiKey = envKey;
-        String emailText =
+		String emailText =
                 """
                 28-09-2025 Dear Nikhil Mathur, Here's the summary of your transaction: Amount Debited: INR 250.00 Account Number: XX2804 Date & Time: 28-09-25, 12:48:34 IST Transaction Info: UPI/P2A/563748979856/Ganesh S N If this transaction was not initiated by you: To block UPI: SMS BLOCKUPI <Customer ID> to +919951860002 from your registered mobile number. Call us at: 18001035577 (Toll Free) 18604195555 (Charges Applicable) Always open to help you. Regards, Axis Bank Ltd. ****This is a system generated communication and does not require signature. **** E003598217_09_2024 Reach us at: CHAT WEB Support Mobile app INTERNET BANKING WHATSAPP BRANCH LOCATOR Copyright Axis Bank Ltd. All rights reserved. Terms & Conditions apply. Please do not share your Internet Banking details, such as user ID/password or your Credit/Debit Card number/CVV/OTP with anyone, either over phone or through email. RBI never deals with individuals for Savings Account, Current Account, Credit Card, Debit Card, etc. Don't be victim to such offers coming to you on phone or email in the name of RBI. Do not click on Links from unknown/unsecure Sources that seek your confidential information. This email is confidential. It may also be legally privileged. If you are not the addressee, you may not copy, forward, disclose or use any part of it. Internet communications cannot be guaranteed to be timely, secure, error or virus-free. The sender does not accept liability for any errors or omissions. We maintain strict security standards and procedures to prevent unauthorised access to information about you. Know more >> Untitled 28-09-2025 Dear Nikhil Mathur, Here's the summary of your transaction: Amount Debited: INR 250.00 Account Number: XX2804 Date & Time: 28-09-25, 12:48:34 IST Transaction Info: UPI/P2A/563748979856/Ganesh S N If this transaction was not initiated by you: To block UPI: SMS BLOCKUPI <Customer ID> to +919951860002 from your registered mobile number. Call us at: 18001035577 (Toll Free) 18604195555 (Charges Applicable) Always open to help you. Regards, Axis Bank Ltd. ****This is a system generated communication and does not require signature. **** E003598217_09_2024 Reach us at: CHAT WEB Support Mobile app INTERNET BANKING WHATSAPP BRANCH LOCATOR Copyright Axis Bank Ltd. All rights reserved. Terms & Conditions apply. Please do not share your Internet Banking details, such as user ID/password or your Credit/Debit Card number/CVV/OTP with anyone, either over phone or through email. RBI never deals with individuals for Savings Account, Current Account, Credit Card, Debit Card, etc. Don't be victim to such offers coming to you on phone or email in the name of RBI. Do not click on Links from unknown/unsecure Sources that seek your confidential information. This email is confidential. It may also be legally privileged. If you are not the addressee, you may not copy, forward, disclose or use any part of it. Internet communications cannot be guaranteed to be timely, secure, error or virus-free. The sender does not accept liability for any errors or omissions. We maintain strict security standards and procedures to prevent unauthorised access to information about you. Know more >>
                 """;
