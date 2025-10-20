@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.dto.CategoryDTO;
-import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.service.CategoryService;
 
 import lombok.RequiredArgsConstructor;
@@ -31,27 +30,23 @@ public class CategoryController {
 	}
 
 	@GetMapping("/{id}")
-	public ResponseEntity<Category> getById(@PathVariable String id) {
-		Category category = categoryService.getCategoryById(id);
-		if (category != null) {
-			return ResponseEntity.ok(category);
-		} else {
-			return ResponseEntity.notFound().build();
-		}
+	public ResponseEntity<CategoryDTO> getById(@PathVariable String id) {
+		CategoryDTO category = categoryService.getCategoryDTOById(id);
+		return category != null ? ResponseEntity.ok(category) : ResponseEntity.notFound().build();
 	}
 
 	@GetMapping("/{id}/children")
-	public List<Category> getChildren(@PathVariable String id) {
-		return categoryService.getChildren(id);
+	public List<CategoryDTO> getChildren(@PathVariable String id) {
+		return categoryService.getChildrenDTO(id);
 	}
 
 	@PostMapping
-	public Category create(@RequestBody Category category) {
+	public CategoryDTO create(@RequestBody CategoryDTO category) {
 		return categoryService.saveCategory(category);
 	}
 
 	@PutMapping("/{id}")
-	public ResponseEntity<Category> update(@PathVariable String id, @RequestBody Category updated) {
+	public ResponseEntity<CategoryDTO> update(@PathVariable String id, @RequestBody CategoryDTO updated) {
 		// Ensure we update the existing entity instead of creating a new one
 		if (categoryService.getCategoryById(id) == null) {
 			return ResponseEntity.notFound().build();

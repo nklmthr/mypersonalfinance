@@ -169,7 +169,7 @@ export default function Categories() {
 		try {
 			const payload = {
 				name: editCategory.name,
-				parent: newCategory.parentId || null,
+				parent: editCategory.parentId || null,
 			};
 			await api.put(`/categories/${editCategory.id}`, payload);
 			setShowEditModal(false);

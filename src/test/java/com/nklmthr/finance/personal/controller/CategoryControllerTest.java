@@ -65,8 +65,8 @@ class CategoryControllerTest {
 
     @Test
     void getById_found() throws Exception {
-        Category c = new Category(); c.setId("c1");
-        when(categoryService.getCategoryById("c1")).thenReturn(c);
+        CategoryDTO c = new CategoryDTO(); c.setId("c1");
+        when(categoryService.getCategoryDTOById("c1")).thenReturn(c);
         mvc.perform(get("/api/categories/c1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value("c1"));
@@ -74,23 +74,23 @@ class CategoryControllerTest {
 
     @Test
     void getById_notFound() throws Exception {
-        when(categoryService.getCategoryById("x")).thenReturn(null);
+        when(categoryService.getCategoryDTOById("x")).thenReturn(null);
         mvc.perform(get("/api/categories/x"))
             .andExpect(status().isNotFound());
     }
 
     @Test
     void getChildren_returnsList() throws Exception {
-        when(categoryService.getChildren("c1")).thenReturn(List.of(new Category()));
+        when(categoryService.getChildrenDTO("c1")).thenReturn(List.of(new CategoryDTO()));
         mvc.perform(get("/api/categories/c1/children"))
             .andExpect(status().isOk());
     }
 
     @Test
     void create_returns200() throws Exception {
-        Category in = new Category(); in.setName("Food");
-        Category out = new Category(); out.setId("c1"); out.setName("Food");
-        when(categoryService.saveCategory(Mockito.any(Category.class))).thenReturn(out);
+        CategoryDTO in = new CategoryDTO(); in.setName("Food");
+        CategoryDTO out = new CategoryDTO(); out.setId("c1"); out.setName("Food");
+        when(categoryService.saveCategory(Mockito.any(CategoryDTO.class))).thenReturn(out);
         mvc.perform(post("/api/categories").contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(in)))
             .andExpect(status().isOk())
@@ -99,9 +99,13 @@ class CategoryControllerTest {
 
     @Test
     void update_returns200WhenExists() throws Exception {
-        Category updated = new Category(); updated.setId("c1"); updated.setName("New");
-        when(categoryService.getCategoryById("c1")).thenReturn(updated);
-        when(categoryService.saveCategory(Mockito.any(Category.class))).thenReturn(updated);
+        // Existence check still uses entity path
+        Category existing = new Category(); existing.setId("c1"); existing.setName("Old");
+        when(categoryService.getCategoryById("c1")).thenReturn(existing);
+
+        CategoryDTO updated = new CategoryDTO(); updated.setId("c1"); updated.setName("New");
+        when(categoryService.saveCategory(Mockito.any(CategoryDTO.class))).thenReturn(updated);
+
         mvc.perform(put("/api/categories/c1").contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(updated)))
             .andExpect(status().isOk())

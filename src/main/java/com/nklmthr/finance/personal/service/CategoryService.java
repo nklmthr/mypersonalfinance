@@ -55,6 +55,12 @@ public class CategoryService {
         return getCategoryById(appUserService.getCurrentUser(), id);
     }
 
+    // DTO variant
+    public CategoryDTO getCategoryDTOById(String id) {
+        Category entity = getCategoryById(id);
+        return entity != null ? categoryMapper.toDTO(entity) : null;
+    }
+
     @Cacheable(value = "categoryById", key = "#appUser.id + '_' + #id")
     public Category getCategoryById(AppUser appUser, String id) {
         logger.info("Fetching category by id: {} for user: {}", id, appUser.getUsername());
@@ -64,6 +70,11 @@ public class CategoryService {
     // Overload
     public Category saveCategory(Category category) {
         return saveCategory(appUserService.getCurrentUser(), category);
+    }
+
+    // DTO variants
+    public CategoryDTO saveCategory(CategoryDTO categoryDto) {
+        return saveCategory(appUserService.getCurrentUser(), categoryDto);
     }
 
     @Caching(evict = {
@@ -79,6 +90,23 @@ public class CategoryService {
         category.setAppUser(appUser);
         logger.info("Saving category: {} for user: {}", category.getName(), appUser.getUsername());
         return categoryRepository.save(category);
+    }
+
+    @Caching(evict = {
+        @CacheEvict(value = "allCategories", key = "#appUser.id"),
+        @CacheEvict(value = "categoryById", key = "#appUser.id + '_' + #categoryDto.id"),
+        @CacheEvict(value = "categoryChildrenById", key = "#appUser.id", allEntries = true),
+        @CacheEvict(value = "categoryDescendentsById", key = "#appUser.id", allEntries = true),
+        @CacheEvict(value = "categoryNonClassified", key = "#appUser.id"),
+        @CacheEvict(value = "categoryTransfer", key = "#appUser.id"),
+        @CacheEvict(value = "categorySplitTransaction", key = "#appUser.id")
+    })
+    public CategoryDTO saveCategory(AppUser appUser, CategoryDTO categoryDto) {
+        Category toSave = categoryMapper.toEntity(categoryDto);
+        toSave.setAppUser(appUser);
+        logger.info("Saving category (DTO): {} for user: {}", toSave.getName(), appUser.getUsername());
+        Category saved = categoryRepository.save(toSave);
+        return categoryMapper.toDTO(saved);
     }
 
     // Overload
@@ -103,6 +131,12 @@ public class CategoryService {
     // Overload
     public List<Category> getChildren(String parentId) {
         return getChildren(appUserService.getCurrentUser(), parentId);
+    }
+
+    // DTO variant
+    public List<CategoryDTO> getChildrenDTO(String parentId) {
+        List<Category> entities = getChildren(parentId);
+        return categoryMapper.toDTOList(entities);
     }
 
     @Cacheable(value = "categoryChildrenById", key = "#appUser.id + '_' + #parentId")

@@ -622,11 +622,11 @@ export default function Transactions() {
 			setTotalCount(txRes.data.totalElements);
 			setCurrentTotal(currentTotalRes.data);
 		} catch (error) {
-			if (err.response?.status === 401) {
+			if (error.response?.status === 401) {
 				localStorage.removeItem("authToken");
 				navigate("/");
 			} else {
-				console.error("Failed to fetch user profile:", err);
+				console.error("Failed to fetch user profile:", error);
 			}
 		} finally {
 			NProgress.done();

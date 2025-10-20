@@ -3,6 +3,8 @@ package com.nklmthr.finance.personal.dto;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.nklmthr.finance.personal.model.Category;
 
 import lombok.AllArgsConstructor;
@@ -22,7 +24,9 @@ public class CategoryDTO {
 
 	private String id;
 	private String name;
-	private String parentId;
+    @JsonProperty("parentId")
+    @JsonAlias({"parent"})
+    private String parentId;
 	private boolean systemCategory;
 	private List<CategoryDTO> children = new ArrayList<>();
 
