@@ -311,8 +311,8 @@ function TransactionForm({
 				</p>
 			</div>
 
-				{/* Account & Amount */}
-				<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				{/* Account, Amount & Currency */}
+				<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 					<div>
 						<label className="block text-sm font-medium mb-1">Account</label>
 					<SearchSelect
@@ -334,6 +334,27 @@ function TransactionForm({
 							className="w-full border rounded px-3 py-2"
 							required
 						/>
+					</div>
+					<div>
+						<label className="block text-sm font-medium mb-1">Currency</label>
+						<select
+							className="w-full border rounded px-3 py-2"
+							value={transaction.currency || "INR"}
+							onChange={(e) =>
+								setTransaction((t) => ({ ...t, currency: e.target.value }))
+							}
+						>
+							<option value="INR">INR</option>
+							<option value="USD">USD</option>
+							<option value="EUR">EUR</option>
+							<option value="GBP">GBP</option>
+							<option value="JPY">JPY</option>
+							<option value="AUD">AUD</option>
+							<option value="CAD">CAD</option>
+							<option value="CNY">CNY</option>
+							<option value="SGD">SGD</option>
+							<option value="AED">AED</option>
+						</select>
 					</div>
 				</div>
 
@@ -757,6 +778,7 @@ useEffect(() => {
 			amount: tx.amount,
 			date: tx.date,
 			type: tx.type,
+				currency: tx.currency || null,
 			account: { id: tx.accountId },
 			category: tx.categoryId ? { id: tx.categoryId } : null,
 			parent: tx.parentId ? { id: tx.parentId } : null,
@@ -837,9 +859,9 @@ const triggerDataExtraction = async (servicesToRun) => {
 		return (
 			<div
 				key={tx.id}
-				className={`grid grid-cols-1 sm:grid-cols-[1.5rem_2fr_1fr_1.5fr_1fr_max-content] gap-2 py-2 px-3 rounded border items-start sm:items-center text-sm ${baseColor} border-gray-200`}
+				className={`grid grid-cols-1 sm:grid-cols-[24px_3fr_2fr_2fr_1fr_2fr] gap-2 py-2 px-3 rounded border items-center text-sm ${baseColor} border-gray-200`}
 			>
-				<div className="text-xs">
+				<div className="text-xs sm:col-span-1 hidden sm:block">
 					{!isChild && tx.children?.length > 0 && (
 						<button
 							onClick={() => toggleExpand(tx.id)}
@@ -850,8 +872,17 @@ const triggerDataExtraction = async (servicesToRun) => {
 					)}
 				</div>
 
-				<div className="flex flex-col">
+				<div className={`flex flex-col ${isChild ? 'pl-3' : ''}`}>
 					<div className="flex items-center gap-1 truncate font-medium text-gray-800">
+						{!isChild && tx.children?.length > 0 && (
+							<button
+								title="Toggle children"
+								className="text-gray-600 hover:text-black sm:hidden"
+								onClick={() => toggleExpand(tx.id)}
+							>
+								{expandedParents[tx.id] ? "▼" : "▶"}
+							</button>
+						)}
 						<span className="truncate">{tx.shortDescription}</span>
 						{hasGpt && (
 							<button
@@ -1093,15 +1124,15 @@ const triggerDataExtraction = async (servicesToRun) => {
 					<span className="text-xs text-gray-500">{tx.account?.name}</span>
 				</div>
 
-				<div>
-					<select
-						className="w-full border rounded px-2 py-1 text-xs sm:text-sm bg-blue-50"
+				<div className="order-3 sm:order-none">
+					<SearchSelect
+						options={[{ id: "", name: "— Category —" }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
 						value={tx.category?.id || ""}
-						onChange={(e) => {
+						onChange={(val) => {
 							saveTx(
 								{
 									...tx,
-									categoryId: e.target.value,
+									categoryId: val,
 									accountId: tx.account?.id,
 									parentId: tx.parent?.id,
 								},
@@ -1109,21 +1140,15 @@ const triggerDataExtraction = async (servicesToRun) => {
 								`/transactions/${tx.id}`
 							);
 						}}
-					>
-						<option value="">— Category —</option>
-						{flattened.map((c) => (
-							<option key={c.id} value={c.id}>
-								{c.name}
-							</option>
-						))}
-					</select>
+						placeholder="Category"
+					/>
 				</div>
 
-				<div className="text-xs sm:text-sm text-gray-500">
+				<div className="hidden sm:block text-xs sm:text-sm text-gray-500 self-start sm:self-center order-4 sm:order-none">
 					{dayjs(tx.date).format("ddd, DD MMM YY HH:mm")}
 				</div>
 
-				<div className="flex flex-wrap gap-1 sm:space-x-2 text-xs sm:text-sm">
+				<div className="hidden sm:flex flex-wrap gap-2 text-xs sm:text-sm justify-start sm:justify-end order-5 sm:order-none">
 					{!isChild && (
 						<button
 							className="text-purple-600 hover:underline"
@@ -1171,6 +1196,55 @@ const triggerDataExtraction = async (servicesToRun) => {
 					>
 						Update
 					</button>
+				</div>
+
+				{/* Mobile footer: date + actions */}
+				<div className="sm:hidden flex items-center justify-between mt-2 text-xs">
+					<div className="text-gray-500">{dayjs(tx.date).format("ddd, DD MMM YY HH:mm")}</div>
+					<div className="flex gap-3">
+						{!isChild && (
+							<button
+								className="text-purple-600"
+								onClick={() =>
+									setSplitTx({
+										...tx,
+										parentId: tx.id,
+										accountId: tx.account?.id,
+									})
+								}
+							>
+								Split
+							</button>
+						)}
+						{!isChild && (!tx.children || tx.children.length === 0) && (
+							<button
+								className="text-teal-600"
+								onClick={() =>
+									setTransferTx({
+										...tx,
+										accountId: tx.account?.id,
+										destinationAccountId: "",
+										explanation: tx.explanation || "",
+									})
+								}
+							>
+								Transfer
+							</button>
+						)}
+						<button className="text-red-600" onClick={() => deleteTx(tx.id)}>Delete</button>
+						<button
+							className="text-blue-600"
+							onClick={() =>
+								setEditTx({
+									...tx,
+									accountId: tx.account?.id,
+									categoryId: tx.category?.id,
+								})
+							}
+						>
+							Update
+						</button>
+					</div>
 				</div>
 			</div>
 		);
@@ -1235,6 +1309,7 @@ function TransactionPageButtons({
 									amount: 0,
 									date: dayjs().format('YYYY-MM-DDTHH:mm'),
 									type: 'DEBIT',
+								currency: 'INR',
 									accountId: '',
 									categoryId: '',
 								})
@@ -1549,6 +1624,7 @@ function TransactionPageButtons({
                                 amount: 0,
                                 date: dayjs().format('YYYY-MM-DDTHH:mm'),
                                 type: 'DEBIT',
+								currency: 'INR',
                                 accountId: '',
                                 categoryId: '',
                             })

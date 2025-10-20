@@ -190,7 +190,7 @@ public class AccountTransactionService {
 			txUpdateEntity.setGptDescription(existingTx.getGptDescription());
 			txUpdateEntity.setGptExplanation(existingTx.getGptExplanation());
 			txUpdateEntity.setGptType(existingTx.getGptType());
-			txUpdateEntity.setCurrency(existingTx.getCurrency());
+			// Keep currency from the incoming update (already mapped by mapper)
 			
 			if (oldType == TransactionType.DEBIT) {
 				oldAccount.setBalance(oldAccount.getBalance().add(oldAmount));
