@@ -38,8 +38,8 @@ function FetchToolbar({
     currentTotal,
 }) {
     return (
-        <div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm">
+            <div className="flex flex-wrap items-center gap-1 justify-between">
                 <div className="flex items-center gap-2">
                     <select
                         value={selectedServices.length === availableServices.length ? 'ALL' : (selectedServices[0] || 'ALL')}
@@ -51,7 +51,7 @@ function FetchToolbar({
                                 setSelectedServices([val]);
                             }
                         }}
-                        className="border px-3 py-2 rounded text-sm min-w-[260px] bg-blue-50"
+                        className="border px-2 py-1 rounded text-sm min-w-[260px] bg-blue-50"
                         title="Select a data extraction service or All"
                     >
                         <option value="ALL">All Services</option>
@@ -62,7 +62,7 @@ function FetchToolbar({
                     <button
                         onClick={() => triggerDataExtraction(selectedServices)}
                         disabled={refreshing}
-                        className={`${refreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'} text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded shadow`}
+                        className={`${refreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'} text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded shadow`}
                         title="Trigger selected data extraction services to fetch new transactions"
                     >
                         Fetch
@@ -76,7 +76,7 @@ function FetchToolbar({
                             })}`
                         )
                     }
-                    className="bg-yellow-200 text-gray-800 px-3 py-2 rounded text-sm shadow hover:bg-yellow-300"
+                    className="bg-yellow-200 text-gray-800 px-2 py-1 rounded text-sm shadow hover:bg-yellow-300"
                 >
                     Total: ₹{currentTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </button>
@@ -94,6 +94,69 @@ function flattenCategories(categories, prefix = "") {
 		}
 	}
 	return flat;
+}
+
+// Reusable searchable select (combobox) for Accounts/Categories
+function SearchSelect({ options, value, onChange, placeholder }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    const containerRef = React.useRef(null);
+
+    const normalize = (s) => (s || "")
+        .toLowerCase()
+        .replace(/[-–—]+/g, " ") // ignore indent dashes
+        .replace(/\s+/g, " ");
+
+    const selected = options.find(o => o.id === value);
+
+    useEffect(() => {
+        // Keep input empty when 'All' (empty id) is selected so user can type immediately
+        if (selected && selected.id) {
+            setQuery(selected.name);
+        } else {
+            setQuery("");
+        }
+    }, [value]);
+
+    useEffect(() => {
+        const handler = (e) => {
+            if (containerRef.current && !containerRef.current.contains(e.target)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener('click', handler);
+        return () => document.removeEventListener('click', handler);
+    }, []);
+
+    const filtered = options.filter(o => normalize(o.name).includes(normalize(query)));
+
+    return (
+        <div ref={containerRef} className="relative w-full">
+            <input
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+                onFocus={() => { setOpen(true); setQuery(""); }}
+                placeholder={placeholder}
+                className="border px-2 py-1 rounded text-sm w-full"
+            />
+            {open && (
+                <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-auto w-full mt-1">
+                    {filtered.map(o => (
+                        <div
+                            key={o.id || 'all'}
+                            className={`px-2 py-1 text-sm cursor-pointer hover:bg-blue-50 ${o.id === value ? 'bg-blue-100' : ''}`}
+                            onClick={() => { onChange(o.id); setQuery(""); setOpen(false); }}
+                        >
+                            {o.name}
+                        </div>
+                    ))}
+                    {filtered.length === 0 && (
+                        <div className="px-2 py-1 text-xs text-gray-500">No matches</div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
 }
 
 // ---- forms ----
@@ -252,21 +315,12 @@ function TransactionForm({
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 					<div>
 						<label className="block text-sm font-medium mb-1">Account</label>
-						<select
-							className="w-full border rounded px-3 py-2"
-							value={transaction.accountId || ""}
-							onChange={(e) =>
-								setTransaction((t) => ({ ...t, accountId: e.target.value }))
-							}
-							required
-						>
-							<option value="">— Select Account —</option>
-							{accounts.map((a) => (
-								<option key={a.id} value={a.id}>
-									{a.name}
-								</option>
-							))}
-						</select>
+					<SearchSelect
+						options={[{ id: "", name: "All Accounts" }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
+						value={transaction.accountId || ""}
+						onChange={(val) => setTransaction((t) => ({ ...t, accountId: val }))}
+						placeholder="Account"
+					/>
 					</div>
 					<div>
 						<label className="block text-sm font-medium mb-1">Amount</label>
@@ -287,20 +341,12 @@ function TransactionForm({
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 					<div>
 						<label className="block text-sm font-medium mb-1">Category</label>
-						<select
-							className="w-full border rounded px-3 py-2"
-							value={transaction.categoryId || ""}
-							onChange={(e) =>
-								setTransaction((t) => ({ ...t, categoryId: e.target.value }))
-							}
-						>
-							<option value="">— Select Category —</option>
-							{flattened.map((c) => (
-								<option key={c.id} value={c.id}>
-									{c.name}
-								</option>
-							))}
-						</select>
+					<SearchSelect
+						options={[{ id: "", name: "All Categories" }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
+						value={transaction.categoryId || ""}
+						onChange={(val) => setTransaction((t) => ({ ...t, categoryId: val }))}
+						placeholder="Category"
+					/>
 					</div>
 					<div>
 						<label className="block text-sm font-medium mb-1">Type</label>
@@ -395,23 +441,12 @@ function TransferForm({ transaction, setTransaction, onCancel, onSubmit, account
 				</div>
 				<label className="block">
 					<span className="text-sm">To Account</span>
-					<select
-						className="mt-1 block w-full border rounded px-2 py-1"
+					<SearchSelect
+						options={[{ id: "", name: "— Select —" }, ...accounts.filter(a => a.id !== transaction.accountId).map(a => ({ id: a.id, name: a.name }))]}
 						value={transaction.destinationAccountId || ""}
-						onChange={(e) =>
-							setTransaction((tx) => ({ ...tx, destinationAccountId: e.target.value }))
-						}
-						required
-					>
-						<option value="">— Select —</option>
-						{accounts
-							.filter((a) => a.id !== transaction.accountId)
-							.map((a) => (
-								<option key={a.id} value={a.id}>
-									{a.name}
-								</option>
-							))}
-					</select>
+						onChange={(val) => setTransaction((tx) => ({ ...tx, destinationAccountId: val }))}
+						placeholder="To Account"
+					/>
 				</label>
 
 				<label className="block">
@@ -543,18 +578,12 @@ function TransactionSplit({ transaction, setTransaction, onCancel, onSubmit, cat
 							onChange={(e) => updateChild(idx, "amount", e.target.value)}
 							className="border rounded px-2 py-1"
 						/>
-						<select
-							className="border rounded px-2 py-1"
-							value={child.categoryId || ""}
-							onChange={(e) => updateChild(idx, "categoryId", e.target.value)}
-						>
-							<option value="">— None —</option>
-							{flattened.map((category) => (
-								<option key={category.id} value={category.id}>
-									{category.name}
-								</option>
-							))}
-						</select>
+					<SearchSelect
+						options={[{ id: "", name: "— None —" }, ...flattened.map(category => ({ id: category.id, name: category.name }))]}
+						value={child.categoryId || ""}
+						onChange={(val) => updateChild(idx, "categoryId", val)}
+						placeholder="Category"
+					/>
 					</div>
 				))}
 
@@ -629,6 +658,8 @@ export default function Transactions() {
 const [refreshing, setRefreshing] = useState(false);
 const [availableServices, setAvailableServices] = useState([]);
 const [selectedServices, setSelectedServices] = useState([]);
+
+// (moved to top-level above)
 
 	// ESC key handler for modal
 	useEffect(() => {
@@ -1452,27 +1483,20 @@ function TransactionPageButtons({
                 />
 
                 {/* Section 2: Filters in two rows */}
-                <div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm space-y-2">
+                <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm space-y-2">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center">
                     <input
                         type="month"
                         value={filterMonth}
                         onChange={(e) => {setFilterMonth(e.target.value); updateUrlParams({ month: e.target.value });}}
-                        className="border px-2 py-1 rounded text-sm w-full"
+                            className="border px-2 py-1 rounded text-sm w-full"
                     />
-
-                    <select
-                        value={filterAccount}
-                        onChange={(e) => {setFilterAccount(e.target.value); updateUrlParams({ accountId: e.target.value });}}
-                        className="border px-2 py-1 rounded text-sm w-full"
-                    >
-                        <option value="">All Accounts</option>
-                        {accounts.map((a) => (
-                            <option key={a.id} value={a.id}>
-                                {a.name}
-                            </option>
-                        ))}
-                    </select>
+                        <SearchSelect
+                            options={[{ id: '', name: 'All Accounts' }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
+                            value={filterAccount}
+                            onChange={(val) => { setFilterAccount(val); updateUrlParams({ accountId: val }); }}
+                            placeholder="Account"
+                        />
 
                     <select
                         value={filterType}
@@ -1492,18 +1516,12 @@ function TransactionPageButtons({
                     />
                     </div>
                     <div className="grid grid-cols-2 gap-2 items-center">
-                        <select
+                        <SearchSelect
+                            options={[{ id: '', name: 'All Categories' }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
                             value={filterCategory}
-                            onChange={(e) => {setFilterCategory(e.target.value); updateUrlParams({ categoryId: e.target.value });}}
-                            className="border px-2 py-1 rounded text-sm w-full"
-                        >
-                            <option value="">All Categories</option>
-                            {flattened.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={(val) => { setFilterCategory(val); updateUrlParams({ categoryId: val }); }}
+                            placeholder="Category"
+                        />
                         <button
                             onClick={() => {
                                 setFilterMonth('');
@@ -1513,7 +1531,7 @@ function TransactionPageButtons({
                                 setSearch('');
                                 setPage(0);
                             }}
-                            className="bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600 w-full md:w-auto md:justify-self-end"
+                            className="bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 w-full md:w-auto md:justify-self-end"
                         >
                             Clear All
                         </button>
@@ -1521,7 +1539,7 @@ function TransactionPageButtons({
                 </div>
 
                 {/* Section 3: Actions (Add + Export) */}
-                <div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm grid grid-cols-4 sm:flex sm:flex-wrap sm:items-center gap-2">
+                <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm grid grid-cols-4 sm:flex sm:flex-wrap sm:items-center gap-2">
                     <button
                         onClick={() =>
                             setEditTx({
@@ -1535,7 +1553,7 @@ function TransactionPageButtons({
                                 categoryId: '',
                             })
                         }
-                        className="bg-green-500 text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded shadow hover:bg-green-600 w-full sm:w-auto"
+                        className="bg-green-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded shadow hover:bg-green-600 w-full sm:w-auto"
                     >
                         Add
                     </button>
@@ -1569,7 +1587,7 @@ function TransactionPageButtons({
                             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                             saveAs(blob, 'transactions.csv');
                         }}
-                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
                     >
                         CSV
                     </button>
@@ -1606,7 +1624,7 @@ function TransactionPageButtons({
                             const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
                             saveAs(blob, 'transactions.xlsx');
                         }}
-                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
                     >
                         XLSX
                     </button>
@@ -1649,7 +1667,7 @@ function TransactionPageButtons({
                             });
                             doc.save('transactions.pdf');
                         }}
-                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
                     >
                         PDF
                     </button>
