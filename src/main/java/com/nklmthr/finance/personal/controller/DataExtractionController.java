@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import com.nklmthr.finance.personal.service.DataExtractionService;
 
@@ -28,12 +29,18 @@ public class DataExtractionController {
      * Returns immediately while processing runs in background
      */
     @PostMapping("/trigger")
-    public ResponseEntity<Map<String, Object>> triggerDataExtraction() {
+    public ResponseEntity<Map<String, Object>> triggerDataExtraction(
+        @RequestParam(name = "services", required = false) List<String> services
+    ) {
         logger.info("Manual data extraction trigger requested");
         
         try {
-            // Start async processing
-            dataExtractionService.triggerAllDataExtractionServices();
+            // Start async processing - all or subset
+            if (services == null || services.isEmpty()) {
+                dataExtractionService.triggerAllDataExtractionServices();
+            } else {
+                dataExtractionService.triggerSpecificServices(services);
+            }
             
             return ResponseEntity.ok(Map.of(
                 "status", "started",

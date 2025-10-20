@@ -29,6 +29,62 @@ function buildTree(categories) {
 	return roots;
 }
 
+function FetchToolbar({
+    availableServices,
+    selectedServices,
+    setSelectedServices,
+    refreshing,
+    triggerDataExtraction,
+    currentTotal,
+}) {
+    return (
+        <div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2 justify-between">
+                <div className="flex items-center gap-2">
+                    <select
+                        value={selectedServices.length === availableServices.length ? 'ALL' : (selectedServices[0] || 'ALL')}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'ALL') {
+                                setSelectedServices(availableServices);
+                            } else {
+                                setSelectedServices([val]);
+                            }
+                        }}
+                        className="border px-3 py-2 rounded text-sm min-w-[260px] bg-blue-50"
+                        title="Select a data extraction service or All"
+                    >
+                        <option value="ALL">All Services</option>
+                        {(availableServices || []).map((svc) => (
+                            <option key={svc} value={svc}>{svc}</option>
+                        ))}
+                    </select>
+                    <button
+                        onClick={() => triggerDataExtraction(selectedServices)}
+                        disabled={refreshing}
+                        className={`${refreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'} text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded shadow`}
+                        title="Trigger selected data extraction services to fetch new transactions"
+                    >
+                        Fetch
+                    </button>
+                </div>
+                <button
+                    onClick={() =>
+                        alert(
+                            `Current Total: ₹${currentTotal.toLocaleString('en-IN', {
+                                minimumFractionDigits: 2,
+                            })}`
+                        )
+                    }
+                    className="bg-yellow-200 text-gray-800 px-3 py-2 rounded text-sm shadow hover:bg-yellow-300"
+                >
+                    Total: ₹{currentTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 function flattenCategories(categories, prefix = "") {
 	let flat = [];
 	for (const c of categories || []) {
@@ -570,7 +626,9 @@ export default function Transactions() {
 	  searchParams.get("search") || ""
 	);
 	const debouncedSearch = useDebounce(search, 500);
-	const [refreshing, setRefreshing] = useState(false);
+const [refreshing, setRefreshing] = useState(false);
+const [availableServices, setAvailableServices] = useState([]);
+const [selectedServices, setSelectedServices] = useState([]);
 
 	// ESC key handler for modal
 	useEffect(() => {
@@ -587,6 +645,20 @@ export default function Transactions() {
 	}, [modalContent]);
 
 	NProgress.configure({ showSpinner: false });
+
+// Load available data extraction services and select all by default
+useEffect(() => {
+    (async () => {
+        try {
+            const res = await api.get('/data-extraction/services');
+            const list = res.data?.services || [];
+            setAvailableServices(list);
+            setSelectedServices(list);
+        } catch (err) {
+            console.error('Failed to load extraction services:', err);
+        }
+    })();
+}, []);
 
 	const toggleExpand = (id) => {
 		setExpandedParents((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -688,7 +760,7 @@ export default function Transactions() {
 		setLoading(false);
 	};
 
-	const triggerDataExtraction = async () => {
+const triggerDataExtraction = async (servicesToRun) => {
 		if (!window.confirm("This will trigger all data extraction services to check for new transactions from your connected email accounts. Continue?")) {
 			return;
 		}
@@ -696,7 +768,8 @@ export default function Transactions() {
 		setRefreshing(true);
 		NProgress.start();
 		try {
-			const response = await api.post('/data-extraction/trigger');
+        const qs = servicesToRun && servicesToRun.length ? `?services=${encodeURIComponent(servicesToRun.join(','))}` : '';
+        const response = await api.post(`/data-extraction/trigger${qs}`);
 			if (response.data.status === 'started') {
 				alert(`Data extraction started! Services running: ${response.data.services.length}\n\nCheck logs for progress. The page will refresh automatically in 30 seconds.`);
 				// Auto refresh the page after 30 seconds to show new transactions
@@ -728,6 +801,8 @@ export default function Transactions() {
 			: index % 2 === 0
 				? "bg-blue-50"
 				: "bg-blue-100";
+		const hasGpt = typeof tx.gptDescription === 'string' && tx.gptDescription.trim().length > 0;
+		const isDescTrimmed = Boolean((tx.gptDescription || tx.description) && (tx.gptDescription || tx.description) !== tx.shortDescription);
 		return (
 			<div
 				key={tx.id}
@@ -747,18 +822,14 @@ export default function Transactions() {
 				<div className="flex flex-col">
 					<div className="flex items-center gap-1 truncate font-medium text-gray-800">
 						<span className="truncate">{tx.shortDescription}</span>
-						{(tx.gptDescription || tx.gptExplanation || tx.gptAmount || tx.gptType || tx.currency || tx.gptAccount) && (
-							<span className="text-xs bg-blue-100 text-blue-700 px-1 rounded ml-1" title="GPT Analysis Available">🤖</span>
-						)}
-						{(tx.gptDescription || tx.gptExplanation || tx.gptAmount || tx.gptType || tx.currency || tx.gptAccount ||
-							(tx.gptDescription || tx.description) !== tx.shortDescription ||
-							(tx.gptExplanation || tx.explanation) !== tx.shortExplanation) && (
-								<button
-									title="View full description"
-									onClick={() =>
-										setModalContent({
-											title: "Transaction Analysis & Comparison",
-											content: (
+						{hasGpt && (
+							<button
+								title="AI analysis available"
+								className="text-blue-700 px-1 ml-1"
+								onClick={() =>
+									setModalContent({
+										title: "Transaction Analysis & Comparison",
+										content: (
 												<div className="space-y-4">
 													{/* Header with Transaction ID and Date */}
 													<div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded border">
@@ -778,15 +849,15 @@ export default function Transactions() {
 													<div className="grid grid-cols-2 gap-4">
 														<div className="space-y-2">
 															<h4 className="font-semibold text-gray-700 text-sm">📊 Original Description</h4>
-															<div className="bg-gray-50 p-3 rounded border min-h-[60px]">
-																<p className="text-sm">{tx.description || <span className="text-gray-400 italic">Not available</span>}</p>
-															</div>
+											<div className="bg-gray-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words">
+												<p className="text-sm leading-snug">{tx.description || <span className="text-gray-400 italic">Not available</span>}</p>
+											</div>
 														</div>
 														<div className="space-y-2">
 															<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Description</h4>
-															<div className="bg-blue-50 p-3 rounded border min-h-[60px]">
-																<p className="text-sm">{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}</p>
-															</div>
+												<div className="bg-blue-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words">
+													<p className="text-sm leading-snug">{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}</p>
+												</div>
 														</div>
 													</div>
 
@@ -794,15 +865,15 @@ export default function Transactions() {
 													<div className="grid grid-cols-2 gap-4">
 														<div className="space-y-2">
 															<h4 className="font-semibold text-gray-700 text-sm">📊 Original Explanation</h4>
-															<div className="bg-gray-50 p-3 rounded border min-h-[60px]">
-																<p className="text-sm">{tx.explanation || <span className="text-gray-400 italic">Not available</span>}</p>
-															</div>
+												<div className="bg-gray-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words">
+													<p className="text-sm leading-snug">{tx.explanation || <span className="text-gray-400 italic">Not available</span>}</p>
+												</div>
 														</div>
 														<div className="space-y-2">
 															<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Explanation</h4>
-															<div className="bg-blue-50 p-3 rounded border min-h-[60px]">
-																<p className="text-sm">{tx.gptExplanation || <span className="text-gray-400 italic">Not analyzed</span>}</p>
-															</div>
+												<div className="bg-blue-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words">
+													<p className="text-sm leading-snug">{tx.gptExplanation || <span className="text-gray-400 italic">Not analyzed</span>}</p>
+												</div>
 														</div>
 													</div>
 
@@ -848,14 +919,107 @@ export default function Transactions() {
 															</div>
 														)}
 													</div>
+											</div>
+										),
+									})
+								}
+							>
+								✨
+							</button>
+						)}
+						{isDescTrimmed && (
+							<button
+								title="View full description"
+								className="text-gray-700 px-1"
+								onClick={() =>
+									setModalContent({
+										title: "Transaction Analysis & Comparison",
+										content: (
+											<div className="space-y-4">
+												{/* Header with Transaction ID and Date */}
+												<div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded border">
+													<div className="flex justify-between items-center">
+														<div>
+															<h3 className="font-semibold text-gray-800">Transaction Details</h3>
+															<p className="text-xs text-gray-600">{new Date(tx.date).toLocaleString()}</p>
+														</div>
+														<div className="text-right">
+															<p className="text-sm text-gray-600">{tx.account?.name}</p>
+															<p className="text-xs text-gray-500">{tx.account?.institution?.name}</p>
+														</div>
+													</div>
 												</div>
-											),
-										})
-									}
-								>
-									🔍
-								</button>
-							)}
+
+											{/* Description Comparison */}
+											<div className="grid grid-cols-2 gap-4">
+												<div className="space-y-2">
+													<h4 className="font-semibold text-gray-700 text-sm">📊 Original Description</h4>
+													<div className="bg-gray-50 p-3 rounded border min-h-[60px]">
+														<p className="text-sm">{tx.description || <span className="text-gray-400 italic">Not available</span>}</p>
+													</div>
+												</div>
+												<div className="space-y-2">
+													<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Description</h4>
+													<div className="bg-blue-50 p-3 rounded border min-h-[60px]">
+														<p className="text-sm">{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}</p>
+													</div>
+												</div>
+											</div>
+
+											{/* Explanation Comparison */}
+											<div className="grid grid-cols-2 gap-4">
+												<div className="space-y-2">
+													<h4 className="font-semibold text-gray-700 text-sm">📊 Original Explanation</h4>
+													<div className="bg-gray-50 p-3 rounded border min-h-[60px]">
+														<p className="text-sm">{tx.explanation || <span className="text-gray-400 italic">Not available</span>}</p>
+													</div>
+												</div>
+												<div className="space-y-2">
+													<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Explanation</h4>
+													<div className="bg-blue-50 p-3 rounded border min-h-[60px]">
+														<p className="text-sm">{tx.gptExplanation || <span className="text-gray-400 italic">Not analyzed</span>}</p>
+													</div>
+												</div>
+											</div>
+
+											{/* Other Fields */}
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+												<div className="space-y-3">
+													<h4 className="font-semibold text-gray-700 text-sm">💰 Amount & Type</h4>
+													<div className="bg-gray-50 p-3 rounded border">
+														<p className="text-sm mb-1">
+															<strong>Original:</strong> 
+															<span className={`font-semibold ml-1 ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+																₹{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.type})
+															</span>
+														</p>
+														{tx.gptAmount && (
+															<p className="text-sm">
+																<strong>GPT:</strong> 
+																<span className={`font-semibold ml-1 ${tx.gptType === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+																	{tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.gptType || "N/A"})
+																</span>
+															</p>
+														)}
+													</div>
+												</div>
+												{tx.currency && (
+													<div className="space-y-3">
+														<h4 className="font-semibold text-blue-700 text-sm">💱 Currency</h4>
+														<div className="bg-blue-50 p-3 rounded border">
+															<p className="text-sm font-medium">{tx.currency}</p>
+														</div>
+													</div>
+												)}
+											</div>
+										</div>
+									),
+								})
+							}
+							>
+								🔍
+							</button>
+						)}
 					</div>
 					<div className="text-xs text-gray-500 break-words">
 						{tx.shortExplanation}
@@ -981,216 +1145,219 @@ export default function Transactions() {
 		);
 	};
 
-	function TransactionPageButtons({
+function TransactionPageButtons({
 		filterMonth,
 		filterAccount,
 		filterCategory,
 		filterType,
 		search,
-		triggerDataExtraction,
+    triggerDataExtraction,
+    availableServices,
+    selectedServices,
+    setSelectedServices,
 		refreshing,
-	}) {
+}) {
 		return (
-			<div className="flex items-center gap-2 mt-2">
-				<button
-					onClick={() => {
-						setFilterMonth("");
-						setFilterAccount("");
-						setFilterCategory("");
-						setFilterType("ALL");
-						setSearch("");
-						setPage(0);
-					}}
-					className="text-sm text-red-600 underline ml-2"
-				>
-					Clear All Filters
-				</button>
-
-				<button
-					onClick={() =>
-						setEditTx({
-							id: null,
-							description: "",
-							explanation: "",
-							amount: 0,
-							date: dayjs().format("YYYY-MM-DDTHH:mm"),
-							type: "DEBIT",
-							accountId: "",
-							categoryId: "",
-						})
-					}
-					className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
-				>
-					Add Transaction
-				</button>
-				<button
-					onClick={triggerDataExtraction}
-					disabled={refreshing}
-					className={`${refreshing 
-						? 'bg-gray-400 cursor-not-allowed' 
-						: 'bg-purple-600 hover:bg-purple-700'
-					} text-white px-3 py-1 rounded text-sm flex items-center gap-1`}
-					title="Trigger all data extraction services to fetch new transactions from email"
-				>
-					{refreshing ? (
-						<>
-							<span className="animate-spin">⟳</span>
-							Extracting...
-						</>
-					) : (
-						<>
-							<span>🔄</span>
-							Refresh Data
-						</>
-					)}
-				</button>
-				<button
-					onClick={async () => {
-						const params = new URLSearchParams({
-							month: filterMonth,
-							accountId: filterAccount,
-							type: filterType,
-							search,
-						});
-						if (filterCategory) params.append("categoryId", filterCategory);
-						const res = await api.get(`/transactions/export?${params}`).catch((err) => {
-							if (err.response?.status === 401) {
-								localStorage.removeItem("authToken");
-								navigate("/");
+			<div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm space-y-2">
+				{/* Line 1: Service selector + Fetch */}
+				<div className="flex flex-wrap items-center gap-2">
+					<select
+						value={selectedServices.length === availableServices.length ? 'ALL' : (selectedServices[0] || 'ALL')}
+						onChange={(e) => {
+							const val = e.target.value;
+							if (val === 'ALL') {
+								setSelectedServices(availableServices);
 							} else {
-								console.error("Failed to fetch user profile:", err);
+								setSelectedServices([val]);
 							}
-						});
-						const flattenedRows = res.data.map((tx) => ({
-							Date: tx.date,
-							Description: tx.description,
-							Explanation: tx.explanation || "",
-							Amount: tx.amount,
-							Type: tx.type,
-							Account: tx.account?.name || "",
-							Category: tx.category?.name || "",
-						}));
-						const csv = Papa.unparse(flattenedRows);
-						const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-						saveAs(blob, "transactions.csv");
-					}}
-					className="bg-green-600 text-white px-3 py-1 rounded text-sm"
-				>
-					Export CSV
-				</button>
+						}}
+						className="border px-3 py-2 rounded text-sm min-w-[260px] bg-blue-50"
+						title="Select a data extraction service or All"
+					>
+						<option value="ALL">All Services</option>
+						{(availableServices || []).map((svc) => (
+							<option key={svc} value={svc}>{svc}</option>
+						))}
+					</select>
+					<button
+						onClick={() => triggerDataExtraction(selectedServices)}
+						disabled={refreshing}
+						className={`${refreshing 
+							? 'bg-gray-400 cursor-not-allowed' 
+							: 'bg-purple-600 hover:bg-purple-700'
+						} text-white px-4 py-2 rounded text-sm shadow`}
+						title="Trigger selected data extraction services to fetch new transactions"
+					>
+						Fetch Transactions
+					</button>
+				</div>
 
-				<button
-					onClick={async () => {
-						const params = new URLSearchParams({
-							month: filterMonth,
-							accountId: filterAccount,
-							type: filterType,
-							search,
-						});
-						if (filterCategory) params.append("categoryId", filterCategory);
-						const res = await api.get(`/transactions/export?${params}`).catch((err) => {
-							if (err.response?.status === 401) {
-								localStorage.removeItem("authToken");
-								navigate("/");
-							} else {
-								console.error("Failed to fetch user profile:", err);
+				{/* Line 2: Filters and quick actions */}
+				<div className="flex flex-wrap items-center gap-2 justify-between">
+					<div className="flex flex-wrap items-center gap-2">
+						<button
+							onClick={() =>
+								setEditTx({
+									id: null,
+									description: '',
+									explanation: '',
+									amount: 0,
+									date: dayjs().format('YYYY-MM-DDTHH:mm'),
+									type: 'DEBIT',
+									accountId: '',
+									categoryId: '',
+								})
 							}
-						});
-						const flattenedRows = res.data.map((tx) => ({
-							Date: tx.date,
-							Description: tx.description,
-							Explanation: tx.explanation || "",
-							Amount: tx.amount,
-							Type: tx.type,
-							Account: tx.account?.name || "",
-							Category: tx.category?.name || "",
-						}));
-						const worksheet = XLSX.utils.json_to_sheet(flattenedRows);
-						const workbook = XLSX.utils.book_new();
-						XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
-						const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-						const blob = new Blob([excelBuffer], { type: "application/octet-stream" });
-						saveAs(blob, "transactions.xlsx");
-					}}
-					className="bg-yellow-600 text-white px-3 py-1 rounded text-sm"
-				>
-					Export XLSX
-				</button>
-				<button
-					onClick={async () => {
-						const params = new URLSearchParams({
-							month: filterMonth,
-							accountId: filterAccount,
-							type: filterType,
-							search,
-						});
-						if (filterCategory) params.append("categoryId", filterCategory);
+                    className="bg-green-500 text-white px-4 py-2 rounded text-sm shadow hover:bg-green-600"
+						>
+							Add
+						</button>
+						<button
+							onClick={async () => {
+								const params = new URLSearchParams({
+									month: filterMonth,
+									accountId: filterAccount,
+									type: filterType,
+									search,
+								});
+								if (filterCategory) params.append('categoryId', filterCategory);
+								const res = await api.get(`/transactions/export?${params}`).catch((err) => {
+									if (err.response?.status === 401) {
+										localStorage.removeItem('authToken');
+										navigate('/');
+									} else {
+										console.error('Failed to fetch user profile:', err);
+									}
+								});
+								const flattenedRows = res.data.map((tx) => ({
+									Date: tx.date,
+									Description: tx.description,
+									Explanation: tx.explanation || '',
+									Amount: tx.amount,
+									Type: tx.type,
+									Account: tx.account?.name || '',
+									Category: tx.category?.name || '',
+								}));
+								const csv = Papa.unparse(flattenedRows);
+								const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+								saveAs(blob, 'transactions.csv');
+							}}
+							className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+						>
+							CSV
+						</button>
+						<button
+							onClick={async () => {
+								const params = new URLSearchParams({
+									month: filterMonth,
+									accountId: filterAccount,
+									type: filterType,
+									search,
+								});
+								if (filterCategory) params.append('categoryId', filterCategory);
+								const res = await api.get(`/transactions/export?${params}`).catch((err) => {
+									if (err.response?.status === 401) {
+										localStorage.removeItem('authToken');
+										navigate('/');
+									} else {
+										console.error('Failed to fetch user profile:', err);
+									}
+								});
+								const flattenedRows = res.data.map((tx) => ({
+									Date: tx.date,
+									Description: tx.description,
+									Explanation: tx.explanation || '',
+									Amount: tx.amount,
+									Type: tx.type,
+									Account: tx.account?.name || '',
+									Category: tx.category?.name || '',
+								}));
+								const worksheet = XLSX.utils.json_to_sheet(flattenedRows);
+								const workbook = XLSX.utils.book_new();
+								XLSX.utils.book_append_sheet(workbook, worksheet, 'Transactions');
+								const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+								const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+								saveAs(blob, 'transactions.xlsx');
+							}}
+							className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+						>
+							XLSX
+						</button>
+						<button
+							onClick={async () => {
+								const params = new URLSearchParams({
+									month: filterMonth,
+									accountId: filterAccount,
+									type: filterType,
+									search,
+								});
+								if (filterCategory) params.append('categoryId', filterCategory);
 
-						const res = await api.get(`/transactions/export?${params}`).catch((err) => {
-							if (err.response?.status === 401) {
-								localStorage.removeItem("authToken");
-								navigate("/");
-							} else {
-								console.error("Failed to fetch user profile:", err);
+								const res = await api.get(`/transactions/export?${params}`).catch((err) => {
+									if (err.response?.status === 401) {
+										localStorage.removeItem('authToken');
+										navigate('/');
+									} else {
+										console.error('Failed to fetch user profile:', err);
+									}
+								});
+								const { jsPDF } = await import('jspdf');
+								const flattenedRows = res.data.map((tx) => ({
+									Date: dayjs(tx.date).isValid() ? dayjs(tx.date).format('DD/MMM') : '',
+									Description: tx.description,
+									Amount: tx.amount,
+									Type: tx.type,
+									Account: tx.account?.name || '',
+								}));
+								const autoTable = (await import('jspdf-autotable')).default;
+								const doc = new jsPDF();
+								const headers = ['Date', 'Description', 'Amount', 'Type', 'Account'];
+								const rows = flattenedRows.map((row) => headers.map((key) => row[key]));
+
+								autoTable(doc, {
+									head: [headers],
+									body: rows,
+									styles: {
+										fontSize: 8,
+										cellWidth: 'wrap',
+									},
+									columnStyles: {
+										0: { cellWidth: 20 },
+										1: { cellWidth: 70 },
+										2: { cellWidth: 25, halign: 'right' },
+										3: { cellWidth: 15 },
+										4: { cellWidth: 30 },
+									},
+									tableWidth: 'wrap',
+									margin: { top: 20 },
+								});
+
+								doc.save('transactions.pdf');
+							}}
+							className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+						>
+							PDF
+						</button>
+					</div>
+					<div>
+						<button
+							onClick={() =>
+								alert(
+									`Current Total: ₹${currentTotal.toLocaleString('en-IN', {
+										minimumFractionDigits: 2,
+									})}`
+								)
 							}
-						});
-						const { jsPDF } = await import("jspdf");
-						const flattenedRows = res.data.map((tx) => ({
-							Date: tx.date,
-							Description: tx.description,
-							Explanation: tx.explanation || "",
-							Amount: tx.amount,
-							Type: tx.type,
-							Account: tx.account?.name || "",
-							Category: tx.category?.name || "",
-						}));
-						const autoTable = (await import("jspdf-autotable")).default;
-						const doc = new jsPDF();
-						const headers = Object.keys(flattenedRows[0] || {});
-						const rows = flattenedRows.map((row) => headers.map((key) => row[key]));
+                    className="bg-yellow-200 text-gray-800 px-4 py-2 rounded text-sm shadow hover:bg-yellow-300"
+						>
+                    Total: ₹{currentTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+						</button>
+					</div>
+				</div>
 
-						autoTable(doc, {
-							head: [headers],
-							body: rows,
-							styles: {
-								fontSize: 8,
-								cellWidth: "wrap",
-							},
-							columnStyles: {
-								0: { cellWidth: 20 }, // Date
-								1: { cellWidth: 45 }, // Description
-								2: { cellWidth: 45 }, // Explanation
-								3: { cellWidth: 20, halign: "right" }, // Amount
-								4: { cellWidth: 15 }, // Type
-								5: { cellWidth: 20 }, // Account
-								6: { cellWidth: 20 }, // Category
-							},
-							tableWidth: "wrap",
-							margin: { top: 20 },
-						});
-
-						doc.save("transactions.pdf");
-					}}
-					className="bg-red-600 text-white px-3 py-1 rounded text-sm ml-2"
-				>
-					Export PDF
-				</button>
-				<button
-					onClick={() =>
-						alert(
-							`Current Total: ₹${currentTotal.toLocaleString("en-IN", {
-								minimumFractionDigits: 2,
-							})}`
-						)
-					}
-					className="bg-gray-700 text-white px-3 py-1 rounded text-sm"
-				>
-					Current Total: ₹
-					{currentTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-				</button>
 			</div>
 		);
-	}
+}
 
 	const renderPagination = () => {
 		if (totalPages <= 1) return null;
@@ -1272,71 +1439,221 @@ export default function Transactions() {
 		);
 	};
 
-	return (
-		<div className="flex flex-wrap items-center justify-between gap-4">
-			{/* Filters */}
-			<div className="flex flex-wrap gap-4 items-center">
-				<input
-					type="month"
-					value={filterMonth}
-					onChange={(e) => {setFilterMonth(e.target.value); updateUrlParams({ month: e.target.value });}}
-					className="border px-2 py-1 rounded text-sm"
-				/>
+        return (
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                {/* Section 1: Fetch toolbar */}
+                <FetchToolbar
+                    availableServices={availableServices}
+                    selectedServices={selectedServices}
+                    setSelectedServices={setSelectedServices}
+                    refreshing={refreshing}
+                    triggerDataExtraction={triggerDataExtraction}
+                    currentTotal={currentTotal}
+                />
 
-				<select
-					value={filterAccount}
-					onChange={(e) => {setFilterAccount(e.target.value); updateUrlParams({ accountId: e.target.value });}}
-					className="border px-2 py-1 rounded text-sm"
-				>
-					<option value="">All Accounts</option>
-					{accounts.map((a) => (
-						<option key={a.id} value={a.id}>
-							{a.name}
-						</option>
-					))}
-				</select>
+                {/* Section 2: Filters in two rows */}
+                <div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm space-y-2">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center">
+                    <input
+                        type="month"
+                        value={filterMonth}
+                        onChange={(e) => {setFilterMonth(e.target.value); updateUrlParams({ month: e.target.value });}}
+                        className="border px-2 py-1 rounded text-sm w-full"
+                    />
 
-				<select
-					value={filterCategory}
-					onChange={(e) => {setFilterCategory(e.target.value); updateUrlParams({ categoryId: e.target.value });}}
-					className="border px-2 py-1 rounded text-sm"
-				>
-					<option value="">All Categories</option>
-					{flattened.map((c) => (
-						<option key={c.id} value={c.id}>
-							{c.name}
-						</option>
-					))}
-				</select>
+                    <select
+                        value={filterAccount}
+                        onChange={(e) => {setFilterAccount(e.target.value); updateUrlParams({ accountId: e.target.value });}}
+                        className="border px-2 py-1 rounded text-sm w-full"
+                    >
+                        <option value="">All Accounts</option>
+                        {accounts.map((a) => (
+                            <option key={a.id} value={a.id}>
+                                {a.name}
+                            </option>
+                        ))}
+                    </select>
 
-				<select
-					value={filterType}
-					onChange={(e) => {setFilterType(e.target.value); updateUrlParams({ type: e.target.value });}}
-					className="border px-2 py-1 rounded text-sm"
-				>
-					<option value="ALL">All Types</option>
-					<option value="CREDIT">Credit</option>
-					<option value="DEBIT">Debit</option>
-				</select>
+                    <select
+                        value={filterType}
+                        onChange={(e) => {setFilterType(e.target.value); updateUrlParams({ type: e.target.value });}}
+                        className="border px-2 py-1 rounded text-sm w-full"
+                    >
+                        <option value="ALL">All Types</option>
+                        <option value="CREDIT">Credit</option>
+                        <option value="DEBIT">Debit</option>
+                    </select>
 
-				<input
-					value={search}
-					onChange={(e) => {setSearch(e.target.value); updateUrlParams({ search: e.target.value }); setPage(0);}}
-					placeholder="Search"
-					className="border px-2 py-1 rounded text-sm"
-				/>
+                    <input
+                        value={search}
+                        onChange={(e) => {setSearch(e.target.value); updateUrlParams({ search: e.target.value }); setPage(0);}}
+                        placeholder="Search"
+                        className="border px-2 py-1 rounded text-sm w-full"
+                    />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 items-center">
+                        <select
+                            value={filterCategory}
+                            onChange={(e) => {setFilterCategory(e.target.value); updateUrlParams({ categoryId: e.target.value });}}
+                            className="border px-2 py-1 rounded text-sm w-full"
+                        >
+                            <option value="">All Categories</option>
+                            {flattened.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={() => {
+                                setFilterMonth('');
+                                setFilterAccount('');
+                                setFilterCategory('');
+                                setFilterType('ALL');
+                                setSearch('');
+                                setPage(0);
+                            }}
+                            className="bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600 w-full md:w-auto md:justify-self-end"
+                        >
+                            Clear All
+                        </button>
+                    </div>
+                </div>
 
-				<TransactionPageButtons
-					filterMonth={filterMonth}
-					filterAccount={filterAccount}
-					filterCategory={filterCategory}
-					filterType={filterType}
-					search={debouncedSearch}
-					currentTotal={currentTotal}
-					triggerDataExtraction={triggerDataExtraction}
-					refreshing={refreshing}
-				/>
-			</div>
+                {/* Section 3: Actions (Add + Export) */}
+                <div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm grid grid-cols-4 sm:flex sm:flex-wrap sm:items-center gap-2">
+                    <button
+                        onClick={() =>
+                            setEditTx({
+                                id: null,
+                                description: '',
+                                explanation: '',
+                                amount: 0,
+                                date: dayjs().format('YYYY-MM-DDTHH:mm'),
+                                type: 'DEBIT',
+                                accountId: '',
+                                categoryId: '',
+                            })
+                        }
+                        className="bg-green-500 text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded shadow hover:bg-green-600 w-full sm:w-auto"
+                    >
+                        Add
+                    </button>
+                    <button
+                        onClick={async () => {
+                            const params = new URLSearchParams({
+                                month: filterMonth,
+                                accountId: filterAccount,
+                                type: filterType,
+                                search: debouncedSearch,
+                            });
+                            if (filterCategory) params.append('categoryId', filterCategory);
+                            const res = await api.get(`/transactions/export?${params}`).catch((err) => {
+                                if (err.response?.status === 401) {
+                                    localStorage.removeItem('authToken');
+                                    navigate('/');
+                                } else {
+                                    console.error('Failed to fetch user profile:', err);
+                                }
+                            });
+                            const flattenedRows = res.data.map((tx) => ({
+                                Date: tx.date,
+                                Description: tx.description,
+                                Explanation: tx.explanation || '',
+                                Amount: tx.amount,
+                                Type: tx.type,
+                                Account: tx.account?.name || '',
+                                Category: tx.category?.name || '',
+                            }));
+                            const csv = Papa.unparse(flattenedRows);
+                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                            saveAs(blob, 'transactions.csv');
+                        }}
+                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                    >
+                        CSV
+                    </button>
+                    <button
+                        onClick={async () => {
+                            const params = new URLSearchParams({
+                                month: filterMonth,
+                                accountId: filterAccount,
+                                type: filterType,
+                                search: debouncedSearch,
+                            });
+                            if (filterCategory) params.append('categoryId', filterCategory);
+                            const res = await api.get(`/transactions/export?${params}`).catch((err) => {
+                                if (err.response?.status === 401) {
+                                    localStorage.removeItem('authToken');
+                                    navigate('/');
+                                } else {
+                                    console.error('Failed to fetch user profile:', err);
+                                }
+                            });
+                            const flattenedRows = res.data.map((tx) => ({
+                                Date: tx.date,
+                                Description: tx.description,
+                                Explanation: tx.explanation || '',
+                                Amount: tx.amount,
+                                Type: tx.type,
+                                Account: tx.account?.name || '',
+                                Category: tx.category?.name || '',
+                            }));
+                            const worksheet = XLSX.utils.json_to_sheet(flattenedRows);
+                            const workbook = XLSX.utils.book_new();
+                            XLSX.utils.book_append_sheet(workbook, worksheet, 'Transactions');
+                            const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+                            const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+                            saveAs(blob, 'transactions.xlsx');
+                        }}
+                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                    >
+                        XLSX
+                    </button>
+                    <button
+                        onClick={async () => {
+                            const params = new URLSearchParams({
+                                month: filterMonth,
+                                accountId: filterAccount,
+                                type: filterType,
+                                search: debouncedSearch,
+                            });
+                            if (filterCategory) params.append('categoryId', filterCategory);
+                            const res = await api.get(`/transactions/export?${params}`).catch((err) => {
+                                if (err.response?.status === 401) {
+                                    localStorage.removeItem('authToken');
+                                    navigate('/');
+                                } else {
+                                    console.error('Failed to fetch user profile:', err);
+                                }
+                            });
+                            const { jsPDF } = await import('jspdf');
+                            const flattenedRows = res.data.map((tx) => ({
+                                Date: dayjs(tx.date).isValid() ? dayjs(tx.date).format('DD/MMM') : '',
+                                Description: tx.description,
+                                Amount: tx.amount,
+                                Type: tx.type,
+                                Account: tx.account?.name || '',
+                            }));
+                            const autoTable = (await import('jspdf-autotable')).default;
+                            const doc = new jsPDF();
+                            const headers = ['Date', 'Description', 'Amount', 'Type', 'Account'];
+                            const rows = flattenedRows.map((row) => headers.map((key) => row[key]));
+                            autoTable(doc, {
+                                head: [headers],
+                                body: rows,
+                                styles: { fontSize: 8, cellWidth: 'wrap' },
+                                columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 70 }, 2: { cellWidth: 25, halign: 'right' }, 3: { cellWidth: 15 }, 4: { cellWidth: 30 } },
+                                tableWidth: 'wrap',
+                                margin: { top: 20 },
+                            });
+                            doc.save('transactions.pdf');
+                        }}
+                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-3 sm:py-2 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                    >
+                        PDF
+                    </button>
+                </div>
 
 			{renderPagination()}
 

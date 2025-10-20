@@ -49,6 +49,38 @@ public class DataExtractionService {
     }
 
     /**
+     * Manually trigger only the specified data extraction services by simple class name
+     */
+    @Async
+    public CompletableFuture<String> triggerSpecificServices(List<String> serviceSimpleNames) {
+        logger.info("Manual trigger: Starting selected data extraction services: {}", serviceSimpleNames);
+
+        int successCount = 0;
+        int failureCount = 0;
+
+        for (AbstractDataExtractionService service : dataExtractionServices) {
+            String simpleName = service.getClass().getSimpleName();
+            if (!serviceSimpleNames.contains(simpleName)) {
+                continue;
+            }
+            try {
+                logger.info("Running data extraction service: {}", simpleName);
+                service.run();
+                successCount++;
+                logger.info("Successfully completed: {}", simpleName);
+            } catch (Exception e) {
+                failureCount++;
+                logger.error("Failed to run data extraction service: {}", simpleName, e);
+            }
+        }
+
+        String result = String.format("Selected data extraction completed. Success: %d, Failures: %d", successCount, failureCount);
+        logger.info("Manual trigger (selected) completed: {}", result);
+
+        return CompletableFuture.completedFuture(result);
+    }
+
+    /**
      * Get the list of available data extraction services
      */
     public List<String> getAvailableServices() {

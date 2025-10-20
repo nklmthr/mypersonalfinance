@@ -39,6 +39,7 @@ public class RegisterUniqueRequestIdFilter implements Filter {
 			MDC.put("requestId", requestId);
 
 			try {
+				logger.info("Request [{} {}] started", httpRequest.getMethod(), path);
 				chain.doFilter(request, response); 
 			} finally {
 				RequestContext.clear();
