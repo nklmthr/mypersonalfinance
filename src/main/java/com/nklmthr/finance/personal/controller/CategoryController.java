@@ -52,8 +52,12 @@ public class CategoryController {
 
 	@PutMapping("/{id}")
 	public ResponseEntity<Category> update(@PathVariable String id, @RequestBody Category updated) {
-		return categoryService.getCategoryById(id) != null ? ResponseEntity.ok(categoryService.saveCategory(updated))
-				: ResponseEntity.notFound().build();
+		// Ensure we update the existing entity instead of creating a new one
+		if (categoryService.getCategoryById(id) == null) {
+			return ResponseEntity.notFound().build();
+		}
+		updated.setId(id);
+		return ResponseEntity.ok(categoryService.saveCategory(updated));
 	}
 
 	@DeleteMapping("/{id}")
