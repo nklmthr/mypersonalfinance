@@ -14,10 +14,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpClientErrorException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,13 +60,20 @@ public class OpenAIClient {
     private String callOpenAI(String prompt) {
         RestTemplate restTemplate = new RestTemplate();
 
+        if (openAIApiKey == null || openAIApiKey.isBlank()) {
+            logger.error("OpenAI API key is missing. Ensure 'PROD_MYFINANCE_KEY' (or property 'openai.gpt-model-api-key') is set.");
+            throw new IllegalStateException("OpenAI API key is missing");
+        }
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Authorization", "Bearer " + openAIApiKey);
-        if (openAIOrganizationId != null && !openAIOrganizationId.isBlank()) {
+        boolean hasOrgHeader = openAIOrganizationId != null && !openAIOrganizationId.isBlank();
+        boolean hasProjectHeader = openAIProjectId != null && !openAIProjectId.isBlank();
+        if (hasOrgHeader) {
             headers.set("OpenAI-Organization", openAIOrganizationId);
         }
-        if (openAIProjectId != null && !openAIProjectId.isBlank()) {
+        if (hasProjectHeader) {
             headers.set("OpenAI-Project", openAIProjectId);
         }
 
@@ -115,21 +124,28 @@ public class OpenAIClient {
         requestBody.put("temperature", 0);
         requestBody.put("max_tokens", 512);
         logger.info("Request Body: {}", requestBody);
-        logger.info("Headers: {}", headers);
+        logger.info("OpenAI request setup - host: {}, model: {}, orgHeaderSet: {}, projectHeaderSet: {}",
+                openAIHost, openAIModel, hasOrgHeader, hasProjectHeader);
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
-        logger.info("Request Entity: {}", requestEntity);
+        logger.debug("Authorization header set: {} (masked)", mask("Bearer " + openAIApiKey));
         logger.info("OpenAI Host: {}", openAIHost);
-        logger.info("OpenAI API Key: {}", openAIApiKey);
-        logger.info("OpenAI Organization ID: {}", openAIOrganizationId);
-        logger.info("OpenAI Project ID: {}", openAIProjectId);
         logger.info("OpenAI Model: {}", openAIModel);
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                openAIHost + "/v1/chat/completions",
-                HttpMethod.POST,
-                requestEntity,
-                String.class
-        );
+        ResponseEntity<String> response;
+        try {
+            response = restTemplate.exchange(
+                    openAIHost + "/v1/chat/completions",
+                    HttpMethod.POST,
+                    requestEntity,
+                    String.class
+            );
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED) {
+                logger.error("OpenAI responded 401 Unauthorized. Verify API key and headers. model={}, host={}, orgHeaderSet={}, projectHeaderSet={}",
+                        openAIModel, openAIHost, hasOrgHeader, hasProjectHeader);
+            }
+            throw e;
+        }
         logger.info("Response: {}", response.getBody());
         try {
             JsonNode root = mapper.readTree(response.getBody());
@@ -331,5 +347,13 @@ public class OpenAIClient {
             logger.warn("Fuzzy scoring failed for '{}' vs '{}': {}", term1, term2, e.getMessage());
             return 0;
         }
+    }
+
+    private static String mask(String secret) {
+        if (secret == null || secret.isBlank()) {
+            return "<empty>";
+        }
+        int keep = Math.min(6, secret.length());
+        return secret.substring(0, keep) + "***";
     }
 }
