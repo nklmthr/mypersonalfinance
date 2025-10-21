@@ -97,7 +97,7 @@ function flattenCategories(categories, prefix = "") {
 }
 
 // Reusable searchable select (combobox) for Accounts/Categories
-function SearchSelect({ options, value, onChange, placeholder }) {
+function SearchSelect({ options, value, onChange, placeholder, error = false }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const containerRef = React.useRef(null);
@@ -130,6 +130,22 @@ function SearchSelect({ options, value, onChange, placeholder }) {
 
     const filtered = options.filter(o => normalize(o.name).includes(normalize(query)));
 
+    // Auto-select when a single non-placeholder option remains
+    useEffect(() => {
+        if (!open) return;
+        const norm = normalize(query);
+        if (!norm) return; // only after user types something
+        const filteredNonPlaceholder = options.filter(o => (o.id || o.id === 0) && normalize(o.name).includes(norm));
+        if (filteredNonPlaceholder.length === 1) {
+            const only = filteredNonPlaceholder[0];
+            if (only.id !== value) {
+                onChange(only.id);
+            }
+            setQuery("");
+            setOpen(false);
+        }
+    }, [query, open, options, value]);
+
     return (
         <div ref={containerRef} className="relative w-full">
             <input
@@ -137,7 +153,8 @@ function SearchSelect({ options, value, onChange, placeholder }) {
                 onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
                 onFocus={() => { setOpen(true); setQuery(""); }}
                 placeholder={placeholder}
-                className="border px-2 py-1 rounded text-sm w-full"
+                aria-invalid={error ? "true" : "false"}
+                className={`border px-2 py-1 rounded text-sm w-full ${error ? 'border-red-500' : ''}`}
             />
             {open && (
                 <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-auto w-full mt-1">
@@ -173,6 +190,7 @@ function TransactionForm({
 	const [dateInputValue, setDateInputValue] = useState(
 		transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : ""
 	);
+	const [errors, setErrors] = useState({});
 
 	// Keep local input in sync when transaction changes (edit mode)
 	useEffect(() => {
@@ -189,6 +207,24 @@ function TransactionForm({
 	const flattened = flattenCategories(treeCategories);
 
 	const submit = () => {
+		// Validate required fields
+		const newErrors = {};
+		if (!dateInputValue.trim()) newErrors.date = "Required";
+		if (!transaction.accountId) newErrors.accountId = "Required";
+		if (transaction.amount === undefined || transaction.amount === null || String(transaction.amount).trim() === "") newErrors.amount = "Required";
+		if (!transaction.currency) newErrors.currency = "Required";
+		if (!transaction.categoryId) newErrors.categoryId = "Required";
+		if (!transaction.type) newErrors.type = "Required";
+		if (!transaction.description || !transaction.description.trim()) newErrors.description = "Required";
+
+		if (Object.keys(newErrors).length > 0) {
+			setErrors(newErrors);
+			const fieldMap = { date: "Date", accountId: "Account", amount: "Amount", currency: "Currency", categoryId: "Category", type: "Type", description: "Description" };
+			const missing = Object.keys(newErrors).map((k) => fieldMap[k]).join(", ");
+			alert(`Please fill required fields: ${missing}`);
+			return;
+		}
+
 		let finalDate = transaction.date;
 		if (dateInputValue.trim()) {
 			try {
@@ -253,12 +289,12 @@ function TransactionForm({
 
 			{/* Date */}
 			<div>
-				<label className="block text-sm font-medium mb-1">Date & Time</label>
+			<label className="block text-sm font-medium mb-1">Date & Time<span className="text-red-600">*</span></label>
 				<input
 					type="text"
 					placeholder="DD/MM/YYYY HH:MM or YYYY-MM-DD HH:MM"
 					value={dateInputValue}
-					onChange={(e) => setDateInputValue(e.target.value)}
+					onChange={(e) => { setDateInputValue(e.target.value); setErrors((er) => ({ ...er, date: undefined })); }}
 					onBlur={(e) => {
 						const value = e.target.value.trim();
 						if (!value) {
@@ -303,9 +339,10 @@ function TransactionForm({
 							setTimeout(() => { e.target.style.borderColor = ""; }, 2000);
 						}
 					}}
-					className="w-full border rounded px-3 py-2"
+					className={`w-full border rounded px-3 py-2 ${errors.date ? 'border-red-500' : ''}`}
 					required
 				/>
+				{errors.date && (<div className="text-xs text-red-600 mt-1">Required</div>)}
 				<p className="text-xs text-gray-500 mt-1">
 					Accepted: "28/09/2025 14:30", "28/09/2025", "2025-09-28 14:30", "2025-09-28T14:30"
 				</p>
@@ -314,35 +351,34 @@ function TransactionForm({
 				{/* Account, Amount & Currency */}
 				<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 					<div>
-						<label className="block text-sm font-medium mb-1">Account</label>
+						<label className="block text-sm font-medium mb-1">Account<span className="text-red-600">*</span></label>
 					<SearchSelect
 						options={[{ id: "", name: "All Accounts" }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
 						value={transaction.accountId || ""}
-						onChange={(val) => setTransaction((t) => ({ ...t, accountId: val }))}
+						onChange={(val) => { setTransaction((t) => ({ ...t, accountId: val })); setErrors((e) => ({ ...e, accountId: undefined })); }}
 						placeholder="Account"
+						error={Boolean(errors.accountId)}
 					/>
+					{errors.accountId && (<div className="text-xs text-red-600 mt-1">Required</div>)}
 					</div>
 					<div>
-						<label className="block text-sm font-medium mb-1">Amount</label>
+						<label className="block text-sm font-medium mb-1">Amount<span className="text-red-600">*</span></label>
 						<input
 							type="number"
 							placeholder="Amount"
 							value={transaction.amount}
-							onChange={(e) =>
-								setTransaction((t) => ({ ...t, amount: e.target.value }))
-							}
-							className="w-full border rounded px-3 py-2"
+							onChange={(e) => { setTransaction((t) => ({ ...t, amount: e.target.value })); setErrors((er) => ({ ...er, amount: undefined })); }}
+							className={`w-full border rounded px-3 py-2 ${errors.amount ? 'border-red-500' : ''}`}
 							required
 						/>
+						{errors.amount && (<div className="text-xs text-red-600 mt-1">Required</div>)}
 					</div>
 					<div>
-						<label className="block text-sm font-medium mb-1">Currency</label>
+						<label className="block text-sm font-medium mb-1">Currency<span className="text-red-600">*</span></label>
 						<select
-							className="w-full border rounded px-3 py-2"
+							className={`w-full border rounded px-3 py-2 ${errors.currency ? 'border-red-500' : ''}`}
 							value={transaction.currency || "INR"}
-							onChange={(e) =>
-								setTransaction((t) => ({ ...t, currency: e.target.value }))
-							}
+							onChange={(e) => { setTransaction((t) => ({ ...t, currency: e.target.value })); setErrors((er) => ({ ...er, currency: undefined })); }}
 						>
 							<option value="INR">INR</option>
 							<option value="USD">USD</option>
@@ -355,48 +391,49 @@ function TransactionForm({
 							<option value="SGD">SGD</option>
 							<option value="AED">AED</option>
 						</select>
+						{errors.currency && (<div className="text-xs text-red-600 mt-1">Required</div>)}
 					</div>
 				</div>
 
 				{/* Category & Transaction Type */}
 				<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 					<div>
-						<label className="block text-sm font-medium mb-1">Category</label>
+					<label className="block text-sm font-medium mb-1">Category<span className="text-red-600">*</span></label>
 					<SearchSelect
 						options={[{ id: "", name: "All Categories" }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
 						value={transaction.categoryId || ""}
-						onChange={(val) => setTransaction((t) => ({ ...t, categoryId: val }))}
+						onChange={(val) => { setTransaction((t) => ({ ...t, categoryId: val })); setErrors((e) => ({ ...e, categoryId: undefined })); }}
 						placeholder="Category"
+						error={Boolean(errors.categoryId)}
 					/>
+					{errors.categoryId && (<div className="text-xs text-red-600 mt-1">Required</div>)}
 					</div>
 					<div>
-						<label className="block text-sm font-medium mb-1">Type</label>
+						<label className="block text-sm font-medium mb-1">Type<span className="text-red-600">*</span></label>
 						<select
-							className="w-full border rounded px-3 py-2"
+							className={`w-full border rounded px-3 py-2 ${errors.type ? 'border-red-500' : ''}`}
 							value={transaction.type || "DEBIT"}
-							onChange={(e) =>
-								setTransaction((t) => ({ ...t, type: e.target.value }))
-							}
+							onChange={(e) => { setTransaction((t) => ({ ...t, type: e.target.value })); setErrors((er) => ({ ...er, type: undefined })); }}
 						>
 							<option value="DEBIT">Debit</option>
 							<option value="CREDIT">Credit</option>
 						</select>
+						{errors.type && (<div className="text-xs text-red-600 mt-1">Required</div>)}
 					</div>
 				</div>
 
 				{/* Description */}
 				<div>
-					<label className="block text-sm font-medium mb-1">Description</label>
+				<label className="block text-sm font-medium mb-1">Description<span className="text-red-600">*</span></label>
 					<input
 						type="text"
 						placeholder="Description"
 						value={transaction.description || ""}
-						onChange={(e) =>
-							setTransaction((t) => ({ ...t, description: e.target.value }))
-						}
-						className="w-full border rounded px-3 py-2"
+					onChange={(e) => { setTransaction((t) => ({ ...t, description: e.target.value })); setErrors((er) => ({ ...er, description: undefined })); }}
+					className={`w-full border rounded px-3 py-2 ${errors.description ? 'border-red-500' : ''}`}
 						required
 					/>
+				{errors.description && (<div className="text-xs text-red-600 mt-1">Required</div>)}
 				</div>
 
 				{/* Explanation */}
