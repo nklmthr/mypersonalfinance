@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import api from "../auth/api";
 import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
@@ -897,6 +897,15 @@ const triggerDataExtraction = async (servicesToRun) => {
 	const treeCategories = buildTree(categories);
 	const flattened = flattenCategories(treeCategories);
 
+	const displayedRows = useMemo(() => {
+		return (transactions || []).reduce((acc, tx) => {
+			const childCount = expandedParents[tx.id] && Array.isArray(tx.children)
+				? tx.children.filter((c) => typeof c === "object" && c !== null).length
+				: 0;
+			return acc + 1 + childCount;
+		}, 0);
+	}, [transactions, expandedParents]);
+
 	const renderRow = (tx, isChild = false, index = 0) => {
 		const baseColor = isChild
 			? "bg-gray-50 border-dashed"
@@ -1694,7 +1703,7 @@ function TransactionPageButtons({
                 </div>
 
                 {/* Section 3: Actions (Add + Export) */}
-                <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm grid grid-cols-4 sm:flex sm:flex-wrap sm:items-center gap-2">
+				<div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm grid grid-cols-4 sm:flex sm:flex-wrap sm:items-center gap-2">
                     <button
                         onClick={() =>
                             setEditTx({
@@ -1830,6 +1839,9 @@ function TransactionPageButtons({
                     >
                         PDF
                     </button>
+					<div className="col-span-4 text-right sm:ml-auto sm:grow-0 sm:text-right text-xs sm:text-sm text-gray-700">
+						Rows: {displayedRows}
+					</div>
                 </div>
 
 			{renderPagination()}
