@@ -52,17 +52,6 @@ public class OpenAIClient {
     @Autowired
     private AccountService accountService;
 
-    public static void main(String[] args) {
-        OpenAIClient impl = new OpenAIClient();
-		String emailText =
-                """
-                28-09-2025 Dear Nikhil Mathur, Here's the summary of your transaction: Amount Debited: INR 250.00 Account Number: XX2804 Date & Time: 28-09-25, 12:48:34 IST Transaction Info: UPI/P2A/563748979856/Ganesh S N If this transaction was not initiated by you: To block UPI: SMS BLOCKUPI <Customer ID> to +919951860002 from your registered mobile number. Call us at: 18001035577 (Toll Free) 18604195555 (Charges Applicable) Always open to help you. Regards, Axis Bank Ltd. ****This is a system generated communication and does not require signature. **** E003598217_09_2024 Reach us at: CHAT WEB Support Mobile app INTERNET BANKING WHATSAPP BRANCH LOCATOR Copyright Axis Bank Ltd. All rights reserved. Terms & Conditions apply. Please do not share your Internet Banking details, such as user ID/password or your Credit/Debit Card number/CVV/OTP with anyone, either over phone or through email. RBI never deals with individuals for Savings Account, Current Account, Credit Card, Debit Card, etc. Don't be victim to such offers coming to you on phone or email in the name of RBI. Do not click on Links from unknown/unsecure Sources that seek your confidential information. This email is confidential. It may also be legally privileged. If you are not the addressee, you may not copy, forward, disclose or use any part of it. Internet communications cannot be guaranteed to be timely, secure, error or virus-free. The sender does not accept liability for any errors or omissions. We maintain strict security standards and procedures to prevent unauthorised access to information about you. Know more >> Untitled 28-09-2025 Dear Nikhil Mathur, Here's the summary of your transaction: Amount Debited: INR 250.00 Account Number: XX2804 Date & Time: 28-09-25, 12:48:34 IST Transaction Info: UPI/P2A/563748979856/Ganesh S N If this transaction was not initiated by you: To block UPI: SMS BLOCKUPI <Customer ID> to +919951860002 from your registered mobile number. Call us at: 18001035577 (Toll Free) 18604195555 (Charges Applicable) Always open to help you. Regards, Axis Bank Ltd. ****This is a system generated communication and does not require signature. **** E003598217_09_2024 Reach us at: CHAT WEB Support Mobile app INTERNET BANKING WHATSAPP BRANCH LOCATOR Copyright Axis Bank Ltd. All rights reserved. Terms & Conditions apply. Please do not share your Internet Banking details, such as user ID/password or your Credit/Debit Card number/CVV/OTP with anyone, either over phone or through email. RBI never deals with individuals for Savings Account, Current Account, Credit Card, Debit Card, etc. Don't be victim to such offers coming to you on phone or email in the name of RBI. Do not click on Links from unknown/unsecure Sources that seek your confidential information. This email is confidential. It may also be legally privileged. If you are not the addressee, you may not copy, forward, disclose or use any part of it. Internet communications cannot be guaranteed to be timely, secure, error or virus-free. The sender does not accept liability for any errors or omissions. We maintain strict security standards and procedures to prevent unauthorised access to information about you. Know more >>
-                """;
-
-        String response = impl.callOpenAI(emailText);
-        System.out.println(response);
-    }
-
     /**
      * Calls the OpenAI/OSS model and returns a pure JSON string
      */
@@ -116,17 +105,24 @@ public class OpenAIClient {
 			"required", List.of("id", "date", "amount", "description", "type", "account", "currency", "category")
         ));
         schema.put("strict", true);
-
+        logger.info("Schema: {}", schema);
         Map<String, Object> responseFormat = new HashMap<>();
         responseFormat.put("type", "json_schema");
         responseFormat.put("json_schema", schema);
         requestBody.put("response_format", responseFormat);
-
+        logger.info("Response Format: {}", responseFormat);
         // Make responses deterministic and bounded
         requestBody.put("temperature", 0);
         requestBody.put("max_tokens", 512);
-
+        logger.info("Request Body: {}", requestBody);
+        logger.info("Headers: {}", headers);
         HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+        logger.info("Request Entity: {}", requestEntity);
+        logger.info("OpenAI Host: {}", openAIHost);
+        logger.info("OpenAI API Key: {}", openAIApiKey);
+        logger.info("OpenAI Organization ID: {}", openAIOrganizationId);
+        logger.info("OpenAI Project ID: {}", openAIProjectId);
+        logger.info("OpenAI Model: {}", openAIModel);
 
         ResponseEntity<String> response = restTemplate.exchange(
                 openAIHost + "/v1/chat/completions",
@@ -134,7 +130,7 @@ public class OpenAIClient {
                 requestEntity,
                 String.class
         );
-
+        logger.info("Response: {}", response.getBody());
         try {
             JsonNode root = mapper.readTree(response.getBody());
             // Prefer tool/function arguments if provided (some servers use this)
