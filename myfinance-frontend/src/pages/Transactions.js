@@ -931,7 +931,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 										content: (
 												<div className="space-y-4">
 													{/* Header with Transaction ID and Date */}
-													<div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded border">
+                                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded border">
 														<div className="flex justify-between items-center">
 															<div>
 																<h3 className="font-semibold text-gray-800">Transaction Details</h3>
@@ -948,13 +948,13 @@ const triggerDataExtraction = async (servicesToRun) => {
 													<div className="grid grid-cols-2 gap-4">
 														<div className="space-y-2">
 															<h4 className="font-semibold text-gray-700 text-sm">📊 Original Description</h4>
-											<div className="bg-gray-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words">
+                                            <div className="bg-gray-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words break-all">
 												<p className="text-sm leading-snug">{tx.description || <span className="text-gray-400 italic">Not available</span>}</p>
 											</div>
 														</div>
 														<div className="space-y-2">
 															<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Description</h4>
-												<div className="bg-blue-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words">
+                                                <div className="bg-blue-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words break-all">
 													<p className="text-sm leading-snug">{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}</p>
 												</div>
 														</div>
@@ -1053,14 +1053,14 @@ const triggerDataExtraction = async (servicesToRun) => {
 											<div className="grid grid-cols-2 gap-4">
 												<div className="space-y-2">
 													<h4 className="font-semibold text-gray-700 text-sm">📊 Original Description</h4>
-													<div className="bg-gray-50 p-3 rounded border min-h-[60px]">
-														<p className="text-sm">{tx.description || <span className="text-gray-400 italic">Not available</span>}</p>
+                                                    <div className="bg-gray-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words break-all">
+                                                        <p className="text-sm">{tx.description || <span className="text-gray-400 italic">Not available</span>}</p>
 													</div>
 												</div>
 												<div className="space-y-2">
 													<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Description</h4>
-													<div className="bg-blue-50 p-3 rounded border min-h-[60px]">
-														<p className="text-sm">{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}</p>
+                                                    <div className="bg-blue-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words break-all">
+                                                        <p className="text-sm">{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}</p>
 													</div>
 												</div>
 											</div>
