@@ -40,32 +40,35 @@ public class AccountTransactionController {
 
 	@GetMapping
 	public Page<AccountTransactionDTO> getTransactions(@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String month,
+            @RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String month,
+            @RequestParam(required = false) String date,
 			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
 			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
 		logger.debug(
-				"Fetching transactions - page: {}, size: {}, month: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
-				page, size, month, accountId, type, categoryId, search);
+                "Fetching transactions - page: {}, size: {}, month: {}, date: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
+                page, size, month, date, accountId, type, categoryId, search);
 		return transactionService.getFilteredTransactions(PageRequest.of(page, size, Sort.by("date").descending()),
-				month, accountId, type, search, categoryId);
+                month, date, accountId, type, search, categoryId);
 	}
 
-	@GetMapping("/currentTotal")
-	public BigDecimal getCurrentTotal(@RequestParam(required = false) String month,
+    @GetMapping("/currentTotal")
+    public BigDecimal getCurrentTotal(@RequestParam(required = false) String month,
+            @RequestParam(required = false) String date,
 			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
 			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
-		logger.debug("Calculating current total - month: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
-				month, accountId, type, categoryId, search);
-		return transactionService.getCurrentTotal(month, accountId, type, search, categoryId);
+        logger.debug("Calculating current total - month: {}, date: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
+                month, date, accountId, type, categoryId, search);
+        return transactionService.getCurrentTotal(month, date, accountId, type, search, categoryId);
 	}
 
-	@GetMapping("/export")
-	public List<AccountTransactionDTO> exportTransactions(@RequestParam(required = false) String month,
+    @GetMapping("/export")
+    public List<AccountTransactionDTO> exportTransactions(@RequestParam(required = false) String month,
+            @RequestParam(required = false) String date,
 			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
 			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
-		logger.debug("Exporting transactions - month: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
-				month, accountId, type, categoryId, search);
-		return transactionService.getFilteredTransactionsForExport(month, accountId, type, categoryId, search);
+        logger.debug("Exporting transactions - month: {}, date: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
+                month, date, accountId, type, categoryId, search);
+        return transactionService.getFilteredTransactionsForExport(month, date, accountId, type, categoryId, search);
 	}
 
 	@GetMapping("/{id}")

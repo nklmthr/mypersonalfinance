@@ -686,6 +686,9 @@ export default function Transactions() {
 	const [filterMonth, setFilterMonth] = useState(
 		searchParams.get("month") || dayjs().format("YYYY-MM")
 	);
+	const [filterDate, setFilterDate] = useState(
+		searchParams.get("date") || ""
+	);
 	const updateUrlParams = (overrides = {}) => {
 	  const params = new URLSearchParams(searchParams);
 
@@ -716,6 +719,9 @@ export default function Transactions() {
 const [refreshing, setRefreshing] = useState(false);
 const [availableServices, setAvailableServices] = useState([]);
 const [selectedServices, setSelectedServices] = useState([]);
+
+// Unified date filter: choose Month or Date (default Month unless URL has date)
+const [filterMode, setFilterMode] = useState(searchParams.get("date") ? "date" : "month");
 
 // (moved to top-level above)
 
@@ -756,15 +762,21 @@ useEffect(() => {
 	const fetchData = async () => {
 		setLoading(true);
 		NProgress.start();
-		try {
+        try {
 			const params = new URLSearchParams({
 				page,
 				size: pageSize,
-				month: filterMonth || "",
 				accountId: filterAccount || "",
 				type: filterType || "",
 				search: search || "",
 			});
+
+            if (filterMode === 'month' && filterMonth) {
+                params.set('month', filterMonth);
+            }
+            if (filterMode === 'date' && filterDate) {
+                params.set('date', filterDate);
+            }
 
 			if (filterCategory) {
 				params.append("categoryId", filterCategory);
@@ -804,7 +816,7 @@ useEffect(() => {
 	useEffect(() => {
 		setCurrentTotal(0);
 		fetchData();
-	}, [page, pageSize, filterMonth, filterAccount, filterType, filterCategory, debouncedSearch]);
+    }, [page, pageSize, filterMode, filterMonth, filterDate, filterAccount, filterType, filterCategory, debouncedSearch]);
 
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
@@ -1356,9 +1368,10 @@ function TransactionPageButtons({
 							Add
 						</button>
 						<button
-							onClick={async () => {
+                        onClick={async () => {
 								const params = new URLSearchParams({
-									month: filterMonth,
+                                ...(filterMode === 'month' && filterMonth ? { month: filterMonth } : {}),
+                                ...(filterMode === 'date' && filterDate ? { date: filterDate } : {}),
 									accountId: filterAccount,
 									type: filterType,
 									search,
@@ -1390,9 +1403,10 @@ function TransactionPageButtons({
 							CSV
 						</button>
 						<button
-							onClick={async () => {
+                        onClick={async () => {
 								const params = new URLSearchParams({
-									month: filterMonth,
+                                ...(filterMode === 'month' && filterMonth ? { month: filterMonth } : {}),
+                                ...(filterMode === 'date' && filterDate ? { date: filterDate } : {}),
 									accountId: filterAccount,
 									type: filterType,
 									search,
@@ -1427,9 +1441,10 @@ function TransactionPageButtons({
 							XLSX
 						</button>
 						<button
-							onClick={async () => {
+                        onClick={async () => {
 								const params = new URLSearchParams({
-									month: filterMonth,
+                                ...(filterMode === 'month' && filterMonth ? { month: filterMonth } : {}),
+                                ...(filterMode === 'date' && filterDate ? { date: filterDate } : {}),
 									accountId: filterAccount,
 									type: filterType,
 									search,
@@ -1596,13 +1611,39 @@ function TransactionPageButtons({
 
                 {/* Section 2: Filters in two rows */}
                 <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm space-y-2">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center">
-                    <input
-                        type="month"
-                        value={filterMonth}
-                        onChange={(e) => {setFilterMonth(e.target.value); updateUrlParams({ month: e.target.value });}}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-center">
+                    <select
+                        value={filterMode}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setFilterMode(val);
+                            if (val === 'month') {
+                                updateUrlParams({ date: '' });
+                            } else {
+                                updateUrlParams({ month: '' });
+                            }
+                        }}
+                        className="border px-2 py-1 rounded text-sm w-full"
+                        title="Choose Month or Date filter"
+                    >
+                        <option value="month">By Month</option>
+                        <option value="date">By Date</option>
+                    </select>
+                    {filterMode === 'month' ? (
+                        <input
+                            type="month"
+                            value={filterMonth}
+                            onChange={(e) => { setFilterMonth(e.target.value); updateUrlParams({ month: e.target.value, date: '' }); }}
                             className="border px-2 py-1 rounded text-sm w-full"
-                    />
+                        />
+                    ) : (
+                        <input
+                            type="date"
+                            value={filterDate}
+                            onChange={(e) => { setFilterDate(e.target.value); updateUrlParams({ date: e.target.value, month: '' }); }}
+                            className="border px-2 py-1 rounded text-sm w-full"
+                        />
+                    )}
                         <SearchSelect
                             options={[{ id: '', name: 'All Accounts' }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
                             value={filterAccount}
@@ -1637,6 +1678,8 @@ function TransactionPageButtons({
                         <button
                             onClick={() => {
                                 setFilterMonth('');
+                                setFilterDate('');
+                                setFilterMode('month');
                                 setFilterAccount('');
                                 setFilterCategory('');
                                 setFilterType('ALL');
@@ -1673,7 +1716,8 @@ function TransactionPageButtons({
                     <button
                         onClick={async () => {
                             const params = new URLSearchParams({
-                                month: filterMonth,
+                                ...(filterMode === 'month' && filterMonth ? { month: filterMonth } : {}),
+                                ...(filterMode === 'date' && filterDate ? { date: filterDate } : {}),
                                 accountId: filterAccount,
                                 type: filterType,
                                 search: debouncedSearch,
@@ -1707,7 +1751,8 @@ function TransactionPageButtons({
                     <button
                         onClick={async () => {
                             const params = new URLSearchParams({
-                                month: filterMonth,
+                                ...(filterMode === 'month' && filterMonth ? { month: filterMonth } : {}),
+                                ...(filterMode === 'date' && filterDate ? { date: filterDate } : {}),
                                 accountId: filterAccount,
                                 type: filterType,
                                 search: debouncedSearch,
@@ -1744,7 +1789,8 @@ function TransactionPageButtons({
                     <button
                         onClick={async () => {
                             const params = new URLSearchParams({
-                                month: filterMonth,
+                                ...(filterMode === 'month' && filterMonth ? { month: filterMonth } : {}),
+                                ...(filterMode === 'date' && filterDate ? { date: filterDate } : {}),
                                 accountId: filterAccount,
                                 type: filterType,
                                 search: debouncedSearch,
