@@ -81,7 +81,17 @@ function AddCategoryModal({
 export default function Categories() {
 	const [categories, setCategories] = useState([]);
 	const [allCategories, setAllCategories] = useState([]);
-	const [expanded, setExpanded] = useState(new Set());
+	const EXPANDED_STORAGE_KEY = "categories:expanded";
+	const [expanded, setExpanded] = useState(() => {
+		if (typeof window === "undefined") return new Set();
+		try {
+			const stored = window.localStorage.getItem(EXPANDED_STORAGE_KEY);
+			return stored ? new Set(JSON.parse(stored)) : new Set();
+		} catch (error) {
+			console.warn("Failed to read expanded categories from storage", error);
+			return new Set();
+		}
+	});
 
 	const [showAddModal, setShowAddModal] = useState(false);
 	const [showEditModal, setShowEditModal] = useState(false);
@@ -108,6 +118,17 @@ export default function Categories() {
 			const nestedTree = buildTree(flatList);
 			setCategories(nestedTree);
 			setAllCategories(flatList); // keep flat for dropdowns
+			setExpanded((prev) => {
+				const validIds = new Set(flatList.map((item) => item.id));
+				const filtered = new Set([...prev].filter((id) => validIds.has(id)));
+				if (typeof window !== "undefined") {
+					window.localStorage.setItem(
+						EXPANDED_STORAGE_KEY,
+						JSON.stringify([...filtered])
+					);
+				}
+				return filtered;
+			});
 		} catch (err) {
 			console.error("Failed to fetch categories:", err);
 		} finally {
@@ -130,13 +151,29 @@ export default function Categories() {
 				roots.push(map[item.id]);
 			}
 		});
-		return roots;
+		return sortByChildCountAsc(roots);
+	};
+
+	const sortByChildCountAsc = (nodes) => {
+		if (!Array.isArray(nodes)) return [];
+		return [...nodes]
+			.sort((a, b) => (a.children?.length || 0) - (b.children?.length || 0))
+			.map((node) => ({
+				...node,
+				children: sortByChildCountAsc(node.children || []),
+			}));
 	};
 
 	const toggleExpand = (id) => {
 		setExpanded((prev) => {
 			const next = new Set(prev);
 			next.has(id) ? next.delete(id) : next.add(id);
+			if (typeof window !== "undefined") {
+				window.localStorage.setItem(
+					EXPANDED_STORAGE_KEY,
+					JSON.stringify([...next])
+				);
+			}
 			return next;
 		});
 	};

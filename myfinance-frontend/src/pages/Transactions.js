@@ -87,7 +87,12 @@ function FetchToolbar({
 
 function flattenCategories(categories, prefix = "") {
 	let flat = [];
-	for (const c of categories || []) {
+	const sorted = [...(categories || [])].sort((a, b) => {
+		const childDiff = (a?.children?.length || 0) - (b?.children?.length || 0);
+		if (childDiff !== 0) return childDiff;
+		return (a?.name || "").localeCompare(b?.name || "", undefined, { sensitivity: "base" });
+	});
+	for (const c of sorted) {
 		flat.push({ id: c.id, name: prefix + c.name });
 		if (c.children?.length > 0) {
 			flat = flat.concat(flattenCategories(c.children, prefix + "— "));
@@ -204,7 +209,9 @@ function TransactionForm({
 	}, [onCancel]);
 
 	const treeCategories = buildTree(categories);
-	const flattened = flattenCategories(treeCategories);
+	const rootHomeForm = treeCategories.filter((cat) => cat?.name === "Home");
+	const limitedTreeForm = rootHomeForm.length > 0 ? rootHomeForm : treeCategories;
+	const flattened = flattenCategories(limitedTreeForm);
 
 	const submit = () => {
 		// Validate required fields
@@ -400,7 +407,7 @@ function TransactionForm({
 					<div>
 					<label className="block text-sm font-medium mb-1">Category<span className="text-red-600">*</span></label>
 					<SearchSelect
-						options={[{ id: "", name: "All Categories" }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
+						options={flattened.map(c => ({ id: c.id, name: c.name }))}
 						value={transaction.categoryId || ""}
 						onChange={(val) => { setTransaction((t) => ({ ...t, categoryId: val })); setErrors((e) => ({ ...e, categoryId: undefined })); }}
 						placeholder="Category"
@@ -575,7 +582,9 @@ function TransactionSplit({ transaction, setTransaction, onCancel, onSubmit, cat
 	};
 
 	const treeCategories = buildTree(categories);
-	const flattened = flattenCategories(treeCategories);
+	const rootHome = treeCategories.filter((cat) => cat?.name === "Home");
+	const limitedTree = rootHome.length > 0 ? rootHome : treeCategories;
+	const flattened = flattenCategories(limitedTree);
 
 	const updateChild = (index, key, value) => {
 		const updated = [...children];
@@ -637,7 +646,7 @@ function TransactionSplit({ transaction, setTransaction, onCancel, onSubmit, cat
 							className="border rounded px-2 py-1"
 						/>
 					<SearchSelect
-						options={[{ id: "", name: "— None —" }, ...flattened.map(category => ({ id: category.id, name: category.name }))]}
+						options={flattened.map(c => ({ id: c.id, name: c.name }))}
 						value={child.categoryId || ""}
 						onChange={(val) => updateChild(idx, "categoryId", val)}
 						placeholder="Category"
@@ -895,7 +904,9 @@ const triggerDataExtraction = async (servicesToRun) => {
 
 	// Build + flatten once per render and reuse everywhere
 	const treeCategories = buildTree(categories);
-	const flattened = flattenCategories(treeCategories);
+	const rootHome = treeCategories.filter((cat) => cat?.name === "Home");
+	const limitedTree = rootHome.length > 0 ? rootHome : treeCategories;
+	const flattened = flattenCategories(limitedTree);
 
 	const displayedRows = useMemo(() => {
 		return (transactions || []).reduce((acc, tx) => {
@@ -1184,7 +1195,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 
 				<div className="order-3 sm:order-none">
 					<SearchSelect
-						options={[{ id: "", name: "— Category —" }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
+						options={flattened.map(c => ({ id: c.id, name: c.name }))}
 						value={tx.category?.id || ""}
 						onChange={(val) => {
 							saveTx(
@@ -1679,7 +1690,7 @@ function TransactionPageButtons({
                     </div>
                     <div className="grid grid-cols-2 gap-2 items-center">
                         <SearchSelect
-                            options={[{ id: '', name: 'All Categories' }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
+                            options={flattened.map(c => ({ id: c.id, name: c.name }))}
                             value={filterCategory}
                             onChange={(val) => { setFilterCategory(val); updateUrlParams({ categoryId: val }); }}
                             placeholder="Category"

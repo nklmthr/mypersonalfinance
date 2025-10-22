@@ -17,12 +17,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.data.domain.Sort;
 
 import com.nklmthr.finance.personal.dto.AccountTypeDTO;
 import com.nklmthr.finance.personal.mapper.AccountTypeMapper;
+import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountType;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.repository.AccountRepository;
 import com.nklmthr.finance.personal.repository.AccountTypeRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +38,9 @@ class AccountTypeServiceTest {
 
     @Mock
     private AccountTypeMapper accountTypeMapper;
+
+    @Mock
+    private AccountRepository accountRepository;
 
     @InjectMocks
     private AccountTypeService accountTypeService;
@@ -53,9 +58,6 @@ class AccountTypeServiceTest {
             .build();
         when(appUserService.getCurrentUser()).thenReturn(currentUser);
 
-        // Ensure fields annotated with @Autowired are set for unit testing
-        ReflectionTestUtils.setField(accountTypeService, "appUserService", appUserService);
-        ReflectionTestUtils.setField(accountTypeService, "accountTypeRepository", accountTypeRepository);
     }
 
     @Test
@@ -102,6 +104,22 @@ class AccountTypeServiceTest {
         AccountType at1 = AccountType.builder().id("a1").name("Savings").appUser(currentUser).build();
         AccountType at2 = AccountType.builder().id("a2").name("Checking").appUser(currentUser).build();
         when(accountTypeRepository.findByAppUser(currentUser)).thenReturn(List.of(at1, at2));
+
+        Account account1 = new Account();
+        account1.setId("acc-1");
+        account1.setBalance(BigDecimal.valueOf(100));
+        account1.setAccountType(at1);
+
+        Account account2 = new Account();
+        account2.setId("acc-2");
+        account2.setBalance(BigDecimal.valueOf(200));
+        account2.setAccountType(at1);
+
+        Account account3 = new Account();
+        account3.setId("acc-3");
+        account3.setBalance(BigDecimal.valueOf(50));
+        account3.setAccountType(at2);
+        when(accountRepository.findAllByAppUser(currentUser, Sort.unsorted())).thenReturn(List.of(account1, account2, account3));
 
         AccountTypeDTO dto1 = new AccountTypeDTO("a1", "Savings", null, null, null);
         AccountTypeDTO dto2 = new AccountTypeDTO("a2", "Checking", null, null, null);

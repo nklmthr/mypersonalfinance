@@ -5,28 +5,69 @@ import { useNavigate, Link } from "react-router-dom";
 
 export default function CategorySpendSummary() {
 	const [data, setData] = useState([]);
-	const [expanded, setExpanded] = useState({});
+	const EXPANDED_STORAGE_KEY = "category-spends:expanded";
+	const [expanded, setExpanded] = useState(() => {
+		if (typeof window === "undefined") return new Set();
+		try {
+			const stored = window.localStorage.getItem(EXPANDED_STORAGE_KEY);
+			return stored ? new Set(JSON.parse(stored)) : new Set();
+		} catch (error) {
+			console.warn("Failed to restore category spends expanded state", error);
+			return new Set();
+		}
+	});
+
 	const navigate = useNavigate();
 	const last6Months = [...Array(6)].map((_, i) =>
 		dayjs().subtract(i, "month").format("YYYY-MM")
 	);
 
-	useEffect(() => {
-		api.get("/category-spends") // <-- update to your actual backend endpoint
-			.then((res) => setData(res.data))
-			.catch((err) => {
-				if (err.response?.status === 401) {
-					localStorage.removeItem("authToken");
-					navigate("/");   
-				} else {
-					console.error("Failed to fetch user profile:", err);
-				}
-			});
-	}, []);
+	const persistExpanded = (expandedSet) => {
+		if (typeof window === "undefined") return;
+		try {
+			window.localStorage.setItem(
+				EXPANDED_STORAGE_KEY,
+				JSON.stringify([...expandedSet])
+			);
+		} catch (error) {
+			console.warn("Failed to persist category spends expanded state", error);
+		}
+	};
+
+	const sortTreeByChildCountAsc = (nodes = []) => {
+		if (!Array.isArray(nodes)) return [];
+		return [...nodes]
+			.map((node) => ({
+				...node,
+				children: sortTreeByChildCountAsc(node.children || []),
+			}))
+			.sort((a, b) => (a.children?.length || 0) - (b.children?.length || 0));
+	};
+
+	const collectIds = (nodes = []) => {
+		const result = new Set();
+		const stack = [...nodes];
+		while (stack.length) {
+			const current = stack.pop();
+			if (!current?.id || result.has(current.id)) continue;
+			result.add(current.id);
+			if (Array.isArray(current.children)) {
+				stack.push(...current.children);
+			}
+		}
+		return result;
+	};
 
 	const toggle = (id) => {
-		setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+		setExpanded((prev) => {
+			const next = new Set(prev);
+			next.has(id) ? next.delete(id) : next.add(id);
+			persistExpanded(next);
+			return next;
+		});
 	};
+
+	const isExpanded = (id) => expanded.has(id);
 
 	const formatINR = (amount) =>
 		new Intl.NumberFormat("en-IN", {
@@ -40,10 +81,33 @@ export default function CategorySpendSummary() {
 		return entry ? entry.amount : 0;
 	};
 
+	useEffect(() => {
+		api.get("/category-spends")
+			.then((res) => {
+				const responseData = Array.isArray(res.data) ? res.data : [];
+				const sorted = sortTreeByChildCountAsc(responseData);
+				setData(sorted);
+				setExpanded((prev) => {
+					const validIds = collectIds(sorted);
+					const filtered = new Set([...prev].filter((id) => validIds.has(id)));
+					persistExpanded(filtered);
+					return filtered;
+				});
+			})
+			.catch((err) => {
+				if (err.response?.status === 401) {
+					localStorage.removeItem("authToken");
+					navigate("/");
+				} else {
+					console.error("Failed to fetch user profile:", err);
+				}
+			});
+	}, []);
+
 	const renderRows = (items = [], depth = 0) => {
 		return items.flatMap((item) => {
 			const hasChildren = item.children?.length > 0;
-			const isExpanded = expanded[item.id];
+			const expandedState = isExpanded(item.id);
 
 			const total = last6Months.reduce(
 				(sum, month) => sum + getAmountForMonth(item.monthlySpends, month),
@@ -59,7 +123,7 @@ export default function CategorySpendSummary() {
 						<div style={{ paddingLeft: depth * 20 }} className="flex items-center gap-1">
 							{hasChildren ? (
 								<button onClick={() => toggle(item.id)} className="text-sm text-blue-500">
-									{isExpanded ? "▾" : "▸"}
+									{expandedState ? "▾" : "▸"}
 								</button>
 							) : (
 								<span className="w-4" />
@@ -68,10 +132,8 @@ export default function CategorySpendSummary() {
 						</div>
 					</td>
 
-
-
 					{last6Months.map((month) => (
-						<td className="text-right px-2 py-1">
+						<td key={month} className="text-right px-2 py-1">
 							<Link
 								to={`/transactions?month=${month}&categoryId=${item.id}`}
 								className="text-blue-600 hover:underline"
@@ -84,7 +146,7 @@ export default function CategorySpendSummary() {
 						{formatINR(total)}
 					</td>
 				</tr>,
-				isExpanded && hasChildren ? renderRows(item.children, depth + 1) : null,
+				expandedState && hasChildren ? renderRows(item.children, depth + 1) : null,
 			];
 		});
 	};
@@ -113,10 +175,5 @@ export default function CategorySpendSummary() {
 				</tbody>
 			</table>
 		</div>
-
 	);
-
-
-
-
 }

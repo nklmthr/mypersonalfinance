@@ -1,17 +1,24 @@
 package com.nklmthr.finance.personal.service;
 
+import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.dto.AccountTypeDTO;
 import com.nklmthr.finance.personal.mapper.AccountTypeMapper;
+import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountType;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.repository.AccountRepository;
 import com.nklmthr.finance.personal.repository.AccountTypeRepository;
 
 import jakarta.transaction.Transactional;
@@ -22,13 +29,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AccountTypeService {
 
-    @Autowired
-    private AppUserService appUserService;
-
-    @Autowired
-    private AccountTypeRepository accountTypeRepository;
-
-    @Autowired
+    private final AppUserService appUserService;
+    private final AccountTypeRepository accountTypeRepository;
+    private final AccountRepository accountRepository;
     private final AccountTypeMapper accountTypeMapper;
 
     private static final Logger logger = LoggerFactory.getLogger(AccountTypeService.class);
@@ -52,6 +55,21 @@ public class AccountTypeService {
         AppUser appUser = appUserService.getCurrentUser();
         logger.info("Fetching all account types for user: " + appUser.getUsername());
         List<AccountType> accountTypes = accountTypeRepository.findByAppUser(appUser);
+
+        if (accountTypes.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Account> accounts = accountRepository.findAllByAppUser(appUser, Sort.unsorted());
+        Map<String, BigDecimal> totalsByType = accounts.stream()
+                .filter(account -> account.getAccountType() != null && account.getAccountType().getId() != null)
+                .filter(account -> Objects.nonNull(account.getBalance()))
+                .collect(Collectors.groupingBy(account -> account.getAccountType().getId(),
+                        Collectors.mapping(Account::getBalance,
+                                Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))));
+
+        accountTypes.forEach(type -> type.setAccountTypeBalance(totalsByType.getOrDefault(type.getId(), BigDecimal.ZERO)));
+
         return accountTypeMapper.toDTOList(accountTypes);
     }
 
