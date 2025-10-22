@@ -38,8 +38,7 @@ public class CategorySpendService {
 		LocalDate sixMonthsAgo = LocalDate.now().withDayOfMonth(1).minusMonths(5);
 		List<CategoryMonthlyProjection> projections = accountTransactionRepository.getCategoryMonthlySpend(user.getId(),
 				sixMonthsAgo,
-				List.of(categoryService.getNonClassifiedCategory().getId(),
-						categoryService.getTransferCategory().getId(),
+				List.of(categoryService.getTransferCategory().getId(),
 						categoryService.getSplitTrnsactionCategory().getId()));
 		logger.info("Found {} category monthly projections for user: {}", projections.size(), user.getUsername());
 		Map<String, CategorySpendDTO> dtoMap = new HashMap<>();
