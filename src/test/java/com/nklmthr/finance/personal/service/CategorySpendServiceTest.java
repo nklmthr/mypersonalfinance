@@ -45,9 +45,12 @@ class CategorySpendServiceTest {
         lenient().when(categoryService.getTransferCategory()).thenReturn(dummy("tr"));
         lenient().when(categoryService.getSplitTrnsactionCategory()).thenReturn(dummy("sp"));
 
-        CategoryMonthlyProjection p1 = projection("c1","Food", null, LocalDate.now().toString(), 100.0);
-        CategoryMonthlyProjection p2 = projection("c2","Dining","c1", LocalDate.now().toString(), 50.0);
-        when(repo.getCategoryMonthlySpend(user.getId(), LocalDate.now().withDayOfMonth(1).minusMonths(5), List.of("nc","tr","sp")))
+        LocalDate month = LocalDate.now();
+        LocalDate sixMonthsAgo = month.withDayOfMonth(1).minusMonths(5);
+
+        CategoryMonthlyProjection p1 = projection("c1","Food", null, month.toString(), 100.0);
+        CategoryMonthlyProjection p2 = projection("c2","Dining","c1", month.toString(), 50.0);
+        when(repo.getCategoryMonthlySpend(user.getId(), sixMonthsAgo, List.of("tr","sp")))
             .thenReturn(List.of(p1, p2));
 
         List<CategorySpendDTO> roots = service.getCategorySpendingLast6Months();

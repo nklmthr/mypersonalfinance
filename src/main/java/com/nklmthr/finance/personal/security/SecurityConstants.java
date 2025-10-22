@@ -24,7 +24,11 @@ public class SecurityConstants {
         "/institutions",
         "/account-types",
         "/gmail/oauth/callback/**",
-        "/error" 
+        "/error",
+        "/favicon.ico",
+        "/manifest.json",
+        "/logo192.png",
+        "/logo512.png"
     };
 
     // Optional: List form for use in custom filters
