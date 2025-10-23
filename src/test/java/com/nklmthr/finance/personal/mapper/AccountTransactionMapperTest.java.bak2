@@ -41,24 +41,21 @@ class AccountTransactionMapperTest {
             .id("t1").date(LocalDateTime.now()).amount(new BigDecimal("10"))
             .description("d").type(TransactionType.DEBIT)
             .account(acc).category(cat).parent("p1")
-            .linkedTransferId("linked1")
             .currency("INR")
             .build();
 
         AccountTransactionDTO dto = mapper.toDTO(tx);
         assertThat(dto.id()).isEqualTo("t1");
         assertThat(dto.parentId()).isEqualTo("p1");
-        assertThat(dto.linkedTransferId()).isEqualTo("linked1");
     }
 
     @Test
     void toEntity_mapsParentAndIgnoresAppUser() {
         AccountDTO a = new AccountDTO("a1","A", BigDecimal.ZERO, null, null, null, null, null);
         CategoryDTO c = new CategoryDTO(); c.setId("c1");
-        AccountTransactionDTO dto = new AccountTransactionDTO("t1", LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.CREDIT, a, c, "p1", java.util.List.of(), "linked1", null, null, null, null, null, null);
+        AccountTransactionDTO dto = new AccountTransactionDTO("t1", LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.CREDIT, a, c, "p1", java.util.List.of(), null, null, null, null, null, null, null);
         AccountTransaction entity = mapper.toEntity(dto);
         assertThat(entity.getParent()).isEqualTo("p1");
-        assertThat(entity.getLinkedTransferId()).isEqualTo("linked1");
         assertThat(entity.getAppUser()).isNull();
     }
 }

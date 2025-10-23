@@ -102,7 +102,7 @@ function flattenCategories(categories, prefix = "") {
 }
 
 // Reusable searchable select (combobox) for Accounts/Categories
-function SearchSelect({ options, value, onChange, placeholder, error = false }) {
+function SearchSelect({ options, value, onChange, placeholder, error = false, disabled = false }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const containerRef = React.useRef(null);
@@ -121,7 +121,7 @@ function SearchSelect({ options, value, onChange, placeholder, error = false }) 
         } else {
             setQuery("");
         }
-    }, [value]);
+    }, [value, selected?.name]);
 
     useEffect(() => {
         const handler = (e) => {
@@ -137,7 +137,7 @@ function SearchSelect({ options, value, onChange, placeholder, error = false }) 
 
     // Auto-select when a single non-placeholder option remains
     useEffect(() => {
-        if (!open) return;
+        if (!open || disabled) return;
         const norm = normalize(query);
         if (!norm) return; // only after user types something
         const filteredNonPlaceholder = options.filter(o => (o.id || o.id === 0) && normalize(o.name).includes(norm));
@@ -146,28 +146,37 @@ function SearchSelect({ options, value, onChange, placeholder, error = false }) 
             if (only.id !== value) {
                 onChange(only.id);
             }
-            setQuery("");
             setOpen(false);
         }
-    }, [query, open, options, value]);
+    }, [query, open, options, value, onChange, disabled]);
+
+    const handleSelectOption = (option) => {
+        if (disabled) return;
+        onChange(option.id);
+        // Set query to the selected name immediately
+        setQuery(option.name);
+        setOpen(false);
+    };
 
     return (
         <div ref={containerRef} className="relative w-full">
             <input
                 value={query}
-                onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-                onFocus={() => { setOpen(true); setQuery(""); }}
+                onChange={(e) => { if (!disabled) { setQuery(e.target.value); setOpen(true); } }}
+                onFocus={() => { if (!disabled) { setOpen(true); setQuery(""); } }}
                 placeholder={placeholder}
                 aria-invalid={error ? "true" : "false"}
-                className={`border px-2 py-1 rounded text-sm w-full ${error ? 'border-red-500' : ''}`}
+                disabled={disabled}
+                className={`border px-2 py-1 rounded text-sm w-full ${error ? 'border-red-500' : ''} ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             />
-            {open && (
+            {open && !disabled && (
                 <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-auto w-full mt-1">
                     {filtered.map(o => (
                         <div
                             key={o.id || 'all'}
                             className={`px-2 py-1 text-sm cursor-pointer hover:bg-blue-50 ${o.id === value ? 'bg-blue-100' : ''}`}
-                            onClick={() => { onChange(o.id); setQuery(""); setOpen(false); }}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleSelectOption(o)}
                         >
                             {o.name}
                         </div>
@@ -355,31 +364,40 @@ function TransactionForm({
 				</p>
 			</div>
 
-				{/* Account, Amount & Currency */}
-				<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-					<div>
-						<label className="block text-sm font-medium mb-1">Account<span className="text-red-600">*</span></label>
-					<SearchSelect
-						options={[{ id: "", name: "All Accounts" }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
-						value={transaction.accountId || ""}
-						onChange={(val) => { setTransaction((t) => ({ ...t, accountId: val })); setErrors((e) => ({ ...e, accountId: undefined })); }}
-						placeholder="Account"
-						error={Boolean(errors.accountId)}
+			{/* Account, Amount & Currency */}
+			<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+				<div>
+					<label className="block text-sm font-medium mb-1">Account<span className="text-red-600">*</span></label>
+				<SearchSelect
+					options={[{ id: "", name: "All Accounts" }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
+					value={transaction.accountId || ""}
+					onChange={(val) => { setTransaction((t) => ({ ...t, accountId: val })); setErrors((e) => ({ ...e, accountId: undefined })); }}
+					placeholder="Account"
+					error={Boolean(errors.accountId)}
+					disabled={!!(transaction.parentId || transaction.parent)}
+				/>
+				{errors.accountId && (<div className="text-xs text-red-600 mt-1">Required</div>)}
+				{(transaction.parentId || transaction.parent) && (
+					<div className="text-xs text-gray-600 mt-1">⚠️ Child transaction accounts cannot be modified.</div>
+				)}
+				</div>
+				<div>
+					<label className="block text-sm font-medium mb-1">Amount<span className="text-red-600">*</span></label>
+					<input
+						type="number"
+						placeholder="Amount"
+						value={transaction.amount}
+						onChange={(e) => { setTransaction((t) => ({ ...t, amount: e.target.value })); setErrors((er) => ({ ...er, amount: undefined })); }}
+						className={`w-full border rounded px-3 py-2 ${errors.amount ? 'border-red-500' : ''} ${transaction.parentId || transaction.parent ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+						disabled={!!(transaction.parentId || transaction.parent)}
+						title={transaction.parentId || transaction.parent ? "Cannot change amount of a child transaction" : ""}
+						required
 					/>
-					{errors.accountId && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-					</div>
-					<div>
-						<label className="block text-sm font-medium mb-1">Amount<span className="text-red-600">*</span></label>
-						<input
-							type="number"
-							placeholder="Amount"
-							value={transaction.amount}
-							onChange={(e) => { setTransaction((t) => ({ ...t, amount: e.target.value })); setErrors((er) => ({ ...er, amount: undefined })); }}
-							className={`w-full border rounded px-3 py-2 ${errors.amount ? 'border-red-500' : ''}`}
-							required
-						/>
-						{errors.amount && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-					</div>
+					{errors.amount && (<div className="text-xs text-red-600 mt-1">Required</div>)}
+					{(transaction.parentId || transaction.parent) && (
+						<div className="text-xs text-gray-600 mt-1">⚠️ Child transaction amounts cannot be modified. Edit the parent split instead.</div>
+					)}
+				</div>
 					<div>
 						<label className="block text-sm font-medium mb-1">Currency<span className="text-red-600">*</span></label>
 						<select
@@ -415,18 +433,23 @@ function TransactionForm({
 					/>
 					{errors.categoryId && (<div className="text-xs text-red-600 mt-1">Required</div>)}
 					</div>
-					<div>
-						<label className="block text-sm font-medium mb-1">Type<span className="text-red-600">*</span></label>
-						<select
-							className={`w-full border rounded px-3 py-2 ${errors.type ? 'border-red-500' : ''}`}
-							value={transaction.type || "DEBIT"}
-							onChange={(e) => { setTransaction((t) => ({ ...t, type: e.target.value })); setErrors((er) => ({ ...er, type: undefined })); }}
-						>
-							<option value="DEBIT">Debit</option>
-							<option value="CREDIT">Credit</option>
-						</select>
-						{errors.type && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-					</div>
+				<div>
+					<label className="block text-sm font-medium mb-1">Type<span className="text-red-600">*</span></label>
+					<select
+						className={`w-full border rounded px-3 py-2 ${errors.type ? 'border-red-500' : ''} ${transaction.parentId || transaction.parent ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+						value={transaction.type || "DEBIT"}
+						onChange={(e) => { setTransaction((t) => ({ ...t, type: e.target.value })); setErrors((er) => ({ ...er, type: undefined })); }}
+						disabled={!!(transaction.parentId || transaction.parent)}
+						title={transaction.parentId || transaction.parent ? "Cannot change type of a child transaction" : ""}
+					>
+						<option value="DEBIT">Debit</option>
+						<option value="CREDIT">Credit</option>
+					</select>
+					{errors.type && (<div className="text-xs text-red-600 mt-1">Required</div>)}
+					{(transaction.parentId || transaction.parent) && (
+						<div className="text-xs text-gray-600 mt-1">⚠️ Child transaction types cannot be modified.</div>
+					)}
+				</div>
 				</div>
 
 				{/* Description */}
@@ -830,45 +853,46 @@ useEffect(() => {
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
 		NProgress.start();
-		const payload = {
-			description: tx.description,
-			explanation: tx.explanation || "",
-			amount: tx.amount,
-			date: tx.date,
-			type: tx.type,
+		try {
+			const payload = {
+				description: tx.description,
+				explanation: tx.explanation || "",
+				amount: tx.amount,
+				date: tx.date,
+				type: tx.type,
 				currency: tx.currency || null,
-			account: { id: tx.accountId },
-			category: tx.categoryId ? { id: tx.categoryId } : null,
-			parent: tx.parentId ? { id: tx.parentId } : null,
-		};
-		console.log("Sending payload to backend:", payload);
-		console.log("Date being sent:", tx.date);
-		await api[method](url, payload);
-		await fetchData();
-		NProgress.done();
-		setLoading(false);
+				account: { id: tx.accountId },
+				category: tx.categoryId ? { id: tx.categoryId } : null,
+				parent: tx.parentId ? { id: tx.parentId } : null,
+			};
+			console.log("Sending payload to backend:", payload);
+			console.log("Date being sent:", tx.date);
+			await api[method](url, payload);
+			await fetchData();
+		} catch (err) {
+			console.error("Failed to save transaction:", err);
+			// Error is already handled by api.js interceptor (shows modal)
+		} finally {
+			NProgress.done();
+			setLoading(false);
+		}
 	};
 
 	const deleteTx = async (id) => {
 		if (!window.confirm("Delete this transaction?")) return;
 		setLoading(true);
 		NProgress.start();
-		await api
-			.delete(`/transactions/${id}`)
-			.then(() => {
-				console.log("Transaction deleted successfully");
-			})
-			.catch((err) => {
-				if (err.response?.status === 401) {
-					localStorage.removeItem("authToken");
-					navigate("/");
-				} else {
-					console.error("Failed to fetch user profile:", err);
-				}
-			});
-		await fetchData();
-		NProgress.done();
-		setLoading(false);
+		try {
+			await api.delete(`/transactions/${id}`);
+			console.log("Transaction deleted successfully");
+			await fetchData();
+		} catch (err) {
+			console.error("Failed to delete transaction:", err);
+			// Error is already handled by api.js interceptor (shows modal)
+		} finally {
+			NProgress.done();
+			setLoading(false);
+		}
 	};
 
 const triggerDataExtraction = async (servicesToRun) => {
@@ -1183,6 +1207,14 @@ const triggerDataExtraction = async (servicesToRun) => {
 					<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">
 						{tx.type}
 					</span>
+					{tx.linkedTransferId && (
+						<span 
+							className="ml-2 text-xs bg-purple-100 text-purple-700 rounded px-2 py-0.5 inline-flex items-center gap-1"
+							title={`Transfer linked to transaction: ${tx.linkedTransferId}`}
+						>
+							🔗 Transfer
+						</span>
+					)}
 					{tx.gptAmount && tx.gptAmount !== tx.amount && (
 						<div className="text-xs text-blue-600 mt-1">
 							🤖 GPT: {tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
@@ -1878,29 +1910,38 @@ function TransactionPageButtons({
 					onSubmit={async (enrichedParent) => {
 						setLoading(true);
 						NProgress.start();
-						const childrenPayload = enrichedParent.children.map((c) => ({
-							description: c.description,
-							amount: c.amount,
-							date: enrichedParent.date,
-							type: enrichedParent.type,
-							account: { id: enrichedParent.accountId },
-							category: c.categoryId ? { id: c.categoryId } : null,
-							parentId: enrichedParent.parentId,
-						}));
-						await api.post("/transactions/split", childrenPayload).then(() => {
+						try {
+							const childrenPayload = enrichedParent.children.map((c) => ({
+								id: null,
+								date: enrichedParent.date,
+								amount: parseFloat(c.amount),
+								description: c.description,
+								shortDescription: null,
+								explanation: null,
+								shortExplanation: null,
+								type: enrichedParent.type,
+								account: { id: enrichedParent.accountId },
+								category: c.categoryId ? { id: c.categoryId } : null,
+								parentId: enrichedParent.parentId,
+								children: [],
+								gptAmount: null,
+								gptDescription: null,
+								gptExplanation: null,
+								gptType: null,
+								currency: enrichedParent.currency || 'INR',
+								gptAccount: null,
+							}));
+							await api.post("/transactions/split", childrenPayload);
 							console.log("Transaction split successfully");
-						}).catch((err) => {
-							if (err.response?.status === 401) {
-								localStorage.removeItem("authToken");
-								navigate("/");
-							} else {
-								console.error("Failed to fetch user profile:", err);
-							}
-						});
-						setSplitTx(null);
-						await fetchData();
-						NProgress.done();
-						setLoading(false);
+							setSplitTx(null);
+							await fetchData();
+						} catch (err) {
+							console.error("Failed to split transaction:", err);
+							// Error is already handled by api.js interceptor (shows modal)
+						} finally {
+							NProgress.done();
+							setLoading(false);
+						}
 					}}
 					categories={categories}
 				/>
@@ -1914,27 +1955,22 @@ function TransactionPageButtons({
 					onSubmit={async () => {
 						setLoading(true);
 						NProgress.start();
-						await api
-							.post("/transactions/transfer", {
+						try {
+							await api.post("/transactions/transfer", {
 								sourceTransactionId: transferTx.id,
 								destinationAccountId: transferTx.destinationAccountId,
 								explanation: transferTx.explanation,
-							})
-							.then(() => {
-								console.log("Transaction transfer successful");
-							})
-							.catch((err) => {
-								if (err.response?.status === 401) {
-									localStorage.removeItem("authToken");
-									navigate("/");
-								} else {
-									console.error("Failed to fetch user profile:", err);
-								}
 							});
-						setTransferTx(null);
-						await fetchData();
-						NProgress.done();
-						setLoading(false);
+							console.log("Transaction transfer successful");
+							setTransferTx(null);
+							await fetchData();
+						} catch (err) {
+							console.error("Failed to transfer transaction:", err);
+							// Error is already handled by api.js interceptor (shows modal)
+						} finally {
+							NProgress.done();
+							setLoading(false);
+						}
 					}}
 					accounts={accounts}
 				/>

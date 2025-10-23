@@ -86,7 +86,7 @@ class AccountTransactionControllerTest {
 
     @Test
     void getById_found() throws Exception {
-        AccountTransactionDTO dto = new AccountTransactionDTO("t1", java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null);
+        AccountTransactionDTO dto = new AccountTransactionDTO("t1", java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null);
         when(service.getById("t1")).thenReturn(Optional.of(dto));
         mvc.perform(get("/api/transactions/t1"))
             .andExpect(status().isOk())
@@ -102,8 +102,8 @@ class AccountTransactionControllerTest {
 
     @Test
     void create_returns200() throws Exception {
-        AccountTransactionDTO in = new AccountTransactionDTO(null, java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null);
-        AccountTransactionDTO out = new AccountTransactionDTO("t1", java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null);
+        AccountTransactionDTO in = new AccountTransactionDTO(null, java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null);
+        AccountTransactionDTO out = new AccountTransactionDTO("t1", java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null);
         when(service.save(Mockito.any(AccountTransactionDTO.class))).thenReturn(out);
         mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(in)))
@@ -113,7 +113,7 @@ class AccountTransactionControllerTest {
 
     @Test
     void update_foundReturns200() throws Exception {
-        AccountTransactionDTO out = new AccountTransactionDTO("t1", java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null);
+        AccountTransactionDTO out = new AccountTransactionDTO("t1", java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null);
         when(service.updateTransaction(Mockito.eq("t1"), Mockito.any())).thenReturn(Optional.of(out));
         mvc.perform(put("/api/transactions/t1").contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(out)))
@@ -123,7 +123,7 @@ class AccountTransactionControllerTest {
 
     @Test
     void update_notFoundReturns404() throws Exception {
-        AccountTransactionDTO out = new AccountTransactionDTO("t1", java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null);
+        AccountTransactionDTO out = new AccountTransactionDTO("t1", java.time.LocalDateTime.now(), BigDecimal.ONE, "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a","A", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null);
         when(service.updateTransaction(Mockito.eq("t1"), Mockito.any())).thenReturn(Optional.empty());
         mvc.perform(put("/api/transactions/t1").contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(out)))

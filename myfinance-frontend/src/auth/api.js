@@ -35,6 +35,12 @@ api.interceptors.response.use(
 			}, 1);
 			return Promise.reject(error);
 		}
+		if (error.response?.status === 400) {
+			// Handle validation errors from backend
+			const message = error.response.data?.error || error.response.data?.message || error.response.data || 'Bad request';
+			showModal(`Validation Error: ${message}`);
+			return Promise.reject(error);
+		}
 		if (
 			error.code === 'ECONNREFUSED' ||
 			error.message === 'Network Error' ||

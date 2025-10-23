@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
-import com.nklmthr.finance.personal.dto.SplitTransactionRequest;
 import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
 
@@ -90,10 +89,15 @@ public class AccountTransactionController {
 	}
 
 	@PutMapping("/{id}")
-	public ResponseEntity<AccountTransactionDTO> update(@PathVariable String id,
+	public ResponseEntity<?> update(@PathVariable String id,
 			@RequestBody AccountTransactionDTO tx) {
-		return transactionService.updateTransaction(id, tx).map(ResponseEntity::ok)
-				.orElse(ResponseEntity.notFound().build());
+		try {
+			return transactionService.updateTransaction(id, tx).map(dto -> ResponseEntity.ok((Object) dto))
+					.orElse(ResponseEntity.notFound().build());
+		} catch (IllegalArgumentException e) {
+			logger.warn("Update transaction failed for ID {}: {}", id, e.getMessage());
+			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		}
 	}
 
 	@PostMapping("/transfer")
@@ -108,16 +112,21 @@ public class AccountTransactionController {
 	}
 
 	@PostMapping("/split")
-	public ResponseEntity<String> splitTransaction(@RequestBody List<SplitTransactionRequest> splitTransactions) {
+	public ResponseEntity<String> splitTransaction(@RequestBody List<AccountTransactionDTO> splitTransactions) {
 		logger.debug("Splitting transaction into: {}", splitTransactions);
 		return transactionService.splitTransaction(splitTransactions);
 	}
 
 	@DeleteMapping("/{id}")
-	public ResponseEntity<Void> delete(@PathVariable String id) {
+	public ResponseEntity<?> delete(@PathVariable String id) {
 		logger.debug("Deleting transaction with ID: {}", id);
-		transactionService.delete(id);
-		return ResponseEntity.noContent().build();
+		try {
+			transactionService.delete(id);
+			return ResponseEntity.noContent().build();
+		} catch (IllegalArgumentException e) {
+			logger.warn("Delete transaction failed for ID {}: {}", id, e.getMessage());
+			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		}
 	}
 
 //    @GetMapping("{id}/attachments/")

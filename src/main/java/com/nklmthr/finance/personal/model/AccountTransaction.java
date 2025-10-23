@@ -81,6 +81,9 @@ public class AccountTransaction {
 
 	@Column(name= "parent_id")
 	private String parent;
+	
+	@Column(name = "linked_transfer_id")
+	private String linkedTransferId;
 
 	@ManyToOne(optional = false)
 	@JsonIgnore

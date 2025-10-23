@@ -19,6 +19,7 @@ public record AccountTransactionDTO(
 	CategoryDTO category,
 	String parentId,
 	List<AccountTransactionDTO> children,
+	String linkedTransferId,
 	// GPT fields
 	BigDecimal gptAmount,
 	String gptDescription,

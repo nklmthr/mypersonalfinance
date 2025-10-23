@@ -23,7 +23,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
-import com.nklmthr.finance.personal.dto.SplitTransactionRequest;
 import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.mapper.AccountMapper;
@@ -81,8 +80,14 @@ public class AccountTransactionService {
 		AccountTransaction debit = accountTransactionRepository.findByAppUserAndId(appUser, request.getSourceTransactionId())
 				.orElseThrow(() -> new IllegalArgumentException(
 						"Source transaction not found for user: " + appUser.getUsername()));
-		debit.setCategory(categoryService.getTransferCategory());
-		accountTransactionRepository.save(debit);
+		
+		// Check if transaction has children (is a split transaction parent)
+		List<AccountTransaction> children = accountTransactionRepository.findByAppUserAndParent(appUser, debit.getId());
+		if (!children.isEmpty()) {
+			logger.warn("Attempted to transfer split transaction parent ID: {}. Transfers not allowed for split transactions.", debit.getId());
+			throw new IllegalArgumentException(
+				"Cannot transfer a split transaction. Please delete the split first or transfer the individual child transactions.");
+		}
 		
 		Account toAccount = accountRepository.findByAppUserAndId(appUser, request.getDestinationAccountId()).get();
 		toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
@@ -90,10 +95,10 @@ public class AccountTransactionService {
 		Account fromAccount = debit.getAccount();
 		fromAccount.setBalance(fromAccount.getBalance().subtract(debit.getAmount()));
 		
-		
 		accountRepository.save(fromAccount);
 		accountRepository.save(toAccount);
 		
+		// Create the credit transaction (destination)
 		AccountTransaction credit = new AccountTransaction();
 		credit.setAccount(toAccount);
 		credit.setCurrency(debit.getCurrency());
@@ -106,18 +111,32 @@ public class AccountTransactionService {
 		credit.setCategory(categoryService.getTransferCategory());
 		credit.setAppUser(appUser);
 		credit.setGptAccount(toAccount);
+		
+		// Save credit first to get its ID
+		credit = accountTransactionRepository.save(credit);
+		
+		// Now set bidirectional links
+		debit.setLinkedTransferId(credit.getId());
+		debit.setCategory(categoryService.getTransferCategory());
+		credit.setLinkedTransferId(debit.getId());
+		
+		// Save both with the links
+		accountTransactionRepository.save(debit);
 		accountTransactionRepository.save(credit);
+		
+		logger.info("Transfer created. Debit ID: {}, Credit ID: {}, Amount: {}", 
+			debit.getId(), credit.getId(), debit.getAmount());
 	}
 
 	@Transactional
-	public ResponseEntity<String> splitTransaction(List<SplitTransactionRequest> splitTransactions) {
+	public ResponseEntity<String> splitTransaction(List<AccountTransactionDTO> splitTransactions) {
 		if (splitTransactions == null || splitTransactions.isEmpty()) {
 			return ResponseEntity.badRequest().body("No split transactions provided");
 		}
 
 		AppUser appUser = appUserService.getCurrentUser();
 
-		String parentId = splitTransactions.get(0).getParentId();
+		String parentId = splitTransactions.get(0).parentId();
 		Optional<AccountTransaction> parentOpt = accountTransactionRepository.findById(parentId);
 		if (parentOpt.isEmpty()) {
 			return ResponseEntity.badRequest().body("Parent transaction not found");
@@ -125,39 +144,57 @@ public class AccountTransactionService {
 
 		AccountTransaction parent = parentOpt.get();
 
-		List<AccountTransaction> children = accountTransactionRepository.findByAppUserAndParent(appUser, parent.getId());
-		for (AccountTransaction child : children) {
+		// First, delete existing children and add their amounts back to parent
+		List<AccountTransaction> existingChildren = accountTransactionRepository.findByAppUserAndParent(appUser, parent.getId());
+		for (AccountTransaction child : existingChildren) {
 			parent.setAmount(parent.getAmount().add(child.getAmount()));
 			child.setParent(null);
 			accountTransactionRepository.delete(child);
 		}
+		
+		// Set parent category to "Split Transaction"
 		parent.setCategory(categoryService.getSplitTrnsactionCategory());
-		BigDecimal parentAmount = parent.getAmount();
+		
+		// Validate that the sum of new children equals the (restored) parent amount
 		BigDecimal totalSplitAmount = BigDecimal.ZERO;
-		for (SplitTransactionRequest st : splitTransactions) {
+		for (AccountTransactionDTO st : splitTransactions) {
+			totalSplitAmount = totalSplitAmount.add(st.amount());
+		}
+		
+		if (totalSplitAmount.compareTo(parent.getAmount()) != 0) {
+			return ResponseEntity.badRequest().body(
+				String.format("Split amounts total (%.2f) does not match parent amount (%.2f)", 
+					totalSplitAmount, parent.getAmount()));
+		}
+		
+		// Create new children and deduct their amounts from parent
+		for (AccountTransactionDTO st : splitTransactions) {
 			AccountTransaction child = new AccountTransaction();
-			child.setDescription(st.getDescription());
-			child.setAmount(st.getAmount());
-			child.setDate(st.getDate());
-			child.setType(st.getType());
+			child.setDescription(st.description());
+			child.setAmount(st.amount());
+			child.setDate(st.date());
+			child.setType(st.type());
 			child.setAccount(parent.getAccount());
-			child.setCategory(categoryService.getCategoryById(st.getCategory().getId()));
+			child.setCategory(categoryService.getCategoryById(st.category().getId()));
 			child.setGptAccount(parent.getGptAccount());
 			child.setCurrency(parent.getCurrency());
-			if (child.getParent() == null) {
-				child.setParent(parent.getId());
-			}
+			child.setParent(parent.getId());
 			child.setAppUser(appUser);
-			parent.setAmount(parent.getAmount().subtract(st.getAmount()));
-			totalSplitAmount = totalSplitAmount.add(child.getAmount());
+			
+			// Deduct child amount from parent
+			parent.setAmount(parent.getAmount().subtract(st.amount()));
+			
 			accountTransactionRepository.save(child);
 		}
 
-		if (totalSplitAmount.compareTo(parentAmount) != 0) {
-			return ResponseEntity.badRequest().body("Parent transaction amount does not match split amounts");
+		// Parent amount should now be zero
+		if (parent.getAmount().compareTo(BigDecimal.ZERO) != 0) {
+			logger.warn("Parent amount after split is not zero: {}", parent.getAmount());
 		}
 
 		accountTransactionRepository.save(parent);
+		logger.info("Split transaction successful. Parent ID: {}, Children count: {}, Parent final amount: {}", 
+			parent.getId(), splitTransactions.size(), parent.getAmount());
 		return ResponseEntity.ok("Split successful");
 	}
 
@@ -166,12 +203,94 @@ public class AccountTransactionService {
 		return accountTransactionRepository.findById(id).map(existingTx -> {
 			AppUser appUser = appUserService.getCurrentUser();
 
+			// Check if transaction has children (is a split transaction parent)
+			List<AccountTransaction> children = accountTransactionRepository.findByAppUserAndParent(appUser, id);
+			boolean hasChildren = !children.isEmpty();
+			
+			// Check if transaction is a child (has a parent)
+			boolean isChild = existingTx.getParent() != null;
+			
 			BigDecimal oldAmount = existingTx.getAmount();
 			TransactionType oldType = existingTx.getType();
 			Account oldAccount = existingTx.getAccount();
 			Account newAccount = accountRepository.findByAppUserAndId(appUser, txUpdate.account().id()).get();
 			TransactionType newType = txUpdate.type();
 			BigDecimal newAmount = txUpdate.amount();
+			
+			// Prevent amount change for split transaction parents
+			if (hasChildren && newAmount.compareTo(oldAmount) != 0) {
+				logger.warn("Attempted to change amount of split transaction parent ID: {}. Amount changes not allowed.", id);
+				throw new IllegalArgumentException(
+					"Cannot change amount of a split transaction. Please delete the split first or edit the child transactions.");
+			}
+			
+			// Prevent amount, account, or type change for child transactions
+			if (isChild) {
+				if (newAmount.compareTo(oldAmount) != 0) {
+					logger.warn("Attempted to change amount of child transaction ID: {}. Amount changes not allowed.", id);
+					throw new IllegalArgumentException(
+						"Cannot change amount of a child transaction. Please edit the parent split instead.");
+				}
+				
+				if (!newAccount.getId().equals(oldAccount.getId())) {
+					logger.warn("Attempted to change account of child transaction ID: {}. Account changes not allowed.", id);
+					throw new IllegalArgumentException(
+						"Cannot change account of a child transaction. Please edit the parent split instead.");
+				}
+				
+				if (newType != oldType) {
+					logger.warn("Attempted to change type of child transaction ID: {}. Type changes not allowed.", id);
+					throw new IllegalArgumentException(
+						"Cannot change transaction type of a child transaction. Please edit the parent split instead.");
+				}
+			}
+			
+			// Handle linked transfer transactions
+			if (existingTx.getLinkedTransferId() != null) {
+				Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
+					.findByAppUserAndLinkedTransferId(appUser, existingTx.getId());
+				
+				if (linkedTxOpt.isPresent()) {
+					AccountTransaction linkedTx = linkedTxOpt.get();
+					logger.info("Updating linked transfer. Transaction ID: {}, Linked ID: {}", id, linkedTx.getId());
+					
+					// Validate transfer integrity constraints
+					if (!txUpdate.category().getId().equals(existingTx.getCategory().getId())) {
+						logger.warn("Attempted to change category of transfer transaction ID: {}", id);
+						throw new IllegalArgumentException(
+							"Cannot change category of a transfer transaction. Please delete the transfer first.");
+					}
+					
+					// Reverse old balances for linked transaction
+					Account linkedOldAccount = linkedTx.getAccount();
+					BigDecimal linkedOldAmount = linkedTx.getAmount();
+					TransactionType linkedOldType = linkedTx.getType();
+					
+					if (linkedOldType == TransactionType.DEBIT) {
+						linkedOldAccount.setBalance(linkedOldAccount.getBalance().add(linkedOldAmount));
+					} else if (linkedOldType == TransactionType.CREDIT) {
+						linkedOldAccount.setBalance(linkedOldAccount.getBalance().subtract(linkedOldAmount));
+					}
+					
+					// Update linked transaction with new values
+					linkedTx.setAmount(newAmount);
+					linkedTx.setDate(txUpdate.date());
+					linkedTx.setDescription(txUpdate.description());
+					
+					// Apply new balances for linked transaction
+					if (linkedOldType == TransactionType.DEBIT) {
+						linkedOldAccount.setBalance(linkedOldAccount.getBalance().subtract(newAmount));
+					} else if (linkedOldType == TransactionType.CREDIT) {
+						linkedOldAccount.setBalance(linkedOldAccount.getBalance().add(newAmount));
+					}
+					
+					accountRepository.save(linkedOldAccount);
+					accountTransactionRepository.save(linkedTx);
+					
+					logger.info("Synced linked transfer transaction ID: {} with new amount: {}", linkedTx.getId(), newAmount);
+				}
+			}
+			
 			AccountTransaction txUpdateEntity = accountTransactionMapper.toEntity(txUpdate);
 			txUpdateEntity.setId(id);
 			txUpdateEntity.setAppUser(appUser);
@@ -179,6 +298,9 @@ public class AccountTransactionService {
 			txUpdateEntity.setCategory(categoryService.getCategoryById(txUpdate.category().getId()));
 			if (txUpdateEntity.getParent() == null) {
 				txUpdateEntity.setParent(existingTx.getParent());
+			}
+			if (txUpdateEntity.getLinkedTransferId() == null) {
+				txUpdateEntity.setLinkedTransferId(existingTx.getLinkedTransferId());
 			}
 			txUpdateEntity.setSourceId(existingTx.getSourceId());
 			txUpdateEntity.setSourceThreadId(existingTx.getSourceThreadId());
@@ -295,6 +417,19 @@ public class AccountTransactionService {
 		AccountTransaction existingTransaction = accountTransactionRepository.findByAppUserAndId(appUser, id)
 				.orElseThrow(
 						() -> new IllegalArgumentException("Transaction not found for user: " + appUser.getUsername()));
+		
+		// Handle linked transfer - delete both sides
+		if (existingTransaction.getLinkedTransferId() != null) {
+			Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
+				.findByAppUserAndLinkedTransferId(appUser, existingTransaction.getId());
+			
+			if (linkedTxOpt.isPresent()) {
+				AccountTransaction linkedTx = linkedTxOpt.get();
+				logger.info("Deleting linked transfer transaction ID: {}", linkedTx.getId());
+				accountTransactionRepository.deleteByAppUserAndId(appUser, linkedTx.getId());
+			}
+		}
+		
 		if (existingTransaction.getParent() != null) {
 			AccountTransaction parent = accountTransactionRepository.findByAppUserAndId(appUser, existingTransaction.getParent()).get();
 			parent.setAmount(parent.getAmount().add(existingTransaction.getAmount()));
@@ -504,6 +639,7 @@ public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, St
 		            categoryMapper.toDTO(tx.getCategory()),
 		            tx.getParent(),
 		            children,
+		            tx.getLinkedTransferId(),
 		            tx.getGptAmount(),
 		            tx.getGptDescription(),
 		            tx.getGptExplanation(),

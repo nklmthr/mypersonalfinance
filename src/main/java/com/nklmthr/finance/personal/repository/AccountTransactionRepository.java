@@ -146,5 +146,11 @@ public interface AccountTransactionRepository
 	}
 	
 	List<AccountTransaction> findByParentAndAppUser(String parent, AppUser appUser);
+	
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
+	Optional<AccountTransaction> findByAppUserAndLinkedTransferId(AppUser appUser, String linkedTransferId);
 
 }

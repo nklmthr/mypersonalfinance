@@ -15,6 +15,7 @@ public interface AccountTransactionMapper extends GenericMapper<AccountTransacti
 
 	@Override
 	@Mapping(target = "parentId", source = "parent")
+	@Mapping(target = "linkedTransferId", source = "linkedTransferId")
 	@Mapping(target = "gptAmount", source = "gptAmount")
 	@Mapping(target = "gptDescription", source = "gptDescription")
 	@Mapping(target = "gptExplanation", source = "gptExplanation")
@@ -34,6 +35,7 @@ public interface AccountTransactionMapper extends GenericMapper<AccountTransacti
 	@Mapping(target="sourceTime", ignore = true)
 	@Mapping(target = "uploadedStatement", ignore = true)
 	@Mapping(target = "parent", source = "parentId")
+	@Mapping(target = "linkedTransferId", source = "linkedTransferId")
 	@Mapping(target = "appUser", ignore = true)
 	@Mapping(target = "rawData" , ignore = true)
 	@Mapping(target = "gptAmount", source = "gptAmount")
