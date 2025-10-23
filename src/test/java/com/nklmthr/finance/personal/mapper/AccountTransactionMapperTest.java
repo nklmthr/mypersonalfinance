@@ -20,10 +20,13 @@ import com.nklmthr.finance.personal.model.Category;
 
 class AccountTransactionMapperTest {
 
-    private final AccountTransactionMapper mapper = Mappers.getMapper(AccountTransactionMapper.class);
+    private AccountTransactionMapper mapper;
 
     @BeforeEach
     void wireDependencies() {
+        // Initialize mapper instance
+        mapper = Mappers.getMapper(AccountTransactionMapper.class);
+        
         // Inject required mappers since componentModel is spring
         AccountMapper accountMapper = Mappers.getMapper(AccountMapper.class);
         // Wire nested mappers used by AccountMapper

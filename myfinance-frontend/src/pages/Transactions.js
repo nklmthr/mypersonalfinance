@@ -8,6 +8,7 @@ import { saveAs } from "file-saver";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
 import useDebounce from "../hooks/useDebounce";
+import { useErrorModal } from "../auth/ErrorModalContext";
 
 // ---- helpers: tree + flatten ----
 function buildTree(categories) {
@@ -38,8 +39,8 @@ function FetchToolbar({
     currentTotal,
 }) {
     return (
-        <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm">
-            <div className="flex flex-wrap items-center gap-1 justify-between">
+        <div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2 justify-between">
                 <div className="flex items-center gap-2">
                     <select
                         value={selectedServices.length === availableServices.length ? 'ALL' : (selectedServices[0] || 'ALL')}
@@ -51,7 +52,7 @@ function FetchToolbar({
                                 setSelectedServices([val]);
                             }
                         }}
-                        className="border px-2 py-1 rounded text-sm min-w-[260px] bg-blue-50"
+                        className="border px-3 py-2 rounded text-sm min-w-[260px] bg-blue-50"
                         title="Select a data extraction service or All"
                     >
                         <option value="ALL">All Services</option>
@@ -62,7 +63,10 @@ function FetchToolbar({
                     <button
                         onClick={() => triggerDataExtraction(selectedServices)}
                         disabled={refreshing}
-                        className={`${refreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'} text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded shadow`}
+                        className={`${refreshing 
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-purple-600 hover:bg-purple-700'
+                        } text-white px-4 py-2 rounded text-sm shadow`}
                         title="Trigger selected data extraction services to fetch new transactions"
                     >
                         Fetch
@@ -76,7 +80,7 @@ function FetchToolbar({
                             })}`
                         )
                     }
-                    className="bg-yellow-200 text-gray-800 px-2 py-1 rounded text-sm shadow hover:bg-yellow-300"
+                    className="bg-yellow-200 text-gray-800 px-3 py-2 rounded text-sm shadow hover:bg-yellow-300"
                 >
                     Total: ₹{currentTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </button>
@@ -700,6 +704,7 @@ function TransactionSplit({ transaction, setTransaction, onCancel, onSubmit, cat
 
 // ---- main ----
 export default function Transactions() {
+	const { showModal } = useErrorModal();
 	const [transactions, setTransactions] = useState([]);
 	const [expandedParents, setExpandedParents] = useState({});
 	const [accounts, setAccounts] = useState([]);
@@ -896,21 +901,46 @@ useEffect(() => {
 	};
 
 const triggerDataExtraction = async (servicesToRun) => {
-		if (!window.confirm("This will trigger all data extraction services to check for new transactions from your connected email accounts. Continue?")) {
-			return;
-		}
+		const serviceCount = servicesToRun && servicesToRun.length > 0 ? servicesToRun.length : 'all';
+		const serviceText = servicesToRun && servicesToRun.length > 0 
+			? `${servicesToRun.length} selected service(s)` 
+			: 'all data extraction services';
 		
-		setRefreshing(true);
-		NProgress.start();
+		return new Promise((resolve) => {
+			showModal(
+				`This will trigger ${serviceText} to check for new transactions from your connected email accounts. Continue?`,
+				() => {
+					// User confirmed
+					setRefreshing(true);
+					NProgress.start();
+					performDataExtraction(servicesToRun, resolve);
+				},
+				() => {
+					// User cancelled
+					resolve();
+				}
+			);
+		});
+	};
+
+	const performDataExtraction = async (servicesToRun, resolve) => {
 		try {
         const qs = servicesToRun && servicesToRun.length ? `?services=${encodeURIComponent(servicesToRun.join(','))}` : '';
+        
+        // The backend request blocks until extraction completes (typically 15-20 seconds)
         const response = await api.post(`/data-extraction/trigger${qs}`);
+			
 			if (response.data.status === 'started') {
-				alert(`Data extraction started! Services running: ${response.data.services.length}\n\nCheck logs for progress. The page will refresh automatically in 30 seconds.`);
-				// Auto refresh the page after 30 seconds to show new transactions
-				setTimeout(() => {
-					fetchData();
-				}, 30000);
+				// Backend has completed extraction, now refresh transactions
+				try {
+					await fetchData();
+					showModal(`Data extraction completed!\n\nTransactions have been refreshed. ${response.data.services.length} service(s) processed.`);
+				} catch (err) {
+					console.error('Error refreshing transactions:', err);
+					showModal('Data extraction completed but failed to refresh transactions. Please refresh the page manually.');
+				}
+			} else {
+				showModal('Data extraction returned unexpected status: ' + response.data.status);
 			}
 		} catch (err) {
 			if (err.response?.status === 401) {
@@ -918,11 +948,13 @@ const triggerDataExtraction = async (servicesToRun) => {
 				navigate("/");
 			} else {
 				console.error("Failed to trigger data extraction:", err);
-				alert("Failed to trigger data extraction. Please check the logs.");
+				const errorMsg = err.response?.data?.message || err.response?.data?.error || "Failed to trigger data extraction. Please check the logs.";
+				showModal(`Error: ${errorMsg}`);
 			}
 		} finally {
-			NProgress.done();
 			setRefreshing(false);
+			NProgress.done();
+			resolve();
 		}
 	};
 
@@ -1385,17 +1417,17 @@ function TransactionPageButtons({
 							<option key={svc} value={svc}>{svc}</option>
 						))}
 					</select>
-					<button
-						onClick={() => triggerDataExtraction(selectedServices)}
-						disabled={refreshing}
-						className={`${refreshing 
-							? 'bg-gray-400 cursor-not-allowed' 
-							: 'bg-purple-600 hover:bg-purple-700'
-						} text-white px-4 py-2 rounded text-sm shadow`}
-						title="Trigger selected data extraction services to fetch new transactions"
-					>
-						Fetch Transactions
-					</button>
+				<button
+					onClick={() => triggerDataExtraction(selectedServices)}
+					disabled={refreshing}
+					className={`${refreshing 
+						? 'bg-gray-400 cursor-not-allowed' 
+						: 'bg-purple-600 hover:bg-purple-700'
+					} text-white px-4 py-2 rounded text-sm shadow`}
+					title="Trigger selected data extraction services to fetch new transactions"
+				>
+					Fetch
+				</button>
 				</div>
 
 				{/* Line 2: Filters and quick actions */}

@@ -36,16 +36,19 @@ public class DataExtractionController {
         
         try {
             // Start async processing - all or subset
+            List<String> triggeredServices;
             if (services == null || services.isEmpty()) {
                 dataExtractionService.triggerAllDataExtractionServices();
+                triggeredServices = dataExtractionService.getAvailableServices();
             } else {
                 dataExtractionService.triggerSpecificServices(services);
+                triggeredServices = services;
             }
             
             return ResponseEntity.ok(Map.of(
                 "status", "started",
                 "message", "Data extraction started in background. Check logs for progress.",
-                "services", dataExtractionService.getAvailableServices()
+                "services", triggeredServices
             ));
         } catch (Exception e) {
             logger.error("Failed to trigger data extraction", e);

@@ -2,6 +2,7 @@ package com.nklmthr.finance.personal.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 
@@ -10,7 +11,12 @@ import com.nklmthr.finance.personal.model.Institution;
 
 class InstitutionMapperTest {
 
-    private final InstitutionMapper mapper = Mappers.getMapper(InstitutionMapper.class);
+    private InstitutionMapper mapper;
+
+    @BeforeEach
+    void setUp() {
+        mapper = Mappers.getMapper(InstitutionMapper.class);
+    }
 
     @Test
     void mapsEntityToDto() {

@@ -84,7 +84,14 @@ public class OpenAIClient {
                 - DESCRIPTION: Merchant after "at" or after "UPI/P2A/numbers/" → e.g. "SHASHIKALAKUMARI" or "Ganesh S N"
                 - ACCOUNT: "XX2804" or "ending with 2606" → extract "XX2804" or "2606"
                 - DATE: e.g. "28-09-25, 12:48:34" or "18-09-25" → convert to ISO-8601 "2025-09-28T12:48:34"
-                - TYPE: "spent"/"Debited" = DEBIT, "Credited" = CREDIT
+                - TYPE: Determine transaction type carefully:
+                  * DEBIT = money spent/owed (purchases, payments, transfers out, debited from account)
+                    - Credit card purchases at merchants = DEBIT
+                    - Bank account debits/withdrawals = DEBIT
+                    - Keywords: "Transaction Amount", "spent", "debited", "paid", "purchase", "merchant"
+                  * CREDIT = money received/added (deposits, refunds, credits to account, salary)
+                    - Keywords: "credited", "received", "refund", "cashback", "deposit"
+                  * Default: If transaction shows merchant/purchase on credit card or bank account = DEBIT
                 Output must be a single JSON object matching the required fields.
                 """;
 

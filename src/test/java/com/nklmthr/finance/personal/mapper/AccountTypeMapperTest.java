@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 
@@ -12,7 +13,12 @@ import com.nklmthr.finance.personal.model.AccountType;
 
 class AccountTypeMapperTest {
 
-    private final AccountTypeMapper mapper = Mappers.getMapper(AccountTypeMapper.class);
+    private AccountTypeMapper mapper;
+
+    @BeforeEach
+    void setUp() {
+        mapper = Mappers.getMapper(AccountTypeMapper.class);
+    }
 
     @Test
     void mapsEntityToDto() {
