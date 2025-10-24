@@ -2,8 +2,6 @@ package com.nklmthr.finance.personal.scheduler;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,9 +9,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.scheduler.util.PatternResult;
+import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
 
 @Service
 public class AxisCCDataExtractionService extends AbstractDataExtractionService {
@@ -51,33 +50,33 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 	    try {
 	        logger.debug("AxisCCDataExtractionService content: {}", emailContent);
-	        BigDecimal amount = null;
-	        Pattern amountNewPattern = Pattern.compile("Transaction Amount:\\s*INR\\s*([\\d,]+\\.?\\d*)");
-	        Matcher amountNewMatcher = amountNewPattern.matcher(emailContent);
-	        if (amountNewMatcher.find()) {
-	            amount = new BigDecimal(amountNewMatcher.group(1).replace(",", ""));
-	        } else {
-	            Pattern amountOldPattern = Pattern.compile("for INR ([\\d,]+\\.?\\d*)");
-	            Matcher amountOldMatcher = amountOldPattern.matcher(emailContent);
-	            if (amountOldMatcher.find()) {
-	                amount = new BigDecimal(amountOldMatcher.group(1).replace(",", ""));
-	            }
+	        
+	        // Skip declined/failed transactions
+	        if (emailContent.toLowerCase().contains("has been declined") || 
+	            emailContent.toLowerCase().contains("incorrect pin") ||
+	            emailContent.toLowerCase().contains("transaction declined") ||
+	            emailContent.toLowerCase().contains("transaction failed")) {
+	            logger.info("Skipping declined/failed transaction for Axis CC");
+	            return null;
 	        }
-	        tx.setAmount(amount);
-	        String description = null;
-	        Pattern merchantNewPattern = Pattern.compile("Merchant Name:\\s*([A-Za-z0-9 &\\-]+)");
-	        Matcher merchantNewMatcher = merchantNewPattern.matcher(emailContent);
-	        if (merchantNewMatcher.find()) {
-	            description = merchantNewMatcher.group(1).trim();
-	        } else {
-	            Pattern merchantOldPattern = Pattern.compile("at ([A-Za-z0-9 &\\-]+?) on \\d{2}-\\d{2}-\\d{4}");
-	            Matcher merchantOldMatcher = merchantOldPattern.matcher(emailContent);
-	            if (merchantOldMatcher.find()) {
-	                description = merchantOldMatcher.group(1).trim();
-	            }
+	        
+	        // Use pattern library for extraction
+	        PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
+	        if (amountResult.isPresent()) {
+	            tx.setAmount(amountResult.getValue());
+	            logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
 	        }
-	        tx.setDescription(description);
-	        tx.setType(TransactionType.DEBIT);
+	        
+	        PatternResult<String> descriptionResult = TransactionPatternLibrary.extractDescription(emailContent);
+	        if (descriptionResult.isPresent()) {
+	            tx.setDescription(descriptionResult.getValue());
+	            logger.debug("Extracted description using pattern: {}", descriptionResult.getMatchedPattern());
+	        }
+	        
+	        // Transaction type detection
+	        tx.setType(TransactionPatternLibrary.detectTransactionType(emailContent));
+	        
+	        // Account matching (bank-specific logic)
 	        if (emailContent.contains("0434")) {
 	            tx.setAccount(accountService.getAccountByName("AXIS-CCA-Airtel", appUser));
 	        } else if (emailContent.contains("7002")) {

@@ -118,6 +118,10 @@ public class AccountTransactionService {
 		// Now set bidirectional links
 		debit.setLinkedTransferId(credit.getId());
 		debit.setCategory(categoryService.getTransferCategory());
+		// Default gptAccount to account if null (for old records)
+		if (debit.getGptAccount() == null) {
+			debit.setGptAccount(debit.getAccount());
+		}
 		credit.setLinkedTransferId(debit.getId());
 		
 		// Save both with the links
@@ -176,7 +180,8 @@ public class AccountTransactionService {
 			child.setType(st.type());
 			child.setAccount(parent.getAccount());
 			child.setCategory(categoryService.getCategoryById(st.category().getId()));
-			child.setGptAccount(parent.getGptAccount());
+			// Default gptAccount to account if parent's gptAccount is null (for old records)
+			child.setGptAccount(parent.getGptAccount() != null ? parent.getGptAccount() : parent.getAccount());
 			child.setCurrency(parent.getCurrency());
 			child.setParent(parent.getId());
 			child.setAppUser(appUser);
@@ -192,6 +197,10 @@ public class AccountTransactionService {
 			logger.warn("Parent amount after split is not zero: {}", parent.getAmount());
 		}
 
+		// Default gptAccount to account if null (for old records)
+		if (parent.getGptAccount() == null) {
+			parent.setGptAccount(parent.getAccount());
+		}
 		accountTransactionRepository.save(parent);
 		logger.info("Split transaction successful. Parent ID: {}, Children count: {}, Parent final amount: {}", 
 			parent.getId(), splitTransactions.size(), parent.getAmount());
@@ -272,22 +281,27 @@ public class AccountTransactionService {
 						linkedOldAccount.setBalance(linkedOldAccount.getBalance().subtract(linkedOldAmount));
 					}
 					
-					// Update linked transaction with new values
-					linkedTx.setAmount(newAmount);
-					linkedTx.setDate(txUpdate.date());
-					linkedTx.setDescription(txUpdate.description());
-					
-					// Apply new balances for linked transaction
-					if (linkedOldType == TransactionType.DEBIT) {
-						linkedOldAccount.setBalance(linkedOldAccount.getBalance().subtract(newAmount));
-					} else if (linkedOldType == TransactionType.CREDIT) {
-						linkedOldAccount.setBalance(linkedOldAccount.getBalance().add(newAmount));
-					}
-					
-					accountRepository.save(linkedOldAccount);
-					accountTransactionRepository.save(linkedTx);
-					
-					logger.info("Synced linked transfer transaction ID: {} with new amount: {}", linkedTx.getId(), newAmount);
+				// Update linked transaction with new values
+				linkedTx.setAmount(newAmount);
+				linkedTx.setDate(txUpdate.date());
+				linkedTx.setDescription(txUpdate.description());
+				
+				// Apply new balances for linked transaction
+				if (linkedOldType == TransactionType.DEBIT) {
+					linkedOldAccount.setBalance(linkedOldAccount.getBalance().subtract(newAmount));
+				} else if (linkedOldType == TransactionType.CREDIT) {
+					linkedOldAccount.setBalance(linkedOldAccount.getBalance().add(newAmount));
+				}
+				
+				// Default gptAccount to account if null (for old records)
+				if (linkedTx.getGptAccount() == null) {
+					linkedTx.setGptAccount(linkedTx.getAccount());
+				}
+				
+				accountRepository.save(linkedOldAccount);
+				accountTransactionRepository.save(linkedTx);
+				
+				logger.info("Synced linked transfer transaction ID: {} with new amount: {}", linkedTx.getId(), newAmount);
 				}
 			}
 			
@@ -307,7 +321,8 @@ public class AccountTransactionService {
 			txUpdateEntity.setHref(existingTx.getHref());
 			txUpdateEntity.setHrefText(existingTx.getHrefText());
 			txUpdateEntity.setSourceTime(existingTx.getSourceTime());
-			txUpdateEntity.setGptAccount(existingTx.getGptAccount());
+			// Default gptAccount to account if existing one is null (for old records)
+			txUpdateEntity.setGptAccount(existingTx.getGptAccount() != null ? existingTx.getGptAccount() : newAccount);
 			txUpdateEntity.setGptAmount(existingTx.getGptAmount());
 			txUpdateEntity.setGptDescription(existingTx.getGptDescription());
 			txUpdateEntity.setGptExplanation(existingTx.getGptExplanation());
@@ -375,6 +390,10 @@ public class AccountTransactionService {
 		if (transaction.getDataVersionId() == null) {
 			transaction.setDataVersionId(DATA_VERSION_V20);
 		}
+		// Default gptAccount to account if null to avoid constraint violation
+		if (transaction.getGptAccount() == null) {
+			transaction.setGptAccount(account);
+		}
 		transaction.setAppUser(appUser);
 		accountRepository.save(account);
 		AccountTransaction saved = accountTransactionRepository.save(transaction);
@@ -435,6 +454,10 @@ public class AccountTransactionService {
 			parent.setAmount(parent.getAmount().add(existingTransaction.getAmount()));
 			logger.info("Updated parent transaction ID: {} amount to: {}", parent.getId(), parent.getAmount());
 			parent.setDescription(parent.getDescription() + " ||deleted:" + existingTransaction.getDescription()+"|"+existingTransaction.getAmount());
+			// Default gptAccount to account if null (for old records)
+			if (parent.getGptAccount() == null) {
+				parent.setGptAccount(parent.getAccount());
+			}
 			accountTransactionRepository.save(parent);
 		}
 		if (accountTransactionRepository.findByParentAndAppUser(existingTransaction.getId(), appUser).size() > 0) {
@@ -514,6 +537,10 @@ public class AccountTransactionService {
 		existingTxn.setSourceTime(newTransaction.getSourceTime());
 		// Do not overwrite the existing transaction date here
 		existingTxn.setDataVersionId(DATA_VERSION_V11);
+		// Default gptAccount to account if null (for old records)
+		if (existingTxn.getGptAccount() == null) {
+			existingTxn.setGptAccount(existingTxn.getAccount());
+		}
 		accountTransactionRepository.save(existingTxn);
 	}
 

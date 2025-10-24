@@ -2,8 +2,6 @@ package com.nklmthr.finance.personal.scheduler;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,9 +9,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.scheduler.util.PatternResult;
+import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
 
 @Service
 public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionService {
@@ -49,23 +48,33 @@ public class ICICICCDataExtractionServiceImpl extends AbstractDataExtractionServ
 
 	@Override
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
-		Pattern pattern = Pattern.compile(
-				"INR ([\\d,]+\\.\\d{2}) on (\\w{3} \\d{2}, \\d{4}) at (\\d{2}:\\d{2}:\\d{2})\\. Info: (.+?)\\.");
-		Matcher matcher = pattern.matcher(emailContent);
-		if (matcher.find()) {
-			try {
-				String amountStr = matcher.group(1).replace(",", "");
-				String merchant = matcher.group(4).trim();
-
-				BigDecimal amount = new BigDecimal(amountStr);
-
-				tx.setAmount(amount);
-				tx.setDescription(merchant);
-				tx.setType(TransactionType.DEBIT);
-				tx.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon", appUser));
-			} catch (Exception e) {
-				logger.error("Error parsing transaction data: {}", e.getMessage());
+		try {
+			// Skip declined/failed transactions
+			if (emailContent.toLowerCase().contains("has been declined") || 
+			    emailContent.toLowerCase().contains("incorrect pin") ||
+			    emailContent.toLowerCase().contains("transaction declined") ||
+			    emailContent.toLowerCase().contains("transaction failed")) {
+				logger.info("Skipping declined/failed transaction for ICICI CC");
+				return null;
 			}
+			
+			// Use pattern library for extraction
+			PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
+			if (amountResult.isPresent()) {
+				tx.setAmount(amountResult.getValue());
+				logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
+			}
+
+			PatternResult<String> descriptionResult = TransactionPatternLibrary.extractDescription(emailContent);
+			if (descriptionResult.isPresent()) {
+				tx.setDescription(descriptionResult.getValue());
+				logger.debug("Extracted description using pattern: {}", descriptionResult.getMatchedPattern());
+			}
+
+			tx.setType(TransactionPatternLibrary.detectTransactionType(emailContent));
+			tx.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon", appUser));
+		} catch (Exception e) {
+			logger.error("Error parsing transaction data: {}", e.getMessage());
 		}
 		return tx;
 	}

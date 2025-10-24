@@ -20,7 +20,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -881,19 +880,7 @@ class AccountTransactionServiceTest {
         
         AccountDTO accountDTO = new AccountDTO("acc1", "A-acc1", BigDecimal.valueOf(1000.00), null, null, null, null, null);
 
-        // Setup parent transaction
-        AccountTransaction parent = AccountTransaction.builder()
-            .id("parent1")
-            .amount(BigDecimal.valueOf(100.00))
-            .type(TransactionType.DEBIT)
-            .category(category)
-            .account(account)
-            .appUser(currentUser)
-            .date(LocalDateTime.now())
-            .description("Parent expense")
-            .build();
-
-        // Setup child transaction
+        // Setup child transaction (parent reference is just an ID)
         AccountTransaction child = AccountTransaction.builder()
             .id("child1")
             .amount(BigDecimal.valueOf(50.00))
@@ -955,22 +942,9 @@ class AccountTransactionServiceTest {
         categoryDTO.setId("cat1");
         categoryDTO.setName("Test Category");
         
-        AccountDTO accountDTO1 = new AccountDTO("acc1", "A-acc1", BigDecimal.valueOf(1000.00), null, null, null, null, null);
         AccountDTO accountDTO2 = new AccountDTO("acc2", "A-acc2", BigDecimal.valueOf(2000.00), null, null, null, null, null);
 
-        // Setup parent transaction
-        AccountTransaction parent = AccountTransaction.builder()
-            .id("parent1")
-            .amount(BigDecimal.valueOf(100.00))
-            .type(TransactionType.DEBIT)
-            .category(category)
-            .account(account1)
-            .appUser(currentUser)
-            .date(LocalDateTime.now())
-            .description("Parent expense")
-            .build();
-
-        // Setup child transaction
+        // Setup child transaction (parent reference is just an ID)
         AccountTransaction child = AccountTransaction.builder()
             .id("child1")
             .amount(BigDecimal.valueOf(50.00))
@@ -1033,19 +1007,7 @@ class AccountTransactionServiceTest {
         
         AccountDTO accountDTO = new AccountDTO("acc1", "A-acc1", BigDecimal.valueOf(1000.00), null, null, null, null, null);
 
-        // Setup parent transaction
-        AccountTransaction parent = AccountTransaction.builder()
-            .id("parent1")
-            .amount(BigDecimal.valueOf(100.00))
-            .type(TransactionType.DEBIT)
-            .category(category)
-            .account(account)
-            .appUser(currentUser)
-            .date(LocalDateTime.now())
-            .description("Parent expense")
-            .build();
-
-        // Setup child transaction
+        // Setup child transaction (parent reference is just an ID)
         AccountTransaction child = AccountTransaction.builder()
             .id("child1")
             .amount(BigDecimal.valueOf(50.00))

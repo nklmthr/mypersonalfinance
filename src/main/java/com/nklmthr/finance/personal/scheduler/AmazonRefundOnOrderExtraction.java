@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.scheduler.util.PatternResult;
+import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
 
 @Service
 public class AmazonRefundOnOrderExtraction extends AbstractDataExtractionService {
@@ -45,52 +47,56 @@ public class AmazonRefundOnOrderExtraction extends AbstractDataExtractionService
 	@Override
 	protected AccountTransaction extractTransactionData(AccountTransaction accountTransaction, String emailContent,
 			AppUser appUser) {
-		logger.debug("Extracting transaction data from email content: {}", emailContent);
-		Pattern orderIdPattern = Pattern.compile("Order #\\s*([\\d-]+)");
-		Pattern amountPattern = Pattern.compile("refund for Rs\\.([\\d,.]+)");
-		Pattern itemPattern = Pattern.compile("Item:\\s*(.*?)Quantity:", Pattern.DOTALL);
-		Pattern qtyPattern = Pattern.compile("Quantity:\\s*(\\d+)");
-		Pattern refundModePattern = Pattern.compile("credited as follows:\\s*(.*?)\\s*:", Pattern.DOTALL);
-		Matcher m;
+		try {
+			logger.debug("Extracting Amazon refund transaction");
 
-		// Order ID
-		m = orderIdPattern.matcher(emailContent);
-		if (m.find()) {
-			accountTransaction.setDescription(m.group(1));
-		}
-
-		// Refund Amount
-		m = amountPattern.matcher(emailContent);
-		if (m.find()) {
-			String amt = m.group(1).replace(",", "");
-			accountTransaction.setAmount(new BigDecimal(amt));
-		}
-
-		// Item Name
-		m = itemPattern.matcher(emailContent);
-		if (m.find()) {
-			accountTransaction.setExplanation("Refund for: " + m.group(1).trim());
-		}
-
-		// Quantity
-		m = qtyPattern.matcher(emailContent);
-		if (m.find()) {
-			accountTransaction.setExplanation(accountTransaction.getExplanation() + " | Quantity: " + m.group(1));
-		}
-
-		// Refund Mode
-		m = refundModePattern.matcher(emailContent);
-		if (m.find()) {
-			String mode = m.group(1).trim();
-			logger.debug("Detected refund mode: {}", mode);
-			if (mode.toLowerCase().contains("credit card") && mode.contains("9057")) {
-				accountTransaction.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon", appUser));
-			} else if (mode.toLowerCase().contains("amazon pay") || mode.equalsIgnoreCase("GC")) {
-				accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
+			// Use pattern library for amount extraction
+			PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
+			if (amountResult.isPresent()) {
+				accountTransaction.setAmount(amountResult.getValue());
+				logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
 			}
+
+			// Extract Order ID for description
+			Pattern orderIdPattern = Pattern.compile("Order #\\s*([\\d-]+)");
+			Matcher orderMatcher = orderIdPattern.matcher(emailContent);
+			if (orderMatcher.find()) {
+				accountTransaction.setDescription(orderMatcher.group(1));
+			}
+
+			// Extract Item Name
+			Pattern itemPattern = Pattern.compile("Item:\\s*(.*?)Quantity:", Pattern.DOTALL);
+			Matcher itemMatcher = itemPattern.matcher(emailContent);
+			if (itemMatcher.find()) {
+				accountTransaction.setExplanation("Refund for: " + itemMatcher.group(1).trim());
+			}
+
+			// Extract Quantity
+			Pattern qtyPattern = Pattern.compile("Quantity:\\s*(\\d+)");
+			Matcher qtyMatcher = qtyPattern.matcher(emailContent);
+			if (qtyMatcher.find()) {
+				accountTransaction.setExplanation(accountTransaction.getExplanation() + " | Quantity: " + qtyMatcher.group(1));
+			}
+
+			// Extract Refund Mode and set account
+			Pattern refundModePattern = Pattern.compile("credited as follows:\\s*(.*?)\\s*:", Pattern.DOTALL);
+			Matcher modeMatcher = refundModePattern.matcher(emailContent);
+			if (modeMatcher.find()) {
+				String mode = modeMatcher.group(1).trim();
+				logger.debug("Detected refund mode: {}", mode);
+				if (mode.toLowerCase().contains("credit card") && mode.contains("9057")) {
+					accountTransaction.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon", appUser));
+				} else if (mode.toLowerCase().contains("amazon pay") || mode.equalsIgnoreCase("GC")) {
+					accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
+				}
+			}
+
+			accountTransaction.setType(TransactionType.CREDIT);
+			return accountTransaction;
+		} catch (Exception e) {
+			logger.error("Failed to extract Amazon refund transaction", e);
+			return accountTransaction;
 		}
-		accountTransaction.setType(TransactionType.CREDIT);
-		return accountTransaction;
 	}
 
 }

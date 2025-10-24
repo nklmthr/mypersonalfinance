@@ -3,8 +3,7 @@ package com.nklmthr.finance.personal.scheduler;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,9 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.scheduler.util.PatternResult;
+import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
 
 @Service
 public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionService {
@@ -23,12 +23,6 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
-
-	// Slash-based fallback pattern
-	private static final Pattern GENERIC_PATTERN = Pattern
-			.compile("Rs\\.([\\d,]+\\.\\d{2})\\s+spent on your SBI Credit Card.*?at (.*?) on");
-
-	private static final Pattern REF_PATTERN = Pattern.compile("Ref No\\.\\s*(\\d+)");
 
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
@@ -52,30 +46,44 @@ public class SBICCDataExtractionServiceImpl extends AbstractDataExtractionServic
 	@Override
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
 		try {
-			Matcher m = GENERIC_PATTERN.matcher(emailContent);
-			if (m.find()) {
-				// Amount (remove commas)
-				tx.setAmount(new BigDecimal(m.group(1).replace(",", "")));
-
-				// Merchant
-				tx.setDescription(m.group(2).trim());
+			// Skip declined/failed transactions
+			if (emailContent.toLowerCase().contains("has been declined") || 
+			    emailContent.toLowerCase().contains("incorrect pin") ||
+			    emailContent.toLowerCase().contains("transaction declined") ||
+			    emailContent.toLowerCase().contains("transaction failed")) {
+				logger.info("Skipping declined/failed transaction for SBI CC");
+				return null;
+			}
+			
+			// Use pattern library for extraction
+			PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
+			if (amountResult.isPresent()) {
+				tx.setAmount(amountResult.getValue());
+				logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
 			} else {
-				logger.warn("No SBI Credit Card match found in: {}", emailContent);
+				logger.warn("No amount match found in email");
 			}
 
-			// UPI Ref
-			Matcher ref = REF_PATTERN.matcher(emailContent);
-			if (ref.find()) {
-				tx.setDescription(tx.getDescription() + " UPI Ref " + ref.group(1));
+			PatternResult<String> descriptionResult = TransactionPatternLibrary.extractDescription(emailContent);
+			if (descriptionResult.isPresent()) {
+				tx.setDescription(descriptionResult.getValue());
+				logger.debug("Extracted description using pattern: {}", descriptionResult.getMatchedPattern());
 			}
 
+			// Add UPI reference if present
+			Optional<String> upiRef = TransactionPatternLibrary.extractUpiReference(emailContent);
+			if (upiRef.isPresent() && tx.getDescription() != null) {
+				tx.setDescription(tx.getDescription() + " UPI Ref " + upiRef.get());
+			}
+
+			// Account matching based on card number
 			if (emailContent.contains("2606")) {
 				tx.setAccount(accountService.getAccountByName("SBI Rupay Credit Card", appUser));
 			} else {
 				tx.setAccount(accountService.getAccountByName("SBIB-CCA-Signature", appUser));
 			}
 
-			tx.setType(TransactionType.DEBIT);
+			tx.setType(TransactionPatternLibrary.detectTransactionType(emailContent));
 		} catch (Exception e) {
 			logger.error("Error parsing SBI Credit Card transaction", e);
 		}

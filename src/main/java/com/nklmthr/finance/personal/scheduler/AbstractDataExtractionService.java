@@ -56,6 +56,9 @@ public abstract class AbstractDataExtractionService {
 	@Value("${gmail.lookback.days:7}")
 	private int gmailLookbackDays;
 	
+	@Value("${openai.enabled:true}")
+	private boolean openAIEnabled;
+	
 	@Autowired
 	private OpenAIClient openAIClient;
 	
@@ -128,7 +131,7 @@ public abstract class AbstractDataExtractionService {
 					
 					// Set raw data immediately to ensure it's captured for all transactions
 					accountTransaction.setRawData(emailContent);
-					
+					logger.info("Extracting from email content: {}", emailContent);
 					accountTransaction = extractTransactionData(accountTransaction, emailContent, appUser);
 					
 					// Check if extraction was successful
@@ -148,7 +151,22 @@ public abstract class AbstractDataExtractionService {
 						}
 						accountTransactionService.mergeSourceInfoIfNeeded(existing, accountTransaction);
 					} else {
-						openAIClient.getGptResponse(emailContent, accountTransaction);
+						// Call OpenAI for enrichment if enabled
+						if (openAIEnabled) {
+							logger.debug("OpenAI enabled, calling for transaction enrichment");
+							openAIClient.getGptResponse(emailContent, accountTransaction);
+						} else {
+							logger.info("OpenAI disabled (profile: {}), skipping GPT enrichment", 
+								System.getProperty("spring.profiles.active", "default"));
+						}
+						
+						// Ensure description is never null (database constraint)
+						// Do NOT copy from gptDescription - keep fields completely separate
+						if (accountTransaction.getDescription() == null) {
+							logger.warn("Regex extraction failed for description, setting default value");
+							accountTransaction.setDescription("Unknown");
+						}
+						
 						logger.info("Saving transaction: {}", accountTransaction);
 						accountTransactionService.save(accountTransaction, appUser);
 					}

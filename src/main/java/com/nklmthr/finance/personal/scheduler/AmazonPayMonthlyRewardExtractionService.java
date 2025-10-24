@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.scheduler.util.PatternResult;
+import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
 
 @Service
 public class AmazonPayMonthlyRewardExtractionService extends AbstractDataExtractionService {
@@ -48,49 +50,53 @@ public class AmazonPayMonthlyRewardExtractionService extends AbstractDataExtract
 	@Override
 	protected AccountTransaction extractTransactionData(AccountTransaction accountTransaction, String emailContent,
 	        AppUser appUser) {
-	    logger.debug("Extracting transaction data from email content: {}", emailContent);
-	    Pattern amountPattern = Pattern.compile("Received Amount.*?₹([\\d,]+\\.\\d{2})");
-	    Pattern refIdPattern = Pattern.compile("Reference ID\\s*(\\d+)");
-	    Pattern expiryPattern = Pattern.compile("Expiry date\\s*([\\d\\w-]+)");
-	    Pattern issuerPattern = Pattern.compile("Issued by\\s*(.*?)\\s*(View Statement|$)");
-	    Matcher m;
-	    m = amountPattern.matcher(emailContent);
-	    if (m.find()) {
-	        String amt = m.group(1).replace(",", "");
-	        try {
-	            accountTransaction.setAmount(new BigDecimal(amt));
-	        } catch (NumberFormatException e) {
-	            logger.warn("Failed to parse amount: {}", amt, e);
+	    try {
+	        logger.debug("Extracting Amazon Pay reward transaction");
+	        
+	        // Use pattern library for amount extraction
+	        PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
+	        if (amountResult.isPresent()) {
+	            accountTransaction.setAmount(amountResult.getValue());
+	            logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
 	        }
-	    }
 
-	    m = refIdPattern.matcher(emailContent);
-	    if (m.find()) {
-	        accountTransaction.setDescription(m.group(1).trim());
-	    }
-
-	    m = expiryPattern.matcher(emailContent);
-	    if (m.find()) {
-	        String expiryStr = m.group(1);
-	        try {
-	            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH);
-	            LocalDate expiry = LocalDate.parse(expiryStr, formatter);
-	            accountTransaction.setDescription(accountTransaction.getDescription() + " | Expiry: " + expiry.toString());
-	        } catch (Exception e) {
-	            logger.warn("Failed to parse expiry date: {}", expiryStr, e);
+	        // Extract reference ID for description
+	        Pattern refIdPattern = Pattern.compile("Reference ID\\s*(\\d+)");
+	        Matcher refMatcher = refIdPattern.matcher(emailContent);
+	        if (refMatcher.find()) {
+	            accountTransaction.setDescription(refMatcher.group(1).trim());
 	        }
-	    }
 
-	    m = issuerPattern.matcher(emailContent);
-	    if (m.find()) {
-	        accountTransaction.setExplanation(m.group(1).trim());
-	    }
+	        // Extract and append expiry date
+	        Pattern expiryPattern = Pattern.compile("Expiry date\\s*([\\d\\w-]+)");
+	        Matcher expiryMatcher = expiryPattern.matcher(emailContent);
+	        if (expiryMatcher.find()) {
+	            String expiryStr = expiryMatcher.group(1);
+	            try {
+	                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH);
+	                LocalDate expiry = LocalDate.parse(expiryStr, formatter);
+	                accountTransaction.setDescription(accountTransaction.getDescription() + " | Expiry: " + expiry.toString());
+	            } catch (Exception e) {
+	                logger.warn("Failed to parse expiry date: {}", expiryStr, e);
+	            }
+	        }
 
-	    // Common fields
-	    accountTransaction.setAppUser(appUser);
-	    accountTransaction.setType(TransactionType.CREDIT);
-	    accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
-	    return accountTransaction;
+	        // Extract issuer for explanation
+	        Pattern issuerPattern = Pattern.compile("Issued by\\s*(.*?)\\s*(View Statement|$)");
+	        Matcher issuerMatcher = issuerPattern.matcher(emailContent);
+	        if (issuerMatcher.find()) {
+	            accountTransaction.setExplanation(issuerMatcher.group(1).trim());
+	        }
+
+	        // Common fields
+	        accountTransaction.setAppUser(appUser);
+	        accountTransaction.setType(TransactionType.CREDIT);
+	        accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
+	        return accountTransaction;
+	    } catch (Exception e) {
+	        logger.error("Failed to extract Amazon Pay reward transaction", e);
+	        return accountTransaction;
+	    }
 	}
 
 

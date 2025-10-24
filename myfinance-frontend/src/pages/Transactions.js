@@ -119,8 +119,8 @@ function SearchSelect({ options, value, onChange, placeholder, error = false, di
     const selected = options.find(o => o.id === value);
 
     useEffect(() => {
-        // Keep input empty when 'All' (empty id) is selected so user can type immediately
-        if (selected && selected.id) {
+        // Display the selected option name, including "All" options
+        if (selected) {
             setQuery(selected.name);
         } else {
             setQuery("");
@@ -719,6 +719,7 @@ export default function Transactions() {
 	const [pageSize, setPageSize] = useState(10);
 	const [totalCount, setTotalCount] = useState(0);
 	const [modalContent, setModalContent] = useState(null);
+	const [deleteConfirmation, setDeleteConfirmation] = useState(null);
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [filterMonth, setFilterMonth] = useState(
 		searchParams.get("month") || dayjs().format("YYYY-MM")
@@ -762,19 +763,23 @@ const [filterMode, setFilterMode] = useState(searchParams.get("date") ? "date" :
 
 // (moved to top-level above)
 
-	// ESC key handler for modal
+	// ESC key handler for modals
 	useEffect(() => {
 		const handleEscKey = (e) => {
-			if (e.key === "Escape" && modalContent) {
-				setModalContent(null);
+			if (e.key === "Escape") {
+				if (modalContent) {
+					setModalContent(null);
+				} else if (deleteConfirmation) {
+					setDeleteConfirmation(null);
+				}
 			}
 		};
 		
-		if (modalContent) {
+		if (modalContent || deleteConfirmation) {
 			document.addEventListener("keydown", handleEscKey);
 			return () => document.removeEventListener("keydown", handleEscKey);
 		}
-	}, [modalContent]);
+	}, [modalContent, deleteConfirmation]);
 
 	NProgress.configure({ showSpinner: false });
 
@@ -884,7 +889,12 @@ useEffect(() => {
 	};
 
 	const deleteTx = async (id) => {
-		if (!window.confirm("Delete this transaction?")) return;
+		setDeleteConfirmation(id);
+	};
+
+	const confirmDelete = async () => {
+		const id = deleteConfirmation;
+		setDeleteConfirmation(null);
 		setLoading(true);
 		NProgress.start();
 		try {
@@ -970,6 +980,25 @@ const triggerDataExtraction = async (servicesToRun) => {
 				? tx.children.filter((c) => typeof c === "object" && c !== null).length
 				: 0;
 			return acc + 1 + childCount;
+		}, 0);
+	}, [transactions, expandedParents]);
+
+	const currentPageSum = useMemo(() => {
+		return (transactions || []).reduce((sum, tx) => {
+			const amount = typeof tx.amount === "number" ? tx.amount : 0;
+			let total = sum + amount;
+			
+			// Include child amounts if expanded
+			if (expandedParents[tx.id] && Array.isArray(tx.children)) {
+				tx.children.forEach((child) => {
+					if (typeof child === "object" && child !== null) {
+						const childAmount = typeof child.amount === "number" ? child.amount : 0;
+						total += childAmount;
+					}
+				});
+			}
+			
+			return total;
 		}, 0);
 	}, [transactions, expandedParents]);
 
@@ -1754,7 +1783,7 @@ function TransactionPageButtons({
                     </div>
                     <div className="grid grid-cols-2 gap-2 items-center">
                         <SearchSelect
-                            options={flattened.map(c => ({ id: c.id, name: c.name }))}
+                            options={[{ id: '', name: 'All Categories' }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
                             value={filterCategory}
                             onChange={(val) => { setFilterCategory(val); updateUrlParams({ categoryId: val }); }}
                             placeholder="Category"
@@ -1914,8 +1943,18 @@ function TransactionPageButtons({
                     >
                         PDF
                     </button>
-					<div className="col-span-4 text-right sm:ml-auto sm:grow-0 sm:text-right text-xs sm:text-sm text-gray-700">
-						Rows: {displayedRows}
+					<div className="col-span-4 sm:ml-auto text-right text-xs sm:text-sm">
+						<div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-3 py-1.5 shadow-sm">
+							<span className="font-semibold text-gray-700">Current Page:</span>
+							<div className="flex items-center gap-3 divide-x divide-gray-300">
+								<span className="font-medium text-blue-700">
+									₹{currentPageSum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+								</span>
+								<span className="pl-3 text-gray-600">
+									{displayedRows} {displayedRows === 1 ? 'row' : 'rows'}
+								</span>
+							</div>
+						</div>
 					</div>
                 </div>
 
@@ -2019,6 +2058,33 @@ function TransactionPageButtons({
 						>
 							Close
 						</button>
+					</div>
+				</div>
+			)}
+
+			{deleteConfirmation && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+						<div className="p-6">
+							<h2 className="text-xl font-semibold text-gray-900 mb-2">Delete Transaction</h2>
+							<p className="text-gray-600 mb-6">
+								Are you sure you want to delete this transaction? This action cannot be undone.
+							</p>
+							<div className="flex gap-3 justify-end">
+								<button
+									onClick={() => setDeleteConfirmation(null)}
+									className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors"
+								>
+									Cancel
+								</button>
+								<button
+									onClick={confirmDelete}
+									className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md font-medium transition-colors"
+								>
+									Delete
+								</button>
+							</div>
+						</div>
 					</div>
 				</div>
 			)}

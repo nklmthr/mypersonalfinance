@@ -2,8 +2,6 @@ package com.nklmthr.finance.personal.scheduler;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,9 +9,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.scheduler.util.PatternResult;
+import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
 
 @Service
 public class CSBCCDataExtractionService extends AbstractDataExtractionService {
@@ -48,25 +47,39 @@ public class CSBCCDataExtractionService extends AbstractDataExtractionService {
 	}
 
 	protected AccountTransaction extractTransactionData(AccountTransaction tx, String emailContent, AppUser appUser) {
-		logger.info("Content: {}", emailContent);
-		String regex = "Credit Card ending in (\\d{4}).*?Amount: INR ([\\d,]+\\.\\d{2})\\s+Merchant: (.*?)\\s+Date: (\\d{2}/\\d{2}/\\d{4})\\s+Time: (\\d{2}:\\d{2}:\\d{2})";
+		try {
+			logger.debug("CSB CC extraction from: {}", emailContent);
 
-		// Compile and match
-		Pattern pattern = Pattern.compile(regex, Pattern.DOTALL);
-		Matcher matcher = pattern.matcher(emailContent);
+			// Skip declined/failed transactions
+			if (emailContent.toLowerCase().contains("has been declined") || 
+			    emailContent.toLowerCase().contains("incorrect pin") ||
+			    emailContent.toLowerCase().contains("transaction declined") ||
+			    emailContent.toLowerCase().contains("transaction failed")) {
+				logger.info("Skipping declined/failed transaction for CSB CC");
+				return null;
+			}
 
-		if (matcher.find()) {
-			String cardEnding = matcher.group(1);
-			String amount = matcher.group(2);
-			String merchant = matcher.group(3);
-			tx.setAmount(new BigDecimal(amount.replace(",", "")));
-			tx.setDescription(merchant);
-			tx.setType(TransactionType.DEBIT);
+			// Use pattern library for extraction
+			PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
+			if (amountResult.isPresent()) {
+				tx.setAmount(amountResult.getValue());
+				logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
+			}
+
+			PatternResult<String> descriptionResult = TransactionPatternLibrary.extractDescription(emailContent);
+			if (descriptionResult.isPresent()) {
+				tx.setDescription(descriptionResult.getValue());
+				logger.debug("Extracted description using pattern: {}", descriptionResult.getMatchedPattern());
+			}
+
+			tx.setType(TransactionPatternLibrary.detectTransactionType(emailContent));
 			tx.setAccount(accountService.getAccountByName("CSBB-CCA-OneCard", appUser));
-			logger.info("Extracted - Card Ending: {}, Amount: {}, Merchant: {}", cardEnding, amount, merchant);
+			
 			return tx;
+		} catch (Exception e) {
+			logger.error("Error parsing CSB CC transaction", e);
+			return null;
 		}
-		return null;
 	}
 
 }
