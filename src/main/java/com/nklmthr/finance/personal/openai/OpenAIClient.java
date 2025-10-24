@@ -194,11 +194,12 @@ public class OpenAIClient {
 
     /**
      * Consumes the GPT JSON response and enriches AccountTransaction
+     * Note: rawData should already be set in the caller before invoking this method
      */
     public void getGptResponse(String emailContent, AccountTransaction accountTransaction) {
         try {
             logger.info("Email Content: {}", emailContent);
-            accountTransaction.setRawData(emailContent);
+            // rawData is now set earlier in AbstractDataExtractionService to ensure it's captured for all transactions
 
             String response = callOpenAI(emailContent);
             logger.info("OpenAI Response (raw/cleaned): {}", response);

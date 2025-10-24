@@ -103,46 +103,56 @@ public abstract class AbstractDataExtractionService {
 
 					logger.info("{}: {} messages found.", query, messages.size());
 
-					for (Message message : messages) {
-						Message mess = gmailService.users().messages().get("me", message.getId()).setFormat("full")
-								.execute();
+				for (Message message : messages) {
+					Message mess = gmailService.users().messages().get("me", message.getId()).setFormat("full")
+							.execute();
 
-						String emailContent = extractPlainText(mess);
-						logger.debug("Extracted content for message ID {}: {}", mess.getId(), emailContent);
-						
-						if (StringUtils.isBlank(emailContent) || "[Empty content]".equals(emailContent)
-								|| "[Error extracting message]".equals(emailContent)) {
-							logger.warn("Skipping message with empty content.");
-							continue;
-						}
-
-						AccountTransaction accountTransaction = new AccountTransaction();
-						accountTransaction.setAppUser(appUser);
-						accountTransaction.setCategory(categoryService.getNonClassifiedCategory(appUser));
-						accountTransaction.setSourceId(mess.getId());
-						accountTransaction.setSourceThreadId(mess.getThreadId());
-						accountTransaction.setSourceTime(Instant.ofEpochMilli(mess.getInternalDate())
-								.atZone(ZoneId.systemDefault()).toLocalDateTime());
-						
-						accountTransaction.setDate(accountTransaction.getSourceTime());
-						accountTransaction = extractTransactionData(accountTransaction, emailContent, appUser);
-						
-						// Check if extraction was successful
-						if (accountTransaction == null) {
-							logger.warn("Failed to extract transaction data from email content, skipping message ID: {}", mess.getId());
-							continue;
-						}
-						
-						var duplicateOpt = accountTransactionService.findDuplicate(accountTransaction, appUser);
-						if (duplicateOpt.isPresent()) {
-							logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
-							accountTransactionService.mergeSourceInfoIfNeeded(duplicateOpt.get(), accountTransaction);
-						} else {
-							openAIClient.getGptResponse(emailContent, accountTransaction);
-							logger.info("Saving transaction: {}", accountTransaction);
-							accountTransactionService.save(accountTransaction, appUser);
-						}
+					String emailContent = extractPlainText(mess);
+					logger.debug("Extracted content for message ID {}: {}", mess.getId(), emailContent);
+					
+					if (StringUtils.isBlank(emailContent) || "[Empty content]".equals(emailContent)
+							|| "[Error extracting message]".equals(emailContent)) {
+						logger.warn("Skipping message with empty content.");
+						continue;
 					}
+
+					AccountTransaction accountTransaction = new AccountTransaction();
+					accountTransaction.setAppUser(appUser);
+					accountTransaction.setCategory(categoryService.getNonClassifiedCategory(appUser));
+					accountTransaction.setSourceId(mess.getId());
+					accountTransaction.setSourceThreadId(mess.getThreadId());
+					accountTransaction.setSourceTime(Instant.ofEpochMilli(mess.getInternalDate())
+							.atZone(ZoneId.systemDefault()).toLocalDateTime());
+					
+					accountTransaction.setDate(accountTransaction.getSourceTime());
+					
+					// Set raw data immediately to ensure it's captured for all transactions
+					accountTransaction.setRawData(emailContent);
+					
+					accountTransaction = extractTransactionData(accountTransaction, emailContent, appUser);
+					
+					// Check if extraction was successful
+					if (accountTransaction == null) {
+						logger.warn("Failed to extract transaction data from email content, skipping message ID: {}", mess.getId());
+						continue;
+					}
+					
+					var duplicateOpt = accountTransactionService.findDuplicate(accountTransaction, appUser);
+					if (duplicateOpt.isPresent()) {
+						logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
+						// Update rawData for duplicate if it's missing
+						AccountTransaction existing = duplicateOpt.get();
+						if (StringUtils.isBlank(existing.getRawData())) {
+							logger.info("Updating missing rawData for duplicate transaction ID: {}", existing.getId());
+							existing.setRawData(emailContent);
+						}
+						accountTransactionService.mergeSourceInfoIfNeeded(existing, accountTransaction);
+					} else {
+						openAIClient.getGptResponse(emailContent, accountTransaction);
+						logger.info("Saving transaction: {}", accountTransaction);
+						accountTransactionService.save(accountTransaction, appUser);
+					}
+				}
 				}
 			}
 		} catch (Exception e) {
@@ -155,15 +165,34 @@ public abstract class AbstractDataExtractionService {
 
 	protected String extractPlainText(Message message) {
 		try {
-			if (message == null)
+			if (message == null) {
+				logger.warn("Null message received for extraction");
 				return "[Null message]";
+			}
 
 			MessagePart payload = message.getPayload();
-			if (payload == null)
+			if (payload == null) {
+				logger.warn("No payload in message ID: {}", message.getId());
 				return "[No payload]";
+			}
 
+			logger.debug("Message ID: {}, MIME type: {}", message.getId(), payload.getMimeType());
+			
 			String text = extractTextFromMessagePart(payload);
-			return StringUtils.isNotBlank(text) ? cleanText(text.strip()) : "[Empty content]";
+			
+			if (StringUtils.isBlank(text)) {
+				logger.warn("Extracted blank text from message ID: {}, MIME: {}, has parts: {}", 
+					message.getId(), 
+					payload.getMimeType(), 
+					payload.getParts() != null && !payload.getParts().isEmpty());
+				return "[Empty content]";
+			}
+			
+			String cleaned = cleanText(text.strip());
+			logger.debug("Successfully extracted {} characters from message ID: {}", 
+				cleaned.length(), message.getId());
+			
+			return cleaned;
 		} catch (Exception e) {
 			logger.error("Failed to extract plain text from message: {}", e.getMessage(), e);
 			return "[Error extracting message]";
@@ -213,22 +242,43 @@ public abstract class AbstractDataExtractionService {
 
 
 	private String decodeBase64(String data) {
+		if (StringUtils.isBlank(data)) {
+			logger.debug("Empty data provided for base64 decoding");
+			return null;
+		}
+		
 		try {
 			byte[] bytes = Base64.getUrlDecoder().decode(data);
-			return new String(bytes, StandardCharsets.UTF_8);
+			String decoded = new String(bytes, StandardCharsets.UTF_8);
+			logger.debug("Successfully decoded {} bytes using URL decoder", bytes.length);
+			return decoded;
 		} catch (IllegalArgumentException e) {
-			logger.warn("Failed to decode base64: {}", e.getMessage());
-			return null;
+			logger.warn("Failed to decode base64 with URL decoder: {}, trying standard decoder", e.getMessage());
+			// Try standard decoder as fallback
+			try {
+				byte[] bytes = Base64.getDecoder().decode(data);
+				String decoded = new String(bytes, StandardCharsets.UTF_8);
+				logger.debug("Successfully decoded {} bytes using standard decoder", bytes.length);
+				return decoded;
+			} catch (Exception e2) {
+				logger.error("Both URL and standard base64 decoders failed", e2);
+				return null;
+			}
 		}
 	}
 
 	protected List<String> getGMailAPIQuery() {
 		List<String> queries = new java.util.ArrayList<>();
 		LocalDate today = LocalDate.now();
-		LocalDate twoMonthAgo = today.minusDays(gmailLookbackDays);
+		LocalDate lookbackDate = today.minusDays(gmailLookbackDays);
 		for (String query : getEmailSubject()) {
-			queries.add(String.format("subject:(%s) from:(%s) after:%s before:%s", query, getSender(),
-					formatDate(twoMonthAgo), formatDate(today.plusDays(1))));
+			String gmailQuery = String.format("subject:(%s) from:(%s) after:%s before:%s", 
+					query, 
+					getSender(),
+					formatDate(lookbackDate), 
+					formatDate(today.plusDays(1)));
+			queries.add(gmailQuery);
+			logger.debug("Gmail API query: {}", gmailQuery);
 		}
 		return queries;
 	}
