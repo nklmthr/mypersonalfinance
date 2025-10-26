@@ -131,12 +131,13 @@ public abstract class AbstractDataExtractionService {
 					
 					// Set raw data immediately to ensure it's captured for all transactions
 					accountTransaction.setRawData(emailContent);
-					logger.info("Extracting from email content: {}", emailContent);
+					logger.info("Processing email ID: {}", mess.getId());
 					accountTransaction = extractTransactionData(accountTransaction, emailContent, appUser);
 					
 					// Check if extraction was successful
 					if (accountTransaction == null) {
-						logger.warn("Failed to extract transaction data from email content, skipping message ID: {}", mess.getId());
+						logger.warn("Failed to extract transaction data from email ID: {}. Email content: {}", 
+							mess.getId(), emailContent);
 						continue;
 					}
 					
@@ -163,7 +164,8 @@ public abstract class AbstractDataExtractionService {
 						// Ensure description is never null (database constraint)
 						// Do NOT copy from gptDescription - keep fields completely separate
 						if (accountTransaction.getDescription() == null) {
-							logger.warn("Regex extraction failed for description, setting default value");
+							logger.warn("Regex extraction failed for description in email ID: {}. Email content: {}", 
+								mess.getId(), emailContent);
 							accountTransaction.setDescription("Unknown");
 						}
 						

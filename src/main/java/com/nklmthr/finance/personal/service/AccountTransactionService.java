@@ -6,7 +6,10 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -36,6 +39,13 @@ import com.nklmthr.finance.personal.repository.AccountRepository;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 import com.nklmthr.finance.personal.repository.AccountTransactionSpecifications;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
@@ -63,6 +73,9 @@ public class AccountTransactionService {
 	
 	@Autowired
 	CategoryMapper categoryMapper;
+	
+	@PersistenceContext
+	private EntityManager entityManager;
 
 	private static final Logger logger = LoggerFactory.getLogger(AccountTransactionService.class);
 
@@ -645,13 +658,29 @@ public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, St
 		
 		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
 		logger.info("Total transactions found: {}", page.getTotalElements());
+		
+		// FIX N+1 QUERY: Batch fetch all children for this page in a single query
+		List<String> parentIds = page.getContent().stream()
+			.map(AccountTransaction::getId)
+			.toList();
+		
+		Map<String, List<AccountTransactionDTO>> childrenByParent = new HashMap<>();
+		if (!parentIds.isEmpty()) {
+			AppUser currentUser = appUserService.getCurrentUser();
+			List<AccountTransaction> allChildren = accountTransactionRepository
+				.findByAppUserAndParentIn(currentUser, parentIds);
+			
+			// Group children by parent ID
+			for (AccountTransaction child : allChildren) {
+				childrenByParent
+					.computeIfAbsent(child.getParent(), k -> new ArrayList<>())
+					.add(accountTransactionMapper.toDTO(child));
+			}
+		}
+		
 		List<AccountTransactionDTO> formatted = page.getContent().stream()
 			    .map(tx -> {
-			        List<AccountTransactionDTO> children = accountTransactionRepository
-			                .findByAppUserAndParent(tx.getAppUser(), tx.getId())
-			                .stream()
-			                .map(accountTransactionMapper::toDTO)
-			                .toList();
+			        List<AccountTransactionDTO> children = childrenByParent.getOrDefault(tx.getId(), List.of());
 
 		        return new AccountTransactionDTO(
 		            tx.getId(),
@@ -681,19 +710,52 @@ public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, St
 
 
 public BigDecimal getCurrentTotal(String month, String date, String accountId, String type, String search, String categoryId) {
+        logger.info("Calculating current total for month: {}, date: {}, accountId: {}, type: {}, search: {}, categoryId: {}",
+                month, date, accountId, type, search, categoryId);
+        
         Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
                 ? buildTransactionSpec(month, date, accountId, type, search, categoryId, false)
                 : buildTransactionSpec(month, date, accountId, type, search, null, true);
-        Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, Pageable.unpaged());
-        logger.info("Calculating current total for month: {}, date: {}, accountId: {}, type: {}, search: {}, categoryId: {}",
-                month, date, accountId, type, search, categoryId);
-		logger.info("Total transactions found: {}", page.getTotalElements());
-		BigDecimal total = page.getContent().stream()
-				.map(t -> t.getType() == TransactionType.CREDIT ? t.getAmount() : t.getAmount().negate())
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
-		logger.info("Current total calculated: {}", total);
-		return total.setScale(2, RoundingMode.HALF_UP);
-	}
+        
+        // Calculate total using database-level aggregation
+        BigDecimal total = calculateTotalWithSpec(spec);
+        
+        logger.info("Current total calculated: {}", total);
+        return total.setScale(2, RoundingMode.HALF_UP);
+    }
+    
+    /**
+     * Calculate total amount using database-level aggregation with Specification
+     * This is much more efficient than fetching all records and summing in Java
+     */
+    private BigDecimal calculateTotalWithSpec(Specification<AccountTransaction> spec) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<BigDecimal> query = cb.createQuery(BigDecimal.class);
+        Root<AccountTransaction> root = query.from(AccountTransaction.class);
+
+        // Apply the same filters from the specification
+        Predicate predicate = spec.toPredicate(root, query, cb);
+
+        // Create CASE expression: 
+        // CASE WHEN type = 'CREDIT' THEN amount ELSE -amount END
+        Expression<BigDecimal> caseExpression = cb.<BigDecimal>selectCase()
+                .when(cb.equal(root.get("type"), TransactionType.CREDIT), root.get("amount"))
+                .otherwise(cb.neg(root.get("amount")));
+
+        // Sum the case expression
+        Expression<BigDecimal> sum = cb.sum(caseExpression);
+        
+        // Use COALESCE to return 0 if no results
+        Expression<BigDecimal> total = cb.coalesce(sum, BigDecimal.ZERO);
+
+        query.select(total);
+        if (predicate != null) {
+            query.where(predicate);
+        }
+
+        BigDecimal result = entityManager.createQuery(query).getSingleResult();
+        return result != null ? result : BigDecimal.ZERO;
+    }
 
 // --- Backward-compatible overloads (without 'date') for existing tests/integrations ---
 public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, String month, String accountId,

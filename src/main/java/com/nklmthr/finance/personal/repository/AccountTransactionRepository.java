@@ -35,6 +35,13 @@ public interface AccountTransactionRepository
 	
 	@EntityGraph(attributePaths = {
             "category", "category.parent",
+            "account", "account.accountType", "account.institution",
+            "gptAccount"
+    })
+    List<AccountTransaction> findByAppUserAndParentIn(AppUser appUser, List<String> parentIds);
+	
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
             "account", "account.accountType", "account.institution"
     })
     List<AccountTransaction> findByAppUserAndAccountId(AppUser appUser, String accountId);
