@@ -38,6 +38,43 @@ function FetchToolbar({
     triggerDataExtraction,
     currentTotal,
 }) {
+    // Function to determine color based on amount in lakhs
+    // Negative amounts (expenses) → red, Positive amounts (income/savings) → green
+    const getColorForAmount = (amount) => {
+        const lakhs = amount / 100000;
+        
+        // Very negative (< -3L): dark red
+        if (lakhs < -3) {
+            return { bg: 'bg-red-200', text: 'text-red-950', border: 'border-red-500' };
+        }
+        // Moderately negative (-3L to -2L): red
+        else if (lakhs < -2) {
+            return { bg: 'bg-red-100', text: 'text-red-900', border: 'border-red-400' };
+        }
+        // Slightly negative (-2L to -1L): orange
+        else if (lakhs < -1) {
+            return { bg: 'bg-orange-100', text: 'text-orange-900', border: 'border-orange-300' };
+        }
+        // Near zero (-1L to 1L): yellow
+        else if (lakhs < 1) {
+            return { bg: 'bg-yellow-100', text: 'text-yellow-900', border: 'border-yellow-300' };
+        }
+        // Slightly positive (1L to 2L): light green
+        else if (lakhs < 2) {
+            return { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300' };
+        }
+        // Moderately positive (2L to 3L): green
+        else if (lakhs < 3) {
+            return { bg: 'bg-green-200', text: 'text-green-900', border: 'border-green-400' };
+        }
+        // Very positive (≥ 3L): dark green
+        else {
+            return { bg: 'bg-green-300', text: 'text-green-950', border: 'border-green-500' };
+        }
+    };
+
+    const colors = getColorForAmount(currentTotal);
+
     return (
         <div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm">
             <div className="flex flex-wrap items-center gap-2 justify-between">
@@ -67,23 +104,19 @@ function FetchToolbar({
                             ? 'bg-gray-400 cursor-not-allowed' 
                             : 'bg-purple-600 hover:bg-purple-700'
                         } text-white px-4 py-2 rounded text-sm shadow`}
-                        title="Trigger selected data extraction services to fetch new transactions"
+                        title="Fetch new transactions from bank/email services (NOT for page refresh - transactions auto-load on filter change)"
                     >
                         Fetch
                     </button>
                 </div>
-                <button
-                    onClick={() =>
-                        alert(
-                            `Current Total: ₹${currentTotal.toLocaleString('en-IN', {
-                                minimumFractionDigits: 2,
-                            })}`
-                        )
-                    }
-                    className="bg-yellow-200 text-gray-800 px-3 py-2 rounded text-sm shadow hover:bg-yellow-300"
+                <div
+                    className={`${colors.bg} ${colors.text} ${colors.border} border-2 px-4 py-2 rounded text-sm shadow-md font-semibold`}
+                    title={`Total transactions amount: ₹${currentTotal.toLocaleString('en-IN', {
+                        minimumFractionDigits: 2,
+                    })}`}
                 >
                     Total: ₹{currentTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </button>
+                </div>
             </div>
         </div>
     );
@@ -1321,6 +1354,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 									accountId: tx.account?.id,
 								})
 							}
+							title="Split this transaction into multiple parts with different categories"
 						>
 							Split
 						</button>
@@ -1336,6 +1370,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 									explanation: tx.explanation || "",
 								})
 							}
+							title="Mark this as a transfer between accounts (creates linked transactions)"
 						>
 							Transfer
 						</button>
@@ -1343,6 +1378,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 					<button
 						className="text-red-600 hover:underline"
 						onClick={() => deleteTx(tx.id)}
+						title="Delete this transaction permanently (cannot be undone)"
 					>
 						Delete
 					</button>
@@ -1355,6 +1391,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 								categoryId: tx.category?.id,
 							})
 						}
+						title="Edit transaction details (amount, description, category, etc.)"
 					>
 						Update
 					</button>
@@ -1374,6 +1411,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 										accountId: tx.account?.id,
 									})
 								}
+								title="Split this transaction into multiple parts with different categories"
 							>
 								Split
 							</button>
@@ -1389,11 +1427,18 @@ const triggerDataExtraction = async (servicesToRun) => {
 										explanation: tx.explanation || "",
 									})
 								}
+								title="Mark this as a transfer between accounts (creates linked transactions)"
 							>
 								Transfer
 							</button>
 						)}
-						<button className="text-red-600" onClick={() => deleteTx(tx.id)}>Delete</button>
+						<button 
+							className="text-red-600" 
+							onClick={() => deleteTx(tx.id)}
+							title="Delete this transaction permanently (cannot be undone)"
+						>
+							Delete
+						</button>
 						<button
 							className="text-blue-600"
 							onClick={() =>
@@ -1403,6 +1448,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 									categoryId: tx.category?.id,
 								})
 							}
+							title="Edit transaction details (amount, description, category, etc.)"
 						>
 							Update
 						</button>
@@ -1649,6 +1695,7 @@ function TransactionPageButtons({
 						disabled={page === 0}
 						onClick={() => setPage(0)}
 						className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50"
+						title="Go to first page"
 					>
 						First
 					</button>
@@ -1656,6 +1703,7 @@ function TransactionPageButtons({
 						disabled={page === 0}
 						onClick={() => setPage((p) => p - 1)}
 						className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 ml-1"
+						title="Go to previous page"
 					>
 						Prev
 					</button>
@@ -1670,6 +1718,7 @@ function TransactionPageButtons({
 								className={`px-2 py-1 rounded ${p === page ? "bg-blue-600 text-white" : "bg-gray-200"
 									}`}
 								onClick={() => setPage(p)}
+								title={`Go to page ${p + 1}`}
 							>
 								{p + 1}
 							</button>
@@ -1679,6 +1728,7 @@ function TransactionPageButtons({
 						disabled={page === totalPages - 1}
 						onClick={() => setPage((p) => p + 1)}
 						className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 ml-1"
+						title="Go to next page"
 					>
 						Next
 					</button>
@@ -1686,6 +1736,7 @@ function TransactionPageButtons({
 						disabled={page === totalPages - 1}
 						onClick={() => setPage(totalPages - 1)}
 						className="px-2 py-1 rounded bg-gray-200 disabled:opacity-50 ml-1"
+						title="Go to last page"
 					>
 						Last
 					</button>
@@ -1781,28 +1832,58 @@ function TransactionPageButtons({
                         className="border px-2 py-1 rounded text-sm w-full"
                     />
                     </div>
-                    <div className="grid grid-cols-2 gap-2 items-center">
+                    <div className="flex gap-2 items-center">
                         <SearchSelect
                             options={[{ id: '', name: 'All Categories' }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
                             value={filterCategory}
                             onChange={(val) => { setFilterCategory(val); updateUrlParams({ categoryId: val }); }}
                             placeholder="Category"
                         />
-                        <button
-                            onClick={() => {
-                                setFilterMonth('');
-                                setFilterDate('');
-                                setFilterMode('month');
-                                setFilterAccount('');
-                                setFilterCategory('');
-                                setFilterType('ALL');
-                                setSearch('');
-                                setPage(0);
-                            }}
-                            className="bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 w-full md:w-auto md:justify-self-end"
-                        >
-                            Clear All
-                        </button>
+                        <div className="flex gap-1 ml-auto">
+                            <button
+                                onClick={() => {
+                                    setFilterAccount('');
+                                    setFilterCategory('');
+                                    setFilterType('ALL');
+                                    setSearch('');
+                                    setPage(0);
+                                    updateUrlParams({ 
+                                        accountId: '', 
+                                        categoryId: '', 
+                                        type: 'ALL', 
+                                        search: '' 
+                                    });
+                                }}
+                                className="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600 whitespace-nowrap"
+                                title="Reset filters (keeps month/date selection, clears account, category, type, and search)"
+                            >
+                                Reset
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setFilterMonth('');
+                                    setFilterDate('');
+                                    setFilterMode('month');
+                                    setFilterAccount('');
+                                    setFilterCategory('');
+                                    setFilterType('ALL');
+                                    setSearch('');
+                                    setPage(0);
+                                    updateUrlParams({ 
+                                        month: '', 
+                                        date: '', 
+                                        accountId: '', 
+                                        categoryId: '', 
+                                        type: 'ALL', 
+                                        search: '' 
+                                    });
+                                }}
+                                className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600 whitespace-nowrap"
+                                title="Clear all filters including date selections (resets everything to default)"
+                            >
+                                Clear All
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1823,6 +1904,7 @@ function TransactionPageButtons({
                             })
                         }
                         className="bg-green-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded shadow hover:bg-green-600 w-full sm:w-auto"
+                        title="Add a new transaction manually"
                     >
                         Add
                     </button>
@@ -1858,6 +1940,7 @@ function TransactionPageButtons({
                             saveAs(blob, 'transactions.csv');
                         }}
                         className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                        title="Export filtered transactions to CSV file (comma-separated values, opens in Excel/Sheets)"
                     >
                         CSV
                     </button>
@@ -1896,6 +1979,7 @@ function TransactionPageButtons({
                             saveAs(blob, 'transactions.xlsx');
                         }}
                         className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                        title="Export filtered transactions to Excel file (.xlsx format, preserves formatting)"
                     >
                         XLSX
                     </button>
@@ -1940,6 +2024,7 @@ function TransactionPageButtons({
                             doc.save('transactions.pdf');
                         }}
                         className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                        title="Export filtered transactions to PDF file (printable/shareable document format)"
                     >
                         PDF
                     </button>
