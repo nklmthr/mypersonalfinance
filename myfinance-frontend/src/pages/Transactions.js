@@ -1019,14 +1019,17 @@ const triggerDataExtraction = async (servicesToRun) => {
 	const currentPageSum = useMemo(() => {
 		return (transactions || []).reduce((sum, tx) => {
 			const amount = typeof tx.amount === "number" ? tx.amount : 0;
-			let total = sum + amount;
+			// CREDIT adds to sum, DEBIT subtracts from sum
+			const multiplier = tx.type === "CREDIT" ? 1 : -1;
+			let total = sum + (amount * multiplier);
 			
 			// Include child amounts if expanded
 			if (expandedParents[tx.id] && Array.isArray(tx.children)) {
 				tx.children.forEach((child) => {
 					if (typeof child === "object" && child !== null) {
 						const childAmount = typeof child.amount === "number" ? child.amount : 0;
-						total += childAmount;
+						const childMultiplier = child.type === "CREDIT" ? 1 : -1;
+						total += (childAmount * childMultiplier);
 					}
 				});
 			}
@@ -1389,6 +1392,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 								...tx,
 								accountId: tx.account?.id,
 								categoryId: tx.category?.id,
+								currency: tx.currency || 'INR',
 							})
 						}
 						title="Edit transaction details (amount, description, category, etc.)"
@@ -1446,6 +1450,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 									...tx,
 									accountId: tx.account?.id,
 									categoryId: tx.category?.id,
+									currency: tx.currency || 'INR',
 								})
 							}
 							title="Edit transaction details (amount, description, category, etc.)"
