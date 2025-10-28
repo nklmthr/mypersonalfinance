@@ -22,6 +22,7 @@ public interface AccountTransactionMapper extends GenericMapper<AccountTransacti
 	@Mapping(target = "gptType", source = "gptType")
 	@Mapping(target = "currency", source = "currency")
 	@Mapping(target = "gptAccount", source = "gptAccount")
+	@Mapping(target = "gptCurrency", source = "gptCurrency")
 	@Mapping(target="shortDescription", ignore = true)
 	@Mapping(target="shortExplanation", ignore = true)
 	@Mapping(target="children", ignore = true)
@@ -44,6 +45,7 @@ public interface AccountTransactionMapper extends GenericMapper<AccountTransacti
 	@Mapping(target = "gptType", source = "gptType")
 	@Mapping(target = "currency", source = "currency")
 	@Mapping(target = "gptAccount", source = "gptAccount")
+	@Mapping(target = "gptCurrency", source = "gptCurrency")
 	AccountTransaction toEntity(AccountTransactionDTO dto);
 
 	@Mapping(target="shortDescription", ignore = true)

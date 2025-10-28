@@ -128,5 +128,8 @@ public class AccountTransaction {
 	@JoinColumn(name = "gpt_account_id", nullable = false)
 	@ToString.Exclude
 	private Account gptAccount;
+	
+	@Column
+	private String gptCurrency;
 
 }

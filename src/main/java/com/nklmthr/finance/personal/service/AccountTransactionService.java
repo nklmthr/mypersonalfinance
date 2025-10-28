@@ -701,7 +701,8 @@ public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, St
 		            tx.getGptExplanation(),
 		            tx.getGptType(),
 		            tx.getCurrency(),
-		            accountMapper.toDTO(tx.getGptAccount())
+		            accountMapper.toDTO(tx.getGptAccount()),
+		            tx.getGptCurrency()
 		        );
 			    })
 			    .toList();

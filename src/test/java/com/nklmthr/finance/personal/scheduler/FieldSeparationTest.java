@@ -2,15 +2,19 @@ package com.nklmthr.finance.personal.scheduler;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import com.nklmthr.finance.personal.dto.AccountDTO;
 import com.nklmthr.finance.personal.enums.TransactionType;
+import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.service.AccountService;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher;
 
 /**
  * CRITICAL TEST: Ensures Regex and GPT fields are NEVER mixed
@@ -21,7 +25,7 @@ import com.nklmthr.finance.personal.service.AccountService;
 public class FieldSeparationTest {
 
     @Test
-    void testAxisCC_RegexOnlySetsNonGptFields() {
+    void testAxisCC_RegexOnlySetsNonGptFields() throws Exception {
         String email = """
             Transaction Amount: INR 1000
             Merchant Name: TEST MERCHANT
@@ -29,9 +33,30 @@ public class FieldSeparationTest {
             """;
 
         AxisCCDataExtractionService extractor = new AxisCCDataExtractionService();
-        extractor.accountService = Mockito.mock(AccountService.class);
-        Mockito.when(extractor.accountService.getAccountByName(Mockito.anyString(), Mockito.any()))
-            .thenReturn(null);
+        
+        // Mock accountService
+        AccountService mockAccountService = Mockito.mock(AccountService.class);
+        Account mockAccount = new Account();
+        mockAccount.setName("Test Account");
+        Mockito.when(mockAccountService.getAllAccounts(Mockito.any()))
+            .thenReturn(java.util.List.of());
+        Mockito.when(mockAccountService.getAccountByName(Mockito.anyString(), Mockito.any()))
+            .thenReturn(mockAccount);
+        
+        // Mock accountFuzzyMatcher
+        AccountFuzzyMatcher mockFuzzyMatcher = Mockito.mock(AccountFuzzyMatcher.class);
+        AccountDTO mockAccountDTO = new AccountDTO("test", "Test Account", null, null, null, null, null, null);
+        Mockito.when(mockFuzzyMatcher.findBestMatch(Mockito.anyList(), Mockito.anyString(), Mockito.anyString()))
+            .thenReturn(new AccountFuzzyMatcher.MatchResult(mockAccountDTO, 10));
+        
+        // Use reflection to set fields (accountService is in parent class)
+        Field accountServiceField = AbstractDataExtractionService.class.getDeclaredField("accountService");
+        accountServiceField.setAccessible(true);
+        accountServiceField.set(extractor, mockAccountService);
+        
+        Field fuzzyMatcherField = AxisCCDataExtractionService.class.getDeclaredField("accountFuzzyMatcher");
+        fuzzyMatcherField.setAccessible(true);
+        fuzzyMatcherField.set(extractor, mockFuzzyMatcher);
 
         AccountTransaction tx = new AccountTransaction();
         AccountTransaction result = extractor.extractTransactionData(tx, email, new AppUser());
@@ -54,7 +79,7 @@ public class FieldSeparationTest {
     }
 
     @Test
-    void testICICI_RegexOnlySetsNonGptFields() {
+    void testICICI_RegexOnlySetsNonGptFields() throws Exception {
         String email = """
             Transaction alert for your ICICI Bank Credit Card XX9057
             INR 500.50 on Oct 24, 2025 at 15:30:00. 
@@ -62,9 +87,30 @@ public class FieldSeparationTest {
             """;
 
         ICICICCDataExtractionServiceImpl extractor = new ICICICCDataExtractionServiceImpl();
-        extractor.accountService = Mockito.mock(AccountService.class);
-        Mockito.when(extractor.accountService.getAccountByName(Mockito.anyString(), Mockito.any()))
-            .thenReturn(null);
+        
+        // Mock accountService
+        AccountService mockAccountService = Mockito.mock(AccountService.class);
+        Account mockAccount = new Account();
+        mockAccount.setName("Test Account");
+        Mockito.when(mockAccountService.getAllAccounts(Mockito.any()))
+            .thenReturn(java.util.List.of());
+        Mockito.when(mockAccountService.getAccountByName(Mockito.anyString(), Mockito.any()))
+            .thenReturn(mockAccount);
+        
+        // Mock accountFuzzyMatcher
+        AccountFuzzyMatcher mockFuzzyMatcher = Mockito.mock(AccountFuzzyMatcher.class);
+        AccountDTO mockAccountDTO = new AccountDTO("test", "Test Account", null, null, null, null, null, null);
+        Mockito.when(mockFuzzyMatcher.findBestMatch(Mockito.anyList(), Mockito.anyString(), Mockito.anyString()))
+            .thenReturn(new AccountFuzzyMatcher.MatchResult(mockAccountDTO, 10));
+        
+        // Use reflection to set fields (accountService is in parent class)
+        Field accountServiceField = AbstractDataExtractionService.class.getDeclaredField("accountService");
+        accountServiceField.setAccessible(true);
+        accountServiceField.set(extractor, mockAccountService);
+        
+        Field fuzzyMatcherField = ICICICCDataExtractionServiceImpl.class.getDeclaredField("accountFuzzyMatcher");
+        fuzzyMatcherField.setAccessible(true);
+        fuzzyMatcherField.set(extractor, mockFuzzyMatcher);
 
         AccountTransaction tx = new AccountTransaction();
         AccountTransaction result = extractor.extractTransactionData(tx, email, new AppUser());

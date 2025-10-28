@@ -233,7 +233,7 @@ public class OpenAIClient {
 
             // ---- Currency ----
             JsonNode currencyNode = parsedContent.get("currency");
-            accountTransaction.setCurrency(
+            accountTransaction.setGptCurrency(
                     currencyNode != null && !currencyNode.isNull() ? normalizeCurrency(currencyNode.asText()) : null
             );
 

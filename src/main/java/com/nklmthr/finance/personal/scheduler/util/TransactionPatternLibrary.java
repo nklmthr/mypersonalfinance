@@ -82,7 +82,7 @@ public class TransactionPatternLibrary {
     private static final List<DescriptionPattern> MERCHANT_PATTERNS = List.of(
         // Format: "Merchant Name: MERCHANT" or "Merchant: MERCHANT" - Check this first (highest confidence)
         new DescriptionPattern("MERCHANT_LABELED", 
-            Pattern.compile("Merchant(?:\\s+Name|\\s+ID)?[:\\s]+([A-Za-z0-9\\s&\\-]+?)(?=\\s+(?:Date|Axis|Card|on|\\d{2}/\\d{2}/\\d{4})|\\r?\\n|$)", Pattern.CASE_INSENSITIVE), 95),
+            Pattern.compile("\\bMerchant(?:\\s+Name|\\s+ID)?[:\\s]*:([A-Za-z0-9\\s&\\-]+?)(?=\\s+(?:Date|Axis|Card|on|\\d{2}/\\d{2}/\\d{4})|\\r?\\n|$)", Pattern.CASE_INSENSITIVE), 95),
         
         // Format: "Info: MERCHANT_NAME" - ICICI format
         new DescriptionPattern("INFO_LABELED", 

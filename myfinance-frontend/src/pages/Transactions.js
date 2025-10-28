@@ -1038,6 +1038,183 @@ const triggerDataExtraction = async (servicesToRun) => {
 		}, 0);
 	}, [transactions, expandedParents]);
 
+	// Helper function to create professional transaction comparison modal
+	const createComparisonModal = (tx) => {
+		const hasGptData = tx.gptDescription || tx.gptAmount || tx.gptExplanation || tx.gptType || tx.gptAccount;
+		
+		return (
+			<div className="max-h-[70vh] overflow-y-auto">
+				{/* Header */}
+				<div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border border-blue-200 mb-3 sticky top-0 z-10">
+					<div className="flex justify-between items-center text-sm">
+						<div>
+							<span className="text-xs text-gray-600 uppercase tracking-wide">Transaction Date</span>
+							<div className="font-semibold text-gray-800">{new Date(tx.date).toLocaleString('en-IN', { 
+								year: 'numeric', 
+								month: 'short', 
+								day: 'numeric', 
+								hour: '2-digit', 
+								minute: '2-digit' 
+							})}</div>
+						</div>
+						<div className="text-right">
+							<span className="text-xs text-gray-600">See account comparison below ↓</span>
+						</div>
+					</div>
+				</div>
+
+				{/* Comparison Table */}
+				<div className="border border-gray-300 rounded-lg overflow-hidden">
+					<table className="w-full text-sm">
+						<thead className="bg-gradient-to-r from-gray-100 to-blue-50 border-b-2 border-gray-300">
+							<tr>
+								<th className="px-3 py-2 text-left font-bold text-gray-700 w-32">Attribute</th>
+								<th className="px-3 py-2 text-left font-bold text-gray-700 border-l border-gray-300">📊 Extracted</th>
+								<th className="px-3 py-2 text-left font-bold text-blue-700 border-l-2 border-blue-300">🤖 AI Analyzed</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-gray-200">
+							{/* Amount */}
+							<tr className="hover:bg-gray-50">
+								<td className="px-3 py-2 font-semibold text-gray-700 align-top">💰 Amount</td>
+								<td className="px-3 py-2 border-l border-gray-200 align-top">
+									<span className={`text-lg font-bold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+										₹{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+									</span>
+								</td>
+								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
+									{tx.gptAmount ? (
+										<span className={`text-lg font-bold ${tx.gptType === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+											{tx.currency || "INR"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+										</span>
+									) : (
+										<span className="text-gray-400 italic">Not analyzed</span>
+									)}
+								</td>
+							</tr>
+
+							{/* Type */}
+							<tr className="hover:bg-gray-50">
+								<td className="px-3 py-2 font-semibold text-gray-700 align-top">🔄 Type</td>
+								<td className="px-3 py-2 border-l border-gray-200 align-top">
+									<span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
+										tx.type === "DEBIT" ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
+									}`}>
+										{tx.type}
+									</span>
+								</td>
+								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
+									{tx.gptType ? (
+										<span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
+											tx.gptType === "DEBIT" ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
+										}`}>
+											{tx.gptType}
+										</span>
+									) : (
+										<span className="text-gray-400 italic">Not analyzed</span>
+									)}
+								</td>
+							</tr>
+
+							{/* Account */}
+							<tr className="hover:bg-gray-50">
+								<td className="px-3 py-2 font-semibold text-gray-700 align-top">🏦 Account</td>
+								<td className="px-3 py-2 border-l border-gray-200 align-top">
+									<div className="space-y-0.5">
+										<div className="font-medium text-gray-800">{tx.account?.name}</div>
+										<div className="text-xs text-gray-600">{tx.account?.institution?.description}</div>
+										<div className="text-xs text-gray-500">{tx.account?.accountType?.name}</div>
+									</div>
+								</td>
+								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
+									{tx.gptAccount ? (
+										<div className="space-y-0.5">
+											<div className="font-medium text-gray-800">{tx.gptAccount.name}</div>
+											<div className="text-xs text-gray-600">{tx.gptAccount.institution?.description}</div>
+											<div className="text-xs text-gray-500">{tx.gptAccount.accountType?.name}</div>
+										</div>
+									) : (
+										<span className="text-gray-400 italic">Not analyzed</span>
+									)}
+								</td>
+							</tr>
+
+							{/* Description */}
+							<tr className="hover:bg-gray-50">
+								<td className="px-3 py-2 font-semibold text-gray-700 align-top">📝 Description</td>
+								<td className="px-3 py-2 border-l border-gray-200 align-top">
+									<div className="max-h-24 overflow-y-auto bg-gray-50 p-2 rounded border border-gray-300">
+										<p className="text-sm whitespace-pre-wrap break-words">
+											{tx.description || <span className="text-gray-400 italic">Not available</span>}
+										</p>
+									</div>
+								</td>
+								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
+									<div className="max-h-24 overflow-y-auto bg-blue-50 p-2 rounded border border-blue-300">
+										<p className="text-sm whitespace-pre-wrap break-words">
+											{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}
+										</p>
+									</div>
+								</td>
+							</tr>
+
+							{/* Explanation */}
+							<tr className="hover:bg-gray-50">
+								<td className="px-3 py-2 font-semibold text-gray-700 align-top">💭 Explanation</td>
+								<td className="px-3 py-2 border-l border-gray-200 align-top">
+									<div className="max-h-24 overflow-y-auto bg-gray-50 p-2 rounded border border-gray-300">
+										<p className="text-sm whitespace-pre-wrap break-words">
+											{tx.explanation || <span className="text-gray-400 italic">Not available</span>}
+										</p>
+									</div>
+								</td>
+								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
+									<div className="max-h-24 overflow-y-auto bg-blue-50 p-2 rounded border border-blue-300">
+										<p className="text-sm whitespace-pre-wrap break-words">
+											{tx.gptExplanation || <span className="text-gray-400 italic">Not analyzed</span>}
+										</p>
+									</div>
+								</td>
+							</tr>
+
+							{/* Currency */}
+							<tr className="hover:bg-gray-50">
+								<td className="px-3 py-2 font-semibold text-gray-700 align-top">💱 Currency</td>
+								<td className="px-3 py-2 border-l border-gray-200 align-top">
+									{tx.currency ? (
+										<span className="inline-flex items-center px-3 py-1 bg-gray-100 text-gray-800 rounded-md font-semibold">
+											{tx.currency}
+										</span>
+									) : (
+										<span className="text-gray-400 italic">INR (default)</span>
+									)}
+								</td>
+								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
+									{tx.gptCurrency ? (
+										<span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-md font-semibold">
+											{tx.gptCurrency}
+										</span>
+									) : (
+										<span className="text-gray-400 italic">Not analyzed</span>
+									)}
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+
+				{/* Info Footer */}
+				<div className="mt-3 text-center">
+					<p className="text-xs text-gray-600">
+						{hasGptData 
+							? "✨ AI analysis available for this transaction" 
+							: "ℹ️ No AI analysis performed"}
+					</p>
+				</div>
+			</div>
+		);
+	};
+
 	const renderRow = (tx, isChild = false, index = 0) => {
 		const baseColor = isChild
 			? "bg-gray-50 border-dashed"
@@ -1081,98 +1258,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 								onClick={() =>
 									setModalContent({
 										title: "Transaction Analysis & Comparison",
-										content: (
-												<div className="space-y-4">
-													{/* Header with Transaction ID and Date */}
-                                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded border">
-														<div className="flex justify-between items-center">
-															<div>
-																<h3 className="font-semibold text-gray-800">Transaction Details</h3>
-																<p className="text-xs text-gray-600">{new Date(tx.date).toLocaleString()}</p>
-															</div>
-															<div className="text-right">
-																<p className="text-sm text-gray-600">{tx.account?.name}</p>
-																<p className="text-xs text-gray-500">{tx.account?.institution?.name}</p>
-															</div>
-														</div>
-													</div>
-
-													{/* Description Comparison */}
-													<div className="grid grid-cols-2 gap-4">
-														<div className="space-y-2">
-															<h4 className="font-semibold text-gray-700 text-sm">📊 Original Description</h4>
-                                            <div className="bg-gray-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words break-all">
-												<p className="text-sm leading-snug">{tx.description || <span className="text-gray-400 italic">Not available</span>}</p>
-											</div>
-														</div>
-														<div className="space-y-2">
-															<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Description</h4>
-                                                <div className="bg-blue-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words break-all">
-													<p className="text-sm leading-snug">{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}</p>
-												</div>
-														</div>
-													</div>
-
-													{/* Explanation Comparison */}
-													<div className="grid grid-cols-2 gap-4">
-														<div className="space-y-2">
-															<h4 className="font-semibold text-gray-700 text-sm">📊 Original Explanation</h4>
-												<div className="bg-gray-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words">
-													<p className="text-sm leading-snug">{tx.explanation || <span className="text-gray-400 italic">Not available</span>}</p>
-												</div>
-														</div>
-														<div className="space-y-2">
-															<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Explanation</h4>
-												<div className="bg-blue-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words">
-													<p className="text-sm leading-snug">{tx.gptExplanation || <span className="text-gray-400 italic">Not analyzed</span>}</p>
-												</div>
-														</div>
-													</div>
-
-													{/* Other Fields */}
-													<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-														<div className="space-y-3">
-															<h4 className="font-semibold text-gray-700 text-sm">💰 Amount & Type</h4>
-															<div className="bg-gray-50 p-3 rounded border">
-																<p className="text-sm mb-1">
-																	<strong>Original:</strong> 
-																	<span className={`font-semibold ml-1 ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-																		₹{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.type})
-																	</span>
-																</p>
-																{tx.gptAmount && (
-																	<p className="text-sm">
-																		<strong>GPT:</strong> 
-																		<span className={`font-semibold ml-1 ${tx.gptType === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-																			{tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.gptType || "N/A"})
-																		</span>
-																	</p>
-																)}
-															</div>
-														</div>
-														
-														{tx.gptAccount && (
-															<div className="space-y-3">
-																<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Matched Account</h4>
-																<div className="bg-blue-50 p-3 rounded border">
-																	<p className="text-sm font-medium">{tx.gptAccount.name}</p>
-																	<p className="text-xs text-gray-500">{tx.gptAccount.institution?.name}</p>
-																	<p className="text-xs text-gray-500">{tx.gptAccount.accountType?.name}</p>
-																</div>
-															</div>
-														)}
-														
-														{tx.currency && (
-															<div className="space-y-3">
-																<h4 className="font-semibold text-blue-700 text-sm">💱 Currency</h4>
-																<div className="bg-blue-50 p-3 rounded border">
-																	<p className="text-sm font-medium">{tx.currency}</p>
-																</div>
-															</div>
-														)}
-													</div>
-											</div>
-										),
+										content: createComparisonModal(tx),
 									})
 								}
 							>
@@ -1186,88 +1272,9 @@ const triggerDataExtraction = async (servicesToRun) => {
 								onClick={() =>
 									setModalContent({
 										title: "Transaction Analysis & Comparison",
-										content: (
-											<div className="space-y-4">
-												{/* Header with Transaction ID and Date */}
-												<div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded border">
-													<div className="flex justify-between items-center">
-														<div>
-															<h3 className="font-semibold text-gray-800">Transaction Details</h3>
-															<p className="text-xs text-gray-600">{new Date(tx.date).toLocaleString()}</p>
-														</div>
-														<div className="text-right">
-															<p className="text-sm text-gray-600">{tx.account?.name}</p>
-															<p className="text-xs text-gray-500">{tx.account?.institution?.name}</p>
-														</div>
-													</div>
-												</div>
-
-											{/* Description Comparison */}
-											<div className="grid grid-cols-2 gap-4">
-												<div className="space-y-2">
-													<h4 className="font-semibold text-gray-700 text-sm">📊 Original Description</h4>
-                                                    <div className="bg-gray-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words break-all">
-                                                        <p className="text-sm">{tx.description || <span className="text-gray-400 italic">Not available</span>}</p>
-													</div>
-												</div>
-												<div className="space-y-2">
-													<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Description</h4>
-                                                    <div className="bg-blue-50 p-3 rounded border min-h-[60px] max-h-40 overflow-auto whitespace-pre-wrap break-words break-all">
-                                                        <p className="text-sm">{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}</p>
-													</div>
-												</div>
-											</div>
-
-											{/* Explanation Comparison */}
-											<div className="grid grid-cols-2 gap-4">
-												<div className="space-y-2">
-													<h4 className="font-semibold text-gray-700 text-sm">📊 Original Explanation</h4>
-													<div className="bg-gray-50 p-3 rounded border min-h-[60px]">
-														<p className="text-sm">{tx.explanation || <span className="text-gray-400 italic">Not available</span>}</p>
-													</div>
-												</div>
-												<div className="space-y-2">
-													<h4 className="font-semibold text-blue-700 text-sm">🤖 GPT Explanation</h4>
-													<div className="bg-blue-50 p-3 rounded border min-h-[60px]">
-														<p className="text-sm">{tx.gptExplanation || <span className="text-gray-400 italic">Not analyzed</span>}</p>
-													</div>
-												</div>
-											</div>
-
-											{/* Other Fields */}
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-												<div className="space-y-3">
-													<h4 className="font-semibold text-gray-700 text-sm">💰 Amount & Type</h4>
-													<div className="bg-gray-50 p-3 rounded border">
-														<p className="text-sm mb-1">
-															<strong>Original:</strong> 
-															<span className={`font-semibold ml-1 ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-																₹{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.type})
-															</span>
-														</p>
-														{tx.gptAmount && (
-															<p className="text-sm">
-																<strong>GPT:</strong> 
-																<span className={`font-semibold ml-1 ${tx.gptType === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-																	{tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} ({tx.gptType || "N/A"})
-																</span>
-															</p>
-														)}
-													</div>
-												</div>
-												{tx.currency && (
-													<div className="space-y-3">
-														<h4 className="font-semibold text-blue-700 text-sm">💱 Currency</h4>
-														<div className="bg-blue-50 p-3 rounded border">
-															<p className="text-sm font-medium">{tx.currency}</p>
-														</div>
-													</div>
-												)}
-											</div>
-										</div>
-									),
-								})
-							}
+										content: createComparisonModal(tx),
+									})
+								}
 							>
 								🔍
 							</button>

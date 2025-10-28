@@ -26,7 +26,8 @@ public record AccountTransactionDTO(
 	String gptExplanation,
 	TransactionType gptType,
 	String currency,
-	AccountDTO gptAccount
+	AccountDTO gptAccount,
+	String gptCurrency
 ) {
 	public String getShortDescription() {
 		// Prioritize GPT description over original description

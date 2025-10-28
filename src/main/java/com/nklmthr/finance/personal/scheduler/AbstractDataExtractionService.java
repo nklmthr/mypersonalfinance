@@ -141,6 +141,12 @@ public abstract class AbstractDataExtractionService {
 						continue;
 					}
 					
+					// Set default currency if not set during extraction (most Indian banks use INR)
+					if (accountTransaction.getCurrency() == null) {
+						accountTransaction.setCurrency("INR");
+						logger.debug("Set default currency to INR for transaction from email ID: {}", mess.getId());
+					}
+					
 					var duplicateOpt = accountTransactionService.findDuplicate(accountTransaction, appUser);
 					if (duplicateOpt.isPresent()) {
 						logger.info("Skipping duplicate transaction: {}", accountTransaction.getDescription());
