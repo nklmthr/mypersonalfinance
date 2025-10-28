@@ -80,9 +80,9 @@ public class TransactionPatternLibrary {
     // ==================== MERCHANT/DESCRIPTION EXTRACTION PATTERNS ====================
     
     private static final List<DescriptionPattern> MERCHANT_PATTERNS = List.of(
-        // Format: "Merchant Name: MERCHANT" - Check this first (highest confidence)
+        // Format: "Merchant Name: MERCHANT" or "Merchant: MERCHANT" - Check this first (highest confidence)
         new DescriptionPattern("MERCHANT_LABELED", 
-            Pattern.compile("Merchant (?:Name|ID)[:\\s]+([A-Za-z0-9\\s&\\-]+?)(?:\\r?\\n|$)"), 95),
+            Pattern.compile("Merchant(?:\\s+Name|\\s+ID)?[:\\s]+([A-Za-z0-9\\s&\\-]+?)(?=\\s+(?:Date|Axis|Card|on|\\d{2}/\\d{2}/\\d{4})|\\r?\\n|$)", Pattern.CASE_INSENSITIVE), 95),
         
         // Format: "Info: MERCHANT_NAME" - ICICI format
         new DescriptionPattern("INFO_LABELED", 
@@ -90,7 +90,7 @@ public class TransactionPatternLibrary {
         
         // Format: "at MERCHANT_NAME" or "at ATM-WDL/AXPR/246" - Higher priority than BY_PAYEE
         new DescriptionPattern("MERCHANT_AT_ON", 
-            Pattern.compile("\\bat\\s+([A-Za-z0-9\\s&\\-\\./]+?)(?:\\s+on|\\s*\\.|$)"), 91),
+            Pattern.compile("\\bat\\s+([A-Za-z0-9\\s&\\-\\./*]+?)(?:\\s+on\\s+\\d|\\s*\\.|$)"), 91),
         
         // Format: "Transaction Info: DESCRIPTION"
         new DescriptionPattern("TRANSACTION_INFO", 

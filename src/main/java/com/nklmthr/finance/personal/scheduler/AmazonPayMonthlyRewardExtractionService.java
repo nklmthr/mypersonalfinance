@@ -10,15 +10,20 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.dto.AccountDTO;
 import com.nklmthr.finance.personal.enums.TransactionType;
+import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.scheduler.util.PatternResult;
 import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher.MatchResult;
 
 @Service
 public class AmazonPayMonthlyRewardExtractionService extends AbstractDataExtractionService {
@@ -27,6 +32,9 @@ public class AmazonPayMonthlyRewardExtractionService extends AbstractDataExtract
 
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
+	
+	@Autowired
+	private AccountFuzzyMatcher accountFuzzyMatcher;
 
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
@@ -81,18 +89,37 @@ public class AmazonPayMonthlyRewardExtractionService extends AbstractDataExtract
 	            }
 	        }
 
-	        // Extract issuer for explanation
-	        Pattern issuerPattern = Pattern.compile("Issued by\\s*(.*?)\\s*(View Statement|$)");
-	        Matcher issuerMatcher = issuerPattern.matcher(emailContent);
-	        if (issuerMatcher.find()) {
-	            accountTransaction.setExplanation(issuerMatcher.group(1).trim());
-	        }
+	    // Extract issuer for explanation
+	    Pattern issuerPattern = Pattern.compile("Issued by\\s*(.*?)\\s*(View Statement|$)");
+	    Matcher issuerMatcher = issuerPattern.matcher(emailContent);
+	    if (issuerMatcher.find()) {
+	        accountTransaction.setExplanation(issuerMatcher.group(1).trim());
+	    }
 
-	        // Common fields
-	        accountTransaction.setAppUser(appUser);
-	        accountTransaction.setType(TransactionType.CREDIT);
-	        accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
-	        return accountTransaction;
+	    // Use fuzzy matching to find the best account
+	    List<AccountDTO> accounts = accountService.getAllAccounts(appUser);
+	    MatchResult matchResult = accountFuzzyMatcher.findBestMatch(
+	        accounts,
+	        emailContent,
+	        accountTransaction.getDescription()
+	    );
+	    
+	    if (!matchResult.isValid()) {
+	        logger.error("Failed to fuzzy match account for Amazon Pay monthly reward transaction. Email content: {}", emailContent);
+	        return null;
+	    }
+	    
+	    Account matchedAccount = accountService.getAccountByName(
+	        matchResult.account().name(), 
+	        appUser
+	    );
+	    accountTransaction.setAccount(matchedAccount);
+	    logger.info("Fuzzy matched account: {} with score {}", matchResult.account().name(), matchResult.score());
+
+	    // Common fields
+	    accountTransaction.setAppUser(appUser);
+	    accountTransaction.setType(TransactionType.CREDIT);
+	    return accountTransaction;
 	    } catch (Exception e) {
 	        logger.error("Failed to extract Amazon Pay reward transaction", e);
 	        return accountTransaction;

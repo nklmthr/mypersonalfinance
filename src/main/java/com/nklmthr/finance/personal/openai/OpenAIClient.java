@@ -3,10 +3,8 @@ package com.nklmthr.finance.personal.openai;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
-import org.apache.commons.text.similarity.FuzzyScore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +26,8 @@ import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.service.AccountService;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher.MatchResult;
 
 @Service
 public class OpenAIClient {
@@ -48,11 +48,13 @@ public class OpenAIClient {
     private String openAIProjectId;
 
     private static final Logger logger = LoggerFactory.getLogger(OpenAIClient.class);
-    private static final FuzzyScore fuzzyScore = new FuzzyScore(Locale.ENGLISH);
     private static final ObjectMapper mapper = new ObjectMapper();
 
     @Autowired
     private AccountService accountService;
+    
+    @Autowired
+    private AccountFuzzyMatcher accountFuzzyMatcher;
 
     /**
      * Calls the OpenAI/OSS model and returns a pure JSON string
@@ -264,96 +266,24 @@ public class OpenAIClient {
     }
 
     /**
-     * Fuzzy matches GPT account detail with existing accounts
+     * Fuzzy matches GPT account detail with existing accounts using AccountFuzzyMatcher utility
      */
     private void matchAndSetAccount(String accountDetail, AccountTransaction accountTransaction) {
         List<AccountDTO> accounts = accountService.getAllAccounts(accountTransaction.getAppUser());
-        String normalizedAccountDetail = normalize(accountDetail);
-
-        if (normalizedAccountDetail.isEmpty()) {
-            logger.warn("Account detail became empty after normalization: '{}'", accountDetail);
-            return;
-        }
-
-        int highestScore = 0;
-        AccountDTO bestMatch = null;
-
-        for (AccountDTO account : accounts) {
-            String accName = normalize(account.name());
-            String accType = normalize(account.accountType().name());
-            String instName = normalize(account.institution().name());
-            String accNumber = normalize(account.accountNumber());
-            String rawData = normalize(accountTransaction.getRawData());
-            String description = normalize(accountTransaction.getDescription());
-
-            int score = safeFuzzyScore(normalizedAccountDetail, accName);
-            score += safeFuzzyScore(normalizedAccountDetail, accType);
-            score += safeFuzzyScore(normalizedAccountDetail, instName);
-            score += safeFuzzyScore(normalize(account.accountType().name()), rawData);
-            score += safeFuzzyScore(normalize(account.institution().name()), description);
-
-            if (account.accountNumber() != null && !account.accountNumber().trim().isEmpty()) {
-                score += safeFuzzyScore(normalizedAccountDetail, accNumber) * 3;
-                score += safeFuzzyScore(accNumber, rawData) * 3;
-                score += safeFuzzyScore(accNumber, description) * 2;
-            }
-
-            if (account.accountKeywords() != null && !account.accountKeywords().trim().isEmpty()) {
-                for (String keyword : account.accountKeywords().split(",")) {
-                    String normalizedKeyword = normalize(keyword.trim());
-                    if (!normalizedKeyword.isEmpty()) {
-                        score += safeFuzzyScore(normalizedAccountDetail, normalizedKeyword) * 2;
-                        score += safeFuzzyScore(normalizedKeyword, rawData) * 2;
-                        score += safeFuzzyScore(normalizedKeyword, description) * 2;
-                    }
-                }
-            }
-
-            if (account.accountAliases() != null && !account.accountAliases().trim().isEmpty()) {
-                for (String alias : account.accountAliases().split(",")) {
-                    String normalizedAlias = normalize(alias.trim());
-                    if (!normalizedAlias.isEmpty()) {
-                        score += safeFuzzyScore(normalizedAccountDetail, normalizedAlias) * 2;
-                        score += safeFuzzyScore(normalizedAlias, rawData) * 2;
-                        score += safeFuzzyScore(normalizedAlias, description) * 2;
-                    }
-                }
-            }
-
-            if (score > highestScore) {
-                highestScore = score;
-                bestMatch = account;
-            }
-        }
-
-        if (bestMatch != null && highestScore >= 5) {
-            logger.info("Best matching account: {} with score {}", bestMatch.name(), highestScore);
-            Account matchedAccount = accountService.getAccountByName(bestMatch.name(), accountTransaction.getAppUser());
+        
+        MatchResult matchResult = accountFuzzyMatcher.findBestMatch(
+            accounts,
+            accountDetail,
+            accountTransaction.getRawData(),
+            accountTransaction.getDescription()
+        );
+        
+        if (matchResult.isValid()) {
+            Account matchedAccount = accountService.getAccountByName(
+                matchResult.account().name(), 
+                accountTransaction.getAppUser()
+            );
             accountTransaction.setGptAccount(matchedAccount);
-        } else if (bestMatch != null) {
-            logger.warn("Best match '{}' has low score {} for GPT account detail: '{}' (minimum: 5)",
-                    bestMatch.name(), highestScore, normalizedAccountDetail);
-        } else {
-            logger.warn("No account matched for GPT account detail: '{}'", normalizedAccountDetail);
-        }
-    }
-
-    private static String normalize(String input) {
-        if (input == null) return "";
-        return input.toLowerCase().replaceAll("[^a-z0-9 ]", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-    }
-
-    private static int safeFuzzyScore(String term1, String term2) {
-        if (term1 == null || term2 == null || term1.isEmpty() || term2.isEmpty()) {
-            return 0;
-        }
-        try {
-            return fuzzyScore.fuzzyScore(term1, term2);
-        } catch (Exception e) {
-            logger.warn("Fuzzy scoring failed for '{}' vs '{}': {}", term1, term2, e.getMessage());
-            return 0;
         }
     }
 

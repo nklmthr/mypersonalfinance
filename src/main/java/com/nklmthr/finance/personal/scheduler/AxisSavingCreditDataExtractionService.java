@@ -11,12 +11,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.dto.AccountDTO;
 import com.nklmthr.finance.personal.enums.TransactionType;
+import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.scheduler.util.PatternResult;
 import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
 import com.nklmthr.finance.personal.service.AccountService;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher.MatchResult;
 
 @Service
 public class AxisSavingCreditDataExtractionService extends AbstractDataExtractionService {
@@ -28,6 +32,9 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
+	
+	@Autowired
+	private AccountFuzzyMatcher accountFuzzyMatcher;
 
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
@@ -59,21 +66,40 @@ public class AxisSavingCreditDataExtractionService extends AbstractDataExtractio
 		try {
 			logger.debug("Parsing Axis Bank credit transaction");
 
-			// Use pattern library for extraction
-			PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
-			if (amountResult.isPresent()) {
-				tx.setAmount(amountResult.getValue());
-				logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
-			}
+		// Use pattern library for extraction
+		PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
+		if (amountResult.isPresent()) {
+			tx.setAmount(amountResult.getValue());
+			logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
+		}
 
-			PatternResult<String> descriptionResult = TransactionPatternLibrary.extractDescription(emailContent);
-			if (descriptionResult.isPresent()) {
-				tx.setDescription(descriptionResult.getValue());
-				logger.debug("Extracted description using pattern: {}", descriptionResult.getMatchedPattern());
-			}
+		PatternResult<String> descriptionResult = TransactionPatternLibrary.extractDescription(emailContent);
+		if (descriptionResult.isPresent()) {
+			tx.setDescription(descriptionResult.getValue());
+			logger.debug("Extracted description using pattern: {}", descriptionResult.getMatchedPattern());
+		}
 
-			tx.setType(TransactionType.CREDIT);
-			tx.setAccount(accountService.getAccountByName("Axis Salary Acc", appUser));
+		// Use fuzzy matching to find the best account
+		List<AccountDTO> accounts = accountService.getAllAccounts(appUser);
+		MatchResult matchResult = accountFuzzyMatcher.findBestMatch(
+			accounts,
+			emailContent,
+			tx.getDescription()
+		);
+		
+		if (!matchResult.isValid()) {
+			logger.error("Failed to fuzzy match account for Axis Saving Credit transaction. Email content: {}", emailContent);
+			return null;
+		}
+		
+		Account matchedAccount = accountService.getAccountByName(
+			matchResult.account().name(), 
+			appUser
+		);
+		tx.setAccount(matchedAccount);
+		logger.info("Fuzzy matched account: {} with score {}", matchResult.account().name(), matchResult.score());
+
+		tx.setType(TransactionType.CREDIT);
 
 		} catch (Exception e) {
 			logger.error("Failed to parse Axis credit transaction", e);

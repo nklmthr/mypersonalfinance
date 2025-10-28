@@ -7,15 +7,20 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.dto.AccountDTO;
 import com.nklmthr.finance.personal.enums.TransactionType;
+import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.scheduler.util.PatternResult;
 import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher.MatchResult;
 
 @Service
 public class AmazonReturnRefundExtractionService extends AbstractDataExtractionService {
@@ -23,6 +28,9 @@ public class AmazonReturnRefundExtractionService extends AbstractDataExtractionS
 
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
+	
+	@Autowired
+	private AccountFuzzyMatcher accountFuzzyMatcher;
 
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
@@ -74,22 +82,25 @@ public class AmazonReturnRefundExtractionService extends AbstractDataExtractionS
 	            accountTransaction.setDescription(orderMatcher.group(1).trim());
 	        }
 
-	        // Extract Refund Mode and set account
-	        Pattern refundModePattern = Pattern.compile("(?:refunded to your|will be refunded to your)\\s+(.*?ending in \\d{4})");
-	        Matcher modeMatcher = refundModePattern.matcher(emailContent);
-	        if (modeMatcher.find()) {
-	            String mode = modeMatcher.group(1).trim();
-	            logger.debug("Detected refund mode: {}", mode);
-	            if (mode.contains("9057")) {
-	                accountTransaction.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon", appUser));
-	            } else {
-	                accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
-	            }
-	            logger.debug("Set account based on refund mode: {}", accountTransaction.getAccount().getName());
-	        } else {
-	            logger.warn("No refund mode detected, assigning default Amazon Pay account");
-	            accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
-	        }
+	    // Use fuzzy matching to find the best account
+	    List<AccountDTO> accounts = accountService.getAllAccounts(appUser);
+	    MatchResult matchResult = accountFuzzyMatcher.findBestMatch(
+	        accounts,
+	        emailContent,
+	        accountTransaction.getDescription()
+	    );
+	    
+	    if (!matchResult.isValid()) {
+	        logger.error("Failed to fuzzy match account for Amazon return refund transaction. Email content: {}", emailContent);
+	        return null;
+	    }
+	    
+	    Account matchedAccount = accountService.getAccountByName(
+	        matchResult.account().name(), 
+	        appUser
+	    );
+	    accountTransaction.setAccount(matchedAccount);
+	    logger.info("Fuzzy matched account: {} with score {}", matchResult.account().name(), matchResult.score());
 
 	        // Extract Item Name - supports both "Item returned:" and "Item to be returned:"
 	        Pattern itemPattern = Pattern.compile("Item (?:to be )?returned:\\s*\\d+\\s+(?:\\(https?://[^)]+\\))?\\s*\\[?([^\\]\\n]+?)\\]?\\s+Quantity:", Pattern.DOTALL);

@@ -7,15 +7,20 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.dto.AccountDTO;
 import com.nklmthr.finance.personal.enums.TransactionType;
+import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.scheduler.util.PatternResult;
 import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher.MatchResult;
 
 @Service
 public class AmazonRefundOnOrderExtraction extends AbstractDataExtractionService {
@@ -24,6 +29,9 @@ public class AmazonRefundOnOrderExtraction extends AbstractDataExtractionService
 
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
+	
+	@Autowired
+	private AccountFuzzyMatcher accountFuzzyMatcher;
 
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
@@ -78,20 +86,27 @@ public class AmazonRefundOnOrderExtraction extends AbstractDataExtractionService
 				accountTransaction.setExplanation(accountTransaction.getExplanation() + " | Quantity: " + qtyMatcher.group(1));
 			}
 
-			// Extract Refund Mode and set account
-			Pattern refundModePattern = Pattern.compile("credited as follows:\\s*(.*?)\\s*:", Pattern.DOTALL);
-			Matcher modeMatcher = refundModePattern.matcher(emailContent);
-			if (modeMatcher.find()) {
-				String mode = modeMatcher.group(1).trim();
-				logger.debug("Detected refund mode: {}", mode);
-				if (mode.toLowerCase().contains("credit card") && mode.contains("9057")) {
-					accountTransaction.setAccount(accountService.getAccountByName("ICICI-CCA-Amazon", appUser));
-				} else if (mode.toLowerCase().contains("amazon pay") || mode.equalsIgnoreCase("GC")) {
-					accountTransaction.setAccount(accountService.getAccountByName("AMZN-WLT-Amazon Pay", appUser));
-				}
-			}
+		// Use fuzzy matching to find the best account
+		List<AccountDTO> accounts = accountService.getAllAccounts(appUser);
+		MatchResult matchResult = accountFuzzyMatcher.findBestMatch(
+			accounts,
+			emailContent,
+			accountTransaction.getDescription()
+		);
+		
+		if (!matchResult.isValid()) {
+			logger.error("Failed to fuzzy match account for Amazon refund on order transaction. Email content: {}", emailContent);
+			return null;
+		}
+		
+		Account matchedAccount = accountService.getAccountByName(
+			matchResult.account().name(), 
+			appUser
+		);
+		accountTransaction.setAccount(matchedAccount);
+		logger.info("Fuzzy matched account: {} with score {}", matchResult.account().name(), matchResult.score());
 
-			accountTransaction.setType(TransactionType.CREDIT);
+		accountTransaction.setType(TransactionType.CREDIT);
 			return accountTransaction;
 		} catch (Exception e) {
 			logger.error("Failed to extract Amazon refund transaction", e);

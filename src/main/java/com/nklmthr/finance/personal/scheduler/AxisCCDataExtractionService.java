@@ -5,14 +5,19 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import com.nklmthr.finance.personal.dto.AccountDTO;
+import com.nklmthr.finance.personal.model.Account;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.scheduler.util.PatternResult;
 import com.nklmthr.finance.personal.scheduler.util.TransactionPatternLibrary;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher;
+import com.nklmthr.finance.personal.util.AccountFuzzyMatcher.MatchResult;
 
 @Service
 public class AxisCCDataExtractionService extends AbstractDataExtractionService {
@@ -21,6 +26,9 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 
 	@Value("${scheduler.enabled}")
 	private boolean schedulerEnabled;
+	
+	@Autowired
+	private AccountFuzzyMatcher accountFuzzyMatcher;
 
 	@Scheduled(cron = "${my.scheduler.cron}")
 	public void runTask() {
@@ -60,28 +68,41 @@ public class AxisCCDataExtractionService extends AbstractDataExtractionService {
 	            return null;
 	        }
 	        
-	        // Use pattern library for extraction
-	        PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
-	        if (amountResult.isPresent()) {
-	            tx.setAmount(amountResult.getValue());
-	            logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
-	        }
-	        
-	        PatternResult<String> descriptionResult = TransactionPatternLibrary.extractDescription(emailContent);
-	        if (descriptionResult.isPresent()) {
-	            tx.setDescription(descriptionResult.getValue());
-	            logger.debug("Extracted description using pattern: {}", descriptionResult.getMatchedPattern());
-	        }
-	        
-	        // Transaction type detection
-	        tx.setType(TransactionPatternLibrary.detectTransactionType(emailContent));
-	        
-	        // Account matching (bank-specific logic)
-	        if (emailContent.contains("0434")) {
-	            tx.setAccount(accountService.getAccountByName("AXIS-CCA-Airtel", appUser));
-	        } else if (emailContent.contains("7002")) {
-	            tx.setAccount(accountService.getAccountByName("Axis-Citi-PremierMiles", appUser));
-	        }
+	    // Use pattern library for extraction
+	    PatternResult<BigDecimal> amountResult = TransactionPatternLibrary.extractAmount(emailContent);
+	    if (amountResult.isPresent()) {
+	        tx.setAmount(amountResult.getValue());
+	        logger.debug("Extracted amount using pattern: {}", amountResult.getMatchedPattern());
+	    }
+	    
+	    PatternResult<String> descriptionResult = TransactionPatternLibrary.extractDescription(emailContent);
+	    if (descriptionResult.isPresent()) {
+	        tx.setDescription(descriptionResult.getValue());
+	        logger.debug("Extracted description using pattern: {}", descriptionResult.getMatchedPattern());
+	    }
+	    
+	    // Use fuzzy matching to find the best account
+	    List<AccountDTO> accounts = accountService.getAllAccounts(appUser);
+	    MatchResult matchResult = accountFuzzyMatcher.findBestMatch(
+	        accounts,
+	        emailContent,
+	        tx.getDescription()
+	    );
+	    
+	    if (!matchResult.isValid()) {
+	        logger.error("Failed to fuzzy match account for Axis CC transaction. Email content: {}", emailContent);
+	        return null;
+	    }
+	    
+	    Account matchedAccount = accountService.getAccountByName(
+	        matchResult.account().name(), 
+	        appUser
+	    );
+	    tx.setAccount(matchedAccount);
+	    logger.info("Fuzzy matched account: {} with score {}", matchResult.account().name(), matchResult.score());
+	    
+	    // Transaction type detection
+	    tx.setType(TransactionPatternLibrary.detectTransactionType(emailContent));
 
 	    } catch (Exception e) {
 	        logger.error("Error parsing Axis CC transaction", e);
