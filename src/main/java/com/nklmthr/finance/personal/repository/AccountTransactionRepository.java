@@ -121,7 +121,7 @@ public interface AccountTransactionRepository
 			    AND t.app_user_id = :userId
 			    AND t.date >= :startDate
 			WHERE c.id NOT IN (:excludedCategoryIds)
-			GROUP BY c.id, DATE_FORMAT(t.date, '%Y-%m')
+			GROUP BY c.id, c.name, c.parent_id, DATE_FORMAT(t.date, '%Y-%m')
 			ORDER BY c.name, month
 			""", nativeQuery = true)
 	List<CategoryMonthlyProjection> getCategoryMonthlySpend(@Param("userId") String userId,

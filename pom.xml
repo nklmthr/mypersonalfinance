@@ -221,6 +221,7 @@
 					</path>
 				</annotationProcessorPaths>
 				<generatedSourcesDirectory>${project.build.directory}/generated-sources/annotations</generatedSourcesDirectory>
+				<useIncrementalCompilation>false</useIncrementalCompilation>
 			</configuration>
 		</plugin>
 		<plugin>

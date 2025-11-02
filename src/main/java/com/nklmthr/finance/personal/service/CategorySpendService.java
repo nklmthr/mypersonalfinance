@@ -44,15 +44,20 @@ public class CategorySpendService {
 		Map<String, CategorySpendDTO> dtoMap = new HashMap<>();
 
 		for (CategoryMonthlyProjection p : projections) {
-			Double total = p.getTotal() != null ? p.getTotal() : 0.0;
-
-			dtoMap.computeIfAbsent(p.getCategoryId(), id -> {
-				CategorySpendDTO dto = new CategorySpendDTO();
-				dto.setId(id);
-				dto.setName(p.getCategoryName());
-				dto.setParentId(p.getParentId());
-				return dto;
-			}).getMonthlySpends().add(new MonthlySpend(p.getMonth(), total));
+			// Always add category to map to maintain hierarchy
+			CategorySpendDTO dto = dtoMap.computeIfAbsent(p.getCategoryId(), id -> {
+				CategorySpendDTO newDto = new CategorySpendDTO();
+				newDto.setId(id);
+				newDto.setName(p.getCategoryName());
+				newDto.setParentId(p.getParentId());
+				return newDto;
+			});
+			
+			// Only add monthly spend if month is not null (category has transactions)
+			if (p.getMonth() != null) {
+				Double total = p.getTotal() != null ? p.getTotal() : 0.0;
+				dto.getMonthlySpends().add(new MonthlySpend(p.getMonth(), total));
+			}
 		}
 
 		List<CategorySpendDTO> roots = new ArrayList<>();
@@ -83,7 +88,8 @@ public class CategorySpendService {
 				.collect(Collectors.toMap(MonthlySpend::getMonth, ms -> ms, (a, b) -> a));
 
 		for (MonthlySpend childSpend : child.getMonthlySpends()) {
-			parentMap.merge(childSpend.getMonth(), new MonthlySpend(childSpend.getMonth(), childSpend.getAmount()),
+			parentMap.merge(childSpend.getMonth(), 
+					new MonthlySpend(childSpend.getMonth(), childSpend.getAmount()),
 					(existing, incoming) -> {
 						existing.setAmount(existing.getAmount() + incoming.getAmount());
 						return existing;

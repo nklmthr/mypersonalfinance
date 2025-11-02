@@ -173,6 +173,162 @@ class AccountTransactionServiceTest {
     }
 
     @Test
+    void createTransfer_preventsTransferOfDebitTransaction_alreadyHasLinkedTransferId() {
+        // Test: Attempting to transfer a DEBIT transaction that already has linkedTransferId
+        Account from = createAccount("a1", new BigDecimal("1000"));
+        AccountTransaction debitAlreadyTransferred = AccountTransaction.builder()
+            .id("debit1")
+            .linkedTransferId("credit1") // Already part of a transfer (debit side)
+            .amount(new BigDecimal("100"))
+            .type(TransactionType.DEBIT)
+            .account(from)
+            .appUser(currentUser)
+            .description("Debit side of transfer")
+            .build();
+
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "debit1")).thenReturn(Optional.of(debitAlreadyTransferred));
+        when(accountTransactionRepository.findByAppUserAndParent(currentUser, "debit1")).thenReturn(List.of());
+
+        TransferRequest request = TransferRequest.builder()
+            .sourceTransactionId("debit1")
+            .destinationAccountId("a3")
+            .explanation("Attempting second transfer from debit")
+            .build();
+
+        assertThatThrownBy(() -> service.createTransfer(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("already part of a transfer");
+
+        // Verify no changes were made
+        verify(accountTransactionRepository, never()).save(any(AccountTransaction.class));
+        verify(accountRepository, never()).save(any(Account.class));
+    }
+
+    @Test
+    void createTransfer_preventsTransferOfCreditTransaction_alreadyHasLinkedTransferId() {
+        // Test: Attempting to transfer a CREDIT transaction that already has linkedTransferId
+        Account to = createAccount("a2", new BigDecimal("500"));
+        AccountTransaction creditAlreadyTransferred = AccountTransaction.builder()
+            .id("credit1")
+            .linkedTransferId("debit1") // Already part of a transfer (credit side)
+            .amount(new BigDecimal("100"))
+            .type(TransactionType.CREDIT)
+            .account(to)
+            .appUser(currentUser)
+            .description("Credit side of transfer")
+            .build();
+
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "credit1")).thenReturn(Optional.of(creditAlreadyTransferred));
+        when(accountTransactionRepository.findByAppUserAndParent(currentUser, "credit1")).thenReturn(List.of());
+
+        TransferRequest request = TransferRequest.builder()
+            .sourceTransactionId("credit1")
+            .destinationAccountId("a3")
+            .explanation("Attempting second transfer from credit")
+            .build();
+
+        assertThatThrownBy(() -> service.createTransfer(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("already part of a transfer");
+
+        // Verify no changes were made
+        verify(accountTransactionRepository, never()).save(any(AccountTransaction.class));
+        verify(accountRepository, never()).save(any(Account.class));
+    }
+
+    @Test
+    void createTransfer_preventsTransferOfDebitTransaction_referencedByCredit() {
+        // Test: Attempting to transfer a DEBIT that is referenced by a credit's linkedTransferId
+        // (Edge case: if debit somehow doesn't have linkedTransferId but credit points to it)
+        Account from = createAccount("a1", new BigDecimal("1000"));
+        Account to = createAccount("a2", new BigDecimal("500"));
+        
+        AccountTransaction debitReferenced = AccountTransaction.builder()
+            .id("debit1")
+            .linkedTransferId(null) // Edge case: doesn't point to credit yet
+            .amount(new BigDecimal("100"))
+            .type(TransactionType.DEBIT)
+            .account(from)
+            .appUser(currentUser)
+            .description("Debit side")
+            .build();
+
+        AccountTransaction creditSide = AccountTransaction.builder()
+            .id("credit1")
+            .linkedTransferId("debit1") // Credit points to this debit
+            .amount(new BigDecimal("100"))
+            .type(TransactionType.CREDIT)
+            .account(to)
+            .appUser(currentUser)
+            .description("Credit side")
+            .build();
+
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "debit1")).thenReturn(Optional.of(debitReferenced));
+        when(accountTransactionRepository.findByAppUserAndParent(currentUser, "debit1")).thenReturn(List.of());
+        when(accountTransactionRepository.findByAppUserAndLinkedTransferId(currentUser, "debit1")).thenReturn(Optional.of(creditSide));
+
+        TransferRequest request = TransferRequest.builder()
+            .sourceTransactionId("debit1")
+            .destinationAccountId("a3")
+            .explanation("Attempting second transfer")
+            .build();
+
+        assertThatThrownBy(() -> service.createTransfer(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("already part of a transfer");
+
+        // Verify no changes were made
+        verify(accountTransactionRepository, never()).save(any(AccountTransaction.class));
+        verify(accountRepository, never()).save(any(Account.class));
+    }
+
+    @Test
+    void createTransfer_preventsTransferOfCreditTransaction_referencedByDebit() {
+        // Test: Attempting to transfer a CREDIT that is referenced by a debit's linkedTransferId
+        // (Edge case: if credit somehow doesn't have linkedTransferId but debit points to it)
+        Account from = createAccount("a1", new BigDecimal("1000"));
+        Account to = createAccount("a2", new BigDecimal("500"));
+        
+        AccountTransaction creditReferenced = AccountTransaction.builder()
+            .id("credit1")
+            .linkedTransferId(null) // Edge case: doesn't point to debit yet
+            .amount(new BigDecimal("100"))
+            .type(TransactionType.CREDIT)
+            .account(to)
+            .appUser(currentUser)
+            .description("Credit side")
+            .build();
+
+        AccountTransaction debitSide = AccountTransaction.builder()
+            .id("debit1")
+            .linkedTransferId("credit1") // Debit points to this credit
+            .amount(new BigDecimal("100"))
+            .type(TransactionType.DEBIT)
+            .account(from)
+            .appUser(currentUser)
+            .description("Debit side")
+            .build();
+
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "credit1")).thenReturn(Optional.of(creditReferenced));
+        when(accountTransactionRepository.findByAppUserAndParent(currentUser, "credit1")).thenReturn(List.of());
+        when(accountTransactionRepository.findByAppUserAndLinkedTransferId(currentUser, "credit1")).thenReturn(Optional.of(debitSide));
+
+        TransferRequest request = TransferRequest.builder()
+            .sourceTransactionId("credit1")
+            .destinationAccountId("a3")
+            .explanation("Attempting second transfer")
+            .build();
+
+        assertThatThrownBy(() -> service.createTransfer(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("already part of a transfer");
+
+        // Verify no changes were made
+        verify(accountTransactionRepository, never()).save(any(AccountTransaction.class));
+        verify(accountRepository, never()).save(any(Account.class));
+    }
+
+    @Test
     void splitTransaction_successful() {
         Account account = createAccount("a1", new BigDecimal("1000"));
         AccountTransaction parent = AccountTransaction.builder()
@@ -286,6 +442,7 @@ class AccountTransactionServiceTest {
             .account(acc).appUser(currentUser).build();
 
         when(accountTransactionRepository.findById("tx1")).thenReturn(Optional.of(existing));
+        when(accountTransactionRepository.findByAppUserAndParent(currentUser, "tx1")).thenReturn(List.of());
         when(accountRepository.findByAppUserAndId(currentUser, "a1")).thenReturn(Optional.of(acc));
         Category foodCat2 = new Category();
         foodCat2.setId("cat");
@@ -305,6 +462,7 @@ class AccountTransactionServiceTest {
         assertThat(result).isPresent();
         // oldType=DEBIT refunds 50, then CREDIT adds 20 => 1070
         assertThat(acc.getBalance()).isEqualByComparingTo("1070");
+        verify(accountRepository, times(1)).save(acc); // Verify account is saved
         verify(accountTransactionRepository, times(1)).save(mapped);
     }
 
@@ -317,6 +475,7 @@ class AccountTransactionServiceTest {
             .account(oldAcc).appUser(currentUser).build();
 
         when(accountTransactionRepository.findById("tx1")).thenReturn(Optional.of(existing));
+        when(accountTransactionRepository.findByAppUserAndParent(currentUser, "tx1")).thenReturn(List.of());
         when(accountRepository.findByAppUserAndId(currentUser, "a2")).thenReturn(Optional.of(newAcc));
         Category foodCat3 = new Category();
         foodCat3.setId("cat");
@@ -337,8 +496,42 @@ class AccountTransactionServiceTest {
         // oldType=CREDIT: oldAcc -= 30 => 970; newType=DEBIT on newAcc: 500 - 40 => 460
         assertThat(oldAcc.getBalance()).isEqualByComparingTo("970");
         assertThat(newAcc.getBalance()).isEqualByComparingTo("460");
-        verify(accountRepository).save(oldAcc);
-        verify(accountRepository).save(newAcc);
+        verify(accountRepository, times(1)).save(oldAcc);
+        verify(accountRepository, times(1)).save(newAcc);
+    }
+    
+    @Test
+    void updateTransaction_differentAccount_sameType_adjustsBoth() {
+        Account oldAcc = createAccount("a1", new BigDecimal("1000"));
+        Account newAcc = createAccount("a2", new BigDecimal("500"));
+        AccountTransaction existing = AccountTransaction.builder()
+            .id("tx1").amount(new BigDecimal("100")).type(TransactionType.DEBIT)
+            .account(oldAcc).appUser(currentUser).build();
+
+        when(accountTransactionRepository.findById("tx1")).thenReturn(Optional.of(existing));
+        when(accountTransactionRepository.findByAppUserAndParent(currentUser, "tx1")).thenReturn(List.of());
+        when(accountRepository.findByAppUserAndId(currentUser, "a2")).thenReturn(Optional.of(newAcc));
+        Category foodCat4 = new Category();
+        foodCat4.setId("cat");
+        foodCat4.setName("Food");
+        foodCat4.setAppUser(currentUser);
+        when(categoryService.getCategoryById("cat")).thenReturn(foodCat4);
+
+        AccountTransaction mapped = new AccountTransaction();
+        when(accountTransactionMapper.toEntity(any(AccountTransactionDTO.class))).thenReturn(mapped);
+        when(accountTransactionRepository.save(mapped)).thenReturn(mapped);
+        when(accountTransactionMapper.toDTO(mapped)).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null));
+
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null);
+
+        Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
+
+        assertThat(result).isPresent();
+        // oldType=DEBIT: oldAcc += 100 => 1100; newType=DEBIT on newAcc: 500 - 120 => 380
+        assertThat(oldAcc.getBalance()).isEqualByComparingTo("1100");
+        assertThat(newAcc.getBalance()).isEqualByComparingTo("380");
+        verify(accountRepository, times(1)).save(oldAcc);
+        verify(accountRepository, times(1)).save(newAcc);
     }
 
     @Test
@@ -496,7 +689,12 @@ class AccountTransactionServiceTest {
 
     @Test
     void delete_throwsWhenHasChildren() {
-        AccountTransaction existing = AccountTransaction.builder().id("t1").appUser(currentUser).build();
+        Account acc = createAccount("a1", new BigDecimal("1000"));
+        AccountTransaction existing = AccountTransaction.builder()
+            .id("t1")
+            .account(acc)
+            .appUser(currentUser)
+            .build();
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "t1")).thenReturn(Optional.of(existing));
         when(accountTransactionRepository.findByParentAndAppUser("t1", currentUser)).thenReturn(List.of(existing));
 
@@ -506,8 +704,22 @@ class AccountTransactionServiceTest {
 
     @Test
     void delete_updatesParentAndDeletes() {
-        AccountTransaction parent = AccountTransaction.builder().id("p1").amount(new BigDecimal("200")).appUser(currentUser).description("Parent").build();
-        AccountTransaction child = AccountTransaction.builder().id("t1").amount(new BigDecimal("50")).parent("p1").appUser(currentUser).description("Child").build();
+        Account acc = createAccount("a1", new BigDecimal("1000"));
+        AccountTransaction parent = AccountTransaction.builder()
+            .id("p1")
+            .amount(new BigDecimal("200"))
+            .account(acc)
+            .appUser(currentUser)
+            .description("Parent")
+            .build();
+        AccountTransaction child = AccountTransaction.builder()
+            .id("t1")
+            .amount(new BigDecimal("50"))
+            .parent("p1")
+            .account(acc)
+            .appUser(currentUser)
+            .description("Child")
+            .build();
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "t1")).thenReturn(Optional.of(child));
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "p1")).thenReturn(Optional.of(parent));
         when(accountTransactionRepository.findByParentAndAppUser("t1", currentUser)).thenReturn(List.of());
@@ -677,15 +889,17 @@ class AccountTransactionServiceTest {
             null
         , null);
 
-        // Mock repository calls
+        // Mock repository calls - Case 1: debit has linkedTransferId pointing to credit
         when(accountTransactionRepository.findById("debit1")).thenReturn(Optional.of(debit));
         when(accountTransactionRepository.findByAppUserAndParent(currentUser, "debit1")).thenReturn(List.of());
-        when(accountTransactionRepository.findByAppUserAndLinkedTransferId(currentUser, "debit1")).thenReturn(Optional.of(credit));
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "credit1")).thenReturn(Optional.of(credit));
         when(accountRepository.findByAppUserAndId(currentUser, "a1")).thenReturn(Optional.of(account1));
         when(categoryService.getCategoryById("transfer")).thenReturn(transferCat);
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(i -> i.getArgument(0));
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(updateDTO);
-        when(accountTransactionMapper.toEntity(updateDTO)).thenReturn(debit);
+        
+        AccountTransaction mappedEntity = new AccountTransaction();
+        when(accountTransactionMapper.toEntity(updateDTO)).thenReturn(mappedEntity);
 
         // Execute update
         Optional<AccountTransactionDTO> result = service.updateTransaction("debit1", updateDTO);
@@ -695,6 +909,227 @@ class AccountTransactionServiceTest {
         verify(accountTransactionRepository, atLeast(2)).save(any(AccountTransaction.class));
         assertThat(credit.getAmount()).isEqualByComparingTo("300");
         assertThat(credit.getDescription()).isEqualTo("Updated Transfer");
+        
+        // Verify balances are updated correctly:
+        // Main transaction (debit): oldAmount=200 DEBIT reversed => +200, newAmount=300 DEBIT => -300, net: -100 => account1: 900
+        // Linked transaction (credit): oldAmount=200 CREDIT reversed => -200, newAmount=300 CREDIT => +300, net: +100 => account2: 600
+        assertThat(account1.getBalance()).isEqualByComparingTo("900");  // 1000 + 200 - 300
+        assertThat(account2.getBalance()).isEqualByComparingTo("600");  // 500 - 200 + 300
+        verify(accountRepository, times(1)).save(account1); // Main transaction account
+        verify(accountRepository, times(1)).save(account2); // Linked transaction account
+    }
+
+    @Test
+    void updateTransaction_linkedTransfer_withAccountChange() {
+        // Setup linked transfer pair where main transaction account will change
+        Account account1 = new Account();
+        account1.setId("a1");
+        account1.setBalance(new BigDecimal("1000"));
+        account1.setAppUser(currentUser);
+        
+        Account account2 = new Account();
+        account2.setId("a2");
+        account2.setBalance(new BigDecimal("500"));
+        account2.setAppUser(currentUser);
+        
+        Account account3 = new Account();
+        account3.setId("a3");
+        account3.setBalance(new BigDecimal("2000"));
+        account3.setAppUser(currentUser);
+
+        Category transferCat = new Category();
+        transferCat.setId("transfer");
+        transferCat.setName("Transfer");
+
+        AccountTransaction debit = AccountTransaction.builder()
+            .id("debit1")
+            .linkedTransferId("credit1")
+            .amount(new BigDecimal("200"))
+            .type(TransactionType.DEBIT)
+            .account(account1)
+            .category(transferCat)
+            .appUser(currentUser)
+            .date(LocalDateTime.now())
+            .description("Transfer")
+            .currency("INR")
+            .build();
+
+        AccountTransaction credit = AccountTransaction.builder()
+            .id("credit1")
+            .linkedTransferId("debit1")
+            .amount(new BigDecimal("200"))
+            .type(TransactionType.CREDIT)
+            .account(account2)
+            .category(transferCat)
+            .appUser(currentUser)
+            .date(LocalDateTime.now())
+            .description("Transfer")
+            .currency("INR")
+            .build();
+
+        // Setup DTO for update: change main transaction's account from a1 to a3
+        CategoryDTO catDTO = new CategoryDTO();
+        catDTO.setId("transfer");
+        catDTO.setName("Transfer");
+        AccountDTO accDTO3 = new AccountDTO("a3", "Account 3", BigDecimal.ZERO, null, null, null, null, null);
+
+        AccountTransactionDTO updateDTO = new AccountTransactionDTO(
+            "debit1",
+            LocalDateTime.now(),
+            new BigDecimal("250"), // Changed amount
+            "Updated Transfer",
+            null,
+            null,
+            null,
+            TransactionType.DEBIT,
+            accDTO3, // Changed account from a1 to a3
+            catDTO,
+            null,
+            List.of(),
+            "credit1",
+            null,
+            null,
+            null,
+            null,
+            "INR",
+            null
+        , null);
+
+        // Mock repository calls - Case 1: debit has linkedTransferId pointing to credit
+        when(accountTransactionRepository.findById("debit1")).thenReturn(Optional.of(debit));
+        when(accountTransactionRepository.findByAppUserAndParent(currentUser, "debit1")).thenReturn(List.of());
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "credit1")).thenReturn(Optional.of(credit));
+        when(accountRepository.findByAppUserAndId(currentUser, "a3")).thenReturn(Optional.of(account3));
+        when(categoryService.getCategoryById("transfer")).thenReturn(transferCat);
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(i -> i.getArgument(0));
+        
+        AccountTransaction mappedEntity = new AccountTransaction();
+        when(accountTransactionMapper.toEntity(updateDTO)).thenReturn(mappedEntity);
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(updateDTO);
+
+        // Execute update
+        Optional<AccountTransactionDTO> result = service.updateTransaction("debit1", updateDTO);
+
+        // Verify balances are updated correctly:
+        // Main transaction old account (a1): oldAmount=200 DEBIT reversed => +200 => 1200
+        // Main transaction new account (a3): newAmount=250 DEBIT => -250 => 1750
+        // Linked transaction account (a2): oldAmount=200 CREDIT reversed => -200, newAmount=250 CREDIT => +250, net: +50 => 550
+        assertThat(result).isPresent();
+        assertThat(account1.getBalance()).isEqualByComparingTo("1200");  // 1000 + 200 (reversed)
+        assertThat(account3.getBalance()).isEqualByComparingTo("1750"); // 2000 - 250 (new debit)
+        assertThat(account2.getBalance()).isEqualByComparingTo("550");  // 500 - 200 + 250 (linked transaction updated)
+        verify(accountRepository, times(1)).save(account1); // Old account
+        verify(accountRepository, times(1)).save(account3); // New account
+        verify(accountRepository, times(1)).save(account2); // Linked transaction account
+        verify(accountTransactionRepository, atLeast(2)).save(any(AccountTransaction.class));
+        
+        // Verify linked transaction was synced
+        assertThat(credit.getAmount()).isEqualByComparingTo("250");
+        assertThat(credit.getDescription()).isEqualTo("Updated Transfer");
+        assertThat(credit.getAccount().getId()).isEqualTo("a2"); // Credit account stays the same (correct for transfers)
+    }
+    
+    @Test
+    void updateTransaction_linkedTransfer_creditAccountChange() {
+        // Test updating credit account in a linked transfer
+        Account account1 = new Account();
+        account1.setId("a1");
+        account1.setBalance(new BigDecimal("1000"));
+        account1.setAppUser(currentUser);
+        
+        Account account2 = new Account();
+        account2.setId("a2");
+        account2.setBalance(new BigDecimal("500"));
+        account2.setAppUser(currentUser);
+        
+        Account account4 = new Account();
+        account4.setId("a4");
+        account4.setBalance(new BigDecimal("3000"));
+        account4.setAppUser(currentUser);
+
+        Category transferCat = new Category();
+        transferCat.setId("transfer");
+        transferCat.setName("Transfer");
+
+        AccountTransaction debit = AccountTransaction.builder()
+            .id("debit1")
+            .linkedTransferId("credit1")
+            .amount(new BigDecimal("200"))
+            .type(TransactionType.DEBIT)
+            .account(account1)
+            .category(transferCat)
+            .appUser(currentUser)
+            .date(LocalDateTime.now())
+            .description("Transfer")
+            .currency("INR")
+            .build();
+
+        AccountTransaction credit = AccountTransaction.builder()
+            .id("credit1")
+            .linkedTransferId("debit1")
+            .amount(new BigDecimal("200"))
+            .type(TransactionType.CREDIT)
+            .account(account2)
+            .category(transferCat)
+            .appUser(currentUser)
+            .date(LocalDateTime.now())
+            .description("Transfer")
+            .currency("INR")
+            .build();
+
+        // Setup DTO: updating credit transaction, changing its account from a2 to a4
+        CategoryDTO catDTO = new CategoryDTO();
+        catDTO.setId("transfer");
+        catDTO.setName("Transfer");
+        AccountDTO accDTO4 = new AccountDTO("a4", "Account 4", BigDecimal.ZERO, null, null, null, null, null);
+
+        AccountTransactionDTO updateDTO = new AccountTransactionDTO(
+            "credit1",
+            LocalDateTime.now(),
+            new BigDecimal("250"),
+            "Updated Transfer Destination",
+            null, null, null,
+            TransactionType.CREDIT,
+            accDTO4, // Changed credit account from a2 to a4
+            catDTO,
+            null, List.of(),
+            "debit1",
+            null, null, null, null,
+            "INR",
+            null
+        , null);
+
+        // Mock repository calls - Case 2: credit is referenced by debit's linkedTransferId
+        when(accountTransactionRepository.findById("credit1")).thenReturn(Optional.of(credit));
+        when(accountTransactionRepository.findByAppUserAndParent(currentUser, "credit1")).thenReturn(List.of());
+        when(accountTransactionRepository.findByAppUserAndLinkedTransferId(currentUser, "credit1")).thenReturn(Optional.of(debit));
+        when(accountRepository.findByAppUserAndId(currentUser, "a4")).thenReturn(Optional.of(account4));
+        when(categoryService.getCategoryById("transfer")).thenReturn(transferCat);
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(i -> i.getArgument(0));
+        
+        AccountTransaction mappedEntity = new AccountTransaction();
+        when(accountTransactionMapper.toEntity(updateDTO)).thenReturn(mappedEntity);
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(updateDTO);
+
+        // Execute update
+        Optional<AccountTransactionDTO> result = service.updateTransaction("credit1", updateDTO);
+
+        // Verify balances:
+        // Main transaction (credit) old account (a2): oldAmount=200 CREDIT reversed => -200 => 300
+        // Main transaction (credit) new account (a4): newAmount=250 CREDIT => +250 => 3250
+        // Linked transaction (debit) account (a1): oldAmount=200 DEBIT reversed => +200, newAmount=250 DEBIT => -250, net: -50 => 950
+        assertThat(result).isPresent();
+        assertThat(account2.getBalance()).isEqualByComparingTo("300");  // 500 - 200 (reversed)
+        assertThat(account4.getBalance()).isEqualByComparingTo("3250"); // 3000 + 250 (new credit)
+        assertThat(account1.getBalance()).isEqualByComparingTo("950");  // 1000 + 200 - 250 (linked debit updated)
+        verify(accountRepository, times(1)).save(account1); // Linked debit account
+        verify(accountRepository, times(1)).save(account2); // Credit old account
+        verify(accountRepository, times(1)).save(account4); // Credit new account
+        
+        // Verify linked transaction was synced
+        assertThat(debit.getAmount()).isEqualByComparingTo("250");
+        assertThat(debit.getDescription()).isEqualTo("Updated Transfer Destination");
+        assertThat(debit.getAccount().getId()).isEqualTo("a1"); // Debit account stays the same (correct for transfers)
     }
 
     @Test
@@ -794,10 +1229,12 @@ class AccountTransactionServiceTest {
         Account account1 = new Account();
         account1.setId("a1");
         account1.setBalance(new BigDecimal("1000"));
+        account1.setAppUser(currentUser);
         
         Account account2 = new Account();
         account2.setId("a2");
         account2.setBalance(new BigDecimal("500"));
+        account2.setAppUser(currentUser);
 
         AccountTransaction debit = AccountTransaction.builder()
             .id("debit1")
@@ -821,17 +1258,77 @@ class AccountTransactionServiceTest {
             .description("Transfer")
             .build();
 
-        // Mock repository calls
+        // Mock repository calls - Case 1: debit has linkedTransferId pointing to credit
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "debit1")).thenReturn(Optional.of(debit));
-        when(accountTransactionRepository.findByAppUserAndLinkedTransferId(currentUser, "debit1")).thenReturn(Optional.of(credit));
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "credit1")).thenReturn(Optional.of(credit));
         when(accountTransactionRepository.findByParentAndAppUser("debit1", currentUser)).thenReturn(List.of());
 
         // Execute delete
         service.delete("debit1");
 
+        // Verify balances are reversed: DEBIT refunds to account1, CREDIT deducts from account2
+        assertThat(account1.getBalance()).isEqualByComparingTo("1200"); // 1000 + 200
+        assertThat(account2.getBalance()).isEqualByComparingTo("300");  // 500 - 200
+        verify(accountRepository, times(1)).save(account1);
+        verify(accountRepository, times(1)).save(account2);
+        
         // Verify both transactions were deleted
         verify(accountTransactionRepository).deleteByAppUserAndId(currentUser, "credit1");
         verify(accountTransactionRepository).deleteByAppUserAndId(currentUser, "debit1");
+    }
+    
+    @Test
+    void deleteTransaction_deletesLinkedTransfer_ReverseCase() {
+        // Test Case 2: Delete the credit transaction (which is referenced by debit's linkedTransferId)
+        Account account1 = new Account();
+        account1.setId("a1");
+        account1.setBalance(new BigDecimal("1000"));
+        account1.setAppUser(currentUser);
+        
+        Account account2 = new Account();
+        account2.setId("a2");
+        account2.setBalance(new BigDecimal("500"));
+        account2.setAppUser(currentUser);
+
+        AccountTransaction debit = AccountTransaction.builder()
+            .id("debit1")
+            .linkedTransferId("credit1")
+            .amount(new BigDecimal("200"))
+            .type(TransactionType.DEBIT)
+            .account(account1)
+            .appUser(currentUser)
+            .date(LocalDateTime.now())
+            .description("Transfer")
+            .build();
+
+        AccountTransaction credit = AccountTransaction.builder()
+            .id("credit1")
+            .linkedTransferId("debit1")
+            .amount(new BigDecimal("200"))
+            .type(TransactionType.CREDIT)
+            .account(account2)
+            .appUser(currentUser)
+            .date(LocalDateTime.now())
+            .description("Transfer")
+            .build();
+
+        // Mock repository calls - Case 2: credit doesn't have linkedTransferId, but debit points to it
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "credit1")).thenReturn(Optional.of(credit));
+        when(accountTransactionRepository.findByAppUserAndLinkedTransferId(currentUser, "credit1")).thenReturn(Optional.of(debit));
+        when(accountTransactionRepository.findByParentAndAppUser("credit1", currentUser)).thenReturn(List.of());
+
+        // Execute delete on credit transaction
+        service.delete("credit1");
+
+        // Verify balances are reversed
+        assertThat(account1.getBalance()).isEqualByComparingTo("1200"); // 1000 + 200 (debit reversed)
+        assertThat(account2.getBalance()).isEqualByComparingTo("300");  // 500 - 200 (credit reversed)
+        verify(accountRepository, times(1)).save(account1);
+        verify(accountRepository, times(1)).save(account2);
+        
+        // Verify both transactions were deleted
+        verify(accountTransactionRepository).deleteByAppUserAndId(currentUser, "debit1");
+        verify(accountTransactionRepository).deleteByAppUserAndId(currentUser, "credit1");
     }
 
     @Test
@@ -840,6 +1337,7 @@ class AccountTransactionServiceTest {
         Account account1 = new Account();
         account1.setId("a1");
         account1.setBalance(new BigDecimal("1000"));
+        account1.setAppUser(currentUser);
 
         AccountTransaction tx = AccountTransaction.builder()
             .id("tx1")
@@ -859,9 +1357,119 @@ class AccountTransactionServiceTest {
         // Execute delete
         service.delete("tx1");
 
+        // Verify balance is reversed: DEBIT refunds 50 => 1050
+        assertThat(account1.getBalance()).isEqualByComparingTo("1050");
+        verify(accountRepository, times(1)).save(account1);
+        
         // Verify only one transaction was deleted
         verify(accountTransactionRepository, times(1)).deleteByAppUserAndId(any(AppUser.class), anyString());
         verify(accountTransactionRepository).deleteByAppUserAndId(currentUser, "tx1");
+    }
+    
+    @Test
+    void deleteTransaction_credit_reversesBalance() {
+        // Setup CREDIT transaction
+        Account account1 = new Account();
+        account1.setId("a1");
+        account1.setBalance(new BigDecimal("1000"));
+        account1.setAppUser(currentUser);
+
+        AccountTransaction tx = AccountTransaction.builder()
+            .id("tx1")
+            .linkedTransferId(null)
+            .amount(new BigDecimal("75"))
+            .type(TransactionType.CREDIT)
+            .account(account1)
+            .appUser(currentUser)
+            .date(LocalDateTime.now())
+            .description("Income")
+            .build();
+
+        // Mock repository calls
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "tx1")).thenReturn(Optional.of(tx));
+        when(accountTransactionRepository.findByParentAndAppUser("tx1", currentUser)).thenReturn(List.of());
+
+        // Execute delete
+        service.delete("tx1");
+
+        // Verify balance is reversed: CREDIT deducts 75 => 925
+        assertThat(account1.getBalance()).isEqualByComparingTo("925");
+        verify(accountRepository, times(1)).save(account1);
+        verify(accountTransactionRepository).deleteByAppUserAndId(currentUser, "tx1");
+    }
+    
+    @Test
+    void save_debit_updatesAccountBalance() {
+        Account acc = createAccount("a1", new BigDecimal("1000"));
+        when(accountRepository.findByAppUserAndId(currentUser, "a1")).thenReturn(Optional.of(acc));
+
+        AccountTransaction transaction = new AccountTransaction();
+        transaction.setAccount(acc);
+        transaction.setType(TransactionType.DEBIT);
+        transaction.setAmount(new BigDecimal("150"));
+        transaction.setGptAccount(null);
+        
+        when(accountTransactionMapper.toEntity(any(AccountTransactionDTO.class))).thenAnswer(inv -> {
+            AccountTransactionDTO dto = inv.getArgument(0);
+            transaction.setType(dto.type());
+            transaction.setAmount(dto.amount());
+            transaction.setAccount(acc);
+            transaction.setGptAccount(null);
+            return transaction;
+        });
+        when(accountTransactionRepository.save(transaction)).thenReturn(transaction);
+        when(accountTransactionMapper.toDTO(transaction)).thenReturn(
+            new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("150"), "d", null, null, null, 
+                TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
+                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null));
+
+        AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("150"), "d", null, null, null, 
+            TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
+            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null);
+
+        AccountTransactionDTO result = service.save(input);
+        
+        // Verify balance is updated: DEBIT subtracts 150 => 850
+        assertThat(acc.getBalance()).isEqualByComparingTo("850");
+        verify(accountRepository, times(1)).save(acc);
+        assertThat(result.id()).isEqualTo("tx1");
+    }
+    
+    @Test
+    void save_credit_updatesAccountBalance() {
+        Account acc = createAccount("a1", new BigDecimal("1000"));
+        when(accountRepository.findByAppUserAndId(currentUser, "a1")).thenReturn(Optional.of(acc));
+
+        AccountTransaction transaction = new AccountTransaction();
+        transaction.setAccount(acc);
+        transaction.setType(TransactionType.CREDIT);
+        transaction.setAmount(new BigDecimal("250"));
+        transaction.setGptAccount(null);
+        
+        when(accountTransactionMapper.toEntity(any(AccountTransactionDTO.class))).thenAnswer(inv -> {
+            AccountTransactionDTO dto = inv.getArgument(0);
+            transaction.setType(dto.type());
+            transaction.setAmount(dto.amount());
+            transaction.setAccount(acc);
+            transaction.setGptAccount(null);
+            return transaction;
+        });
+        when(accountTransactionRepository.save(transaction)).thenReturn(transaction);
+        when(accountTransactionMapper.toDTO(transaction)).thenReturn(
+            new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("250"), "d", null, null, null, 
+                TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
+                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null));
+
+        AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("250"), "d", null, null, null, 
+            TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
+            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null);
+
+        AccountTransactionDTO result = service.save(input);
+        
+        // Verify balance is updated: CREDIT adds 250 => 1250
+        assertThat(acc.getBalance()).isEqualByComparingTo("1250");
+        verify(accountRepository, times(1)).save(acc);
+        assertThat(result.id()).isEqualTo("tx1");
     }
 
     @Test

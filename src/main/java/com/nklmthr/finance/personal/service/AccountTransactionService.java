@@ -102,6 +102,25 @@ public class AccountTransactionService {
 				"Cannot transfer a split transaction. Please delete the split first or transfer the individual child transactions.");
 		}
 		
+		// Check if transaction is already part of a transfer (bidirectional check)
+		// Case 1: Transaction has linkedTransferId (points to another transaction)
+		if (debit.getLinkedTransferId() != null) {
+			logger.warn("Attempted to transfer transaction ID: {} that is already part of a transfer (linkedTransferId: {}).", 
+				debit.getId(), debit.getLinkedTransferId());
+			throw new IllegalArgumentException(
+				"Cannot transfer a transaction that is already part of a transfer. Please delete the existing transfer first.");
+		}
+		
+		// Case 2: Another transaction points to this one
+		Optional<AccountTransaction> existingLinkedTx = accountTransactionRepository
+			.findByAppUserAndLinkedTransferId(appUser, debit.getId());
+		if (existingLinkedTx.isPresent()) {
+			logger.warn("Attempted to transfer transaction ID: {} that is already referenced by another transfer transaction (ID: {}).", 
+				debit.getId(), existingLinkedTx.get().getId());
+			throw new IllegalArgumentException(
+				"Cannot transfer a transaction that is already part of a transfer. Please delete the existing transfer first.");
+		}
+		
 		Account toAccount = accountRepository.findByAppUserAndId(appUser, request.getDestinationAccountId()).get();
 		toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
 		
@@ -267,43 +286,80 @@ public class AccountTransactionService {
 				}
 			}
 			
-			// Handle linked transfer transactions
+			// Handle linked transfer transactions - handle both directions (bidirectional)
+			// Case 1: This transaction points to another (has linkedTransferId)
+			// Case 2: Another transaction points to this one
+			AccountTransaction linkedTx = null;
+			
 			if (existingTx.getLinkedTransferId() != null) {
+				// Case 1: This transaction has a linkedTransferId pointing to another transaction
+				Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
+					.findByAppUserAndId(appUser, existingTx.getLinkedTransferId());
+				
+				if (linkedTxOpt.isPresent()) {
+					linkedTx = linkedTxOpt.get();
+					logger.info("Found linked transaction (case 1): {}", linkedTx.getId());
+				}
+			}
+			
+			// Case 2: Another transaction points to this one (bidirectional check)
+			if (linkedTx == null) {
 				Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
 					.findByAppUserAndLinkedTransferId(appUser, existingTx.getId());
 				
 				if (linkedTxOpt.isPresent()) {
-					AccountTransaction linkedTx = linkedTxOpt.get();
-					logger.info("Updating linked transfer. Transaction ID: {}, Linked ID: {}", id, linkedTx.getId());
-					
-					// Validate transfer integrity constraints
-					if (!txUpdate.category().getId().equals(existingTx.getCategory().getId())) {
-						logger.warn("Attempted to change category of transfer transaction ID: {}", id);
-						throw new IllegalArgumentException(
-							"Cannot change category of a transfer transaction. Please delete the transfer first.");
-					}
-					
-					// Reverse old balances for linked transaction
-					Account linkedOldAccount = linkedTx.getAccount();
-					BigDecimal linkedOldAmount = linkedTx.getAmount();
-					TransactionType linkedOldType = linkedTx.getType();
-					
+					linkedTx = linkedTxOpt.get();
+					logger.info("Found linked transaction (case 2): {}", linkedTx.getId());
+				}
+			}
+			
+			if (linkedTx != null) {
+				logger.info("Updating linked transfer. Transaction ID: {}, Linked ID: {}", id, linkedTx.getId());
+				
+				// Validate transfer integrity constraints
+				if (!txUpdate.category().getId().equals(existingTx.getCategory().getId())) {
+					logger.warn("Attempted to change category of transfer transaction ID: {}", id);
+					throw new IllegalArgumentException(
+						"Cannot change category of a transfer transaction. Please delete the transfer first.");
+				}
+				
+				// Store old values for linked transaction to reverse balances
+				Account linkedOldAccount = linkedTx.getAccount();
+				BigDecimal linkedOldAmount = linkedTx.getAmount();
+				TransactionType linkedOldType = linkedTx.getType();
+				
+				// Reverse old balances for linked transaction
+				if (linkedOldAccount != null) {
 					if (linkedOldType == TransactionType.DEBIT) {
 						linkedOldAccount.setBalance(linkedOldAccount.getBalance().add(linkedOldAmount));
 					} else if (linkedOldType == TransactionType.CREDIT) {
 						linkedOldAccount.setBalance(linkedOldAccount.getBalance().subtract(linkedOldAmount));
 					}
-					
-				// Update linked transaction with new values
-				linkedTx.setAmount(newAmount);
-				linkedTx.setDate(txUpdate.date());
-				linkedTx.setDescription(txUpdate.description());
+				}
 				
-				// Apply new balances for linked transaction
-				if (linkedOldType == TransactionType.DEBIT) {
-					linkedOldAccount.setBalance(linkedOldAccount.getBalance().subtract(newAmount));
-				} else if (linkedOldType == TransactionType.CREDIT) {
-					linkedOldAccount.setBalance(linkedOldAccount.getBalance().add(newAmount));
+				// Determine if linked transaction's account should change
+				// For transfers: if main transaction account changes, linked transaction might need to change
+				// But typically: debit (source) and credit (destination) are independent
+				// We'll keep linked transaction's account unchanged unless explicitly needed
+				Account linkedNewAccount = linkedOldAccount; // Default: keep same account
+				
+				// Update linked transaction with synchronized values
+				linkedTx.setAmount(newAmount); // Sync amount
+				linkedTx.setDate(txUpdate.date()); // Sync date
+				linkedTx.setDescription(txUpdate.description()); // Sync description
+				
+				// Keep linked transaction's type (DEBIT stays DEBIT, CREDIT stays CREDIT)
+				// Don't change type as it represents the other side of the transfer
+				
+				// Apply new balances for linked transaction on its account
+				if (linkedNewAccount != null) {
+					if (linkedOldType == TransactionType.DEBIT) {
+						linkedNewAccount.setBalance(linkedNewAccount.getBalance().subtract(newAmount));
+					} else if (linkedOldType == TransactionType.CREDIT) {
+						linkedNewAccount.setBalance(linkedNewAccount.getBalance().add(newAmount));
+					}
+					linkedNewAccount.setAppUser(appUser);
+					accountRepository.save(linkedNewAccount);
 				}
 				
 				// Default gptAccount to account if null (for old records)
@@ -311,11 +367,9 @@ public class AccountTransactionService {
 					linkedTx.setGptAccount(linkedTx.getAccount());
 				}
 				
-				accountRepository.save(linkedOldAccount);
 				accountTransactionRepository.save(linkedTx);
 				
 				logger.info("Synced linked transfer transaction ID: {} with new amount: {}", linkedTx.getId(), newAmount);
-				}
 			}
 			
 			AccountTransaction txUpdateEntity = accountTransactionMapper.toEntity(txUpdate);
@@ -349,12 +403,16 @@ public class AccountTransactionService {
 			}
 
 			if (newAccount.getId().equals(oldAccount.getId())) {
+				// Same account: apply new transaction amount
 				if (newType == TransactionType.DEBIT) {
 					newAccount.setBalance(newAccount.getBalance().subtract(newAmount));
 				} else if (newType == TransactionType.CREDIT) {
 					newAccount.setBalance(newAccount.getBalance().add(newAmount));
 				}
+				newAccount.setAppUser(appUser);
+				accountRepository.save(newAccount);
 			} else {
+				// Different account: update both accounts
 				if (newType == TransactionType.DEBIT) {
 					newAccount.setBalance(newAccount.getBalance().subtract(newAmount));
 				} else if (newType == TransactionType.CREDIT) {
@@ -450,17 +508,61 @@ public class AccountTransactionService {
 				.orElseThrow(
 						() -> new IllegalArgumentException("Transaction not found for user: " + appUser.getUsername()));
 		
-		// Handle linked transfer - delete both sides
+		// Handle linked transfer - reverse balances and delete both sides
+		// Case 1: This transaction points to another (has linkedTransferId)
+		// Case 2: Another transaction points to this one (we need to find it)
+		AccountTransaction linkedTx = null;
+		
 		if (existingTransaction.getLinkedTransferId() != null) {
+			// Case 1: This transaction has a linkedTransferId pointing to another transaction
+			Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
+				.findByAppUserAndId(appUser, existingTransaction.getLinkedTransferId());
+			
+			if (linkedTxOpt.isPresent()) {
+				linkedTx = linkedTxOpt.get();
+				logger.info("Found linked transaction (case 1): {}", linkedTx.getId());
+			}
+		}
+		
+		// Case 2: Another transaction points to this one (bidirectional check)
+		if (linkedTx == null) {
 			Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
 				.findByAppUserAndLinkedTransferId(appUser, existingTransaction.getId());
 			
 			if (linkedTxOpt.isPresent()) {
-				AccountTransaction linkedTx = linkedTxOpt.get();
-				logger.info("Deleting linked transfer transaction ID: {}", linkedTx.getId());
-				accountTransactionRepository.deleteByAppUserAndId(appUser, linkedTx.getId());
+				linkedTx = linkedTxOpt.get();
+				logger.info("Found linked transaction (case 2): {}", linkedTx.getId());
 			}
 		}
+		
+		// Delete the linked transaction if found
+		if (linkedTx != null) {
+			logger.info("Deleting linked transfer transaction ID: {}", linkedTx.getId());
+			
+			// Reverse balance for linked transaction's account
+			Account linkedAccount = linkedTx.getAccount();
+			if (linkedAccount != null) {
+				if (linkedTx.getType() == TransactionType.DEBIT) {
+					linkedAccount.setBalance(linkedAccount.getBalance().add(linkedTx.getAmount()));
+				} else if (linkedTx.getType() == TransactionType.CREDIT) {
+					linkedAccount.setBalance(linkedAccount.getBalance().subtract(linkedTx.getAmount()));
+				}
+				linkedAccount.setAppUser(appUser);
+				accountRepository.save(linkedAccount);
+			}
+			
+			accountTransactionRepository.deleteByAppUserAndId(appUser, linkedTx.getId());
+		}
+		
+		// Reverse balance for this transaction's account
+		Account account = existingTransaction.getAccount();
+		if (existingTransaction.getType() == TransactionType.DEBIT) {
+			account.setBalance(account.getBalance().add(existingTransaction.getAmount()));
+		} else if (existingTransaction.getType() == TransactionType.CREDIT) {
+			account.setBalance(account.getBalance().subtract(existingTransaction.getAmount()));
+		}
+		account.setAppUser(appUser);
+		accountRepository.save(account);
 		
 		if (existingTransaction.getParent() != null) {
 			AccountTransaction parent = accountTransactionRepository.findByAppUserAndId(appUser, existingTransaction.getParent()).get();
@@ -609,6 +711,9 @@ private Specification<AccountTransaction> buildTransactionSpec(String month, Str
 		if (StringUtils.isNotBlank(categoryId)) {
 			Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(categoryId);
 			spec = spec.and(AccountTransactionSpecifications.hasCategory(categoryIds));
+			// When filtering by category, only include leaf transactions (no children)
+			// This ensures we don't double-count split transactions
+			spec = spec.and(AccountTransactionSpecifications.isLeafTransaction());
 		}
 		if (StringUtils.isNotBlank(accountId)) {
 			spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
@@ -640,8 +745,8 @@ public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month
 				"Fetching transactions for export for month: {}, accountId: {}, type: {}, search: {}, categoryId: {}",
 				month, accountId, type, search, categoryId);
     Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
-                ? buildTransactionSpec(month, date, accountId, type, search, categoryId, true)
-                : buildTransactionSpec(month, date, accountId, type, search, null, false);
+                ? buildTransactionSpec(month, date, accountId, type, search, categoryId, false)
+                : buildTransactionSpec(month, date, accountId, type, search, null, true);
 		List<AccountTransaction> list = accountTransactionRepository.findAll(spec,
 				Sort.by(Sort.Direction.DESC, "date"));
 		logger.info("Total transactions found for export: {}", list.size());

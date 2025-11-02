@@ -80,6 +80,14 @@ public class TransactionPatternLibrary {
     // ==================== MERCHANT/DESCRIPTION EXTRACTION PATTERNS ====================
     
     private static final List<DescriptionPattern> MERCHANT_PATTERNS = List.of(
+        // Format: "your order: ORDER_NUMBER" - Amazon format (highest priority for Amazon emails)
+        new DescriptionPattern("AMAZON_ORDER", 
+            Pattern.compile("your order[:\\s]+([\\d\\-]+)", Pattern.CASE_INSENSITIVE), 98),
+        
+        // Format: "reference number is: REF_NUMBER" - Amazon refund format
+        new DescriptionPattern("REFUND_REFERENCE", 
+            Pattern.compile("refund reference number (?:is|:)[:\\s]+([\\d]+)", Pattern.CASE_INSENSITIVE), 97),
+        
         // Format: "Merchant Name: MERCHANT" or "Merchant: MERCHANT" - Check this first (highest confidence)
         new DescriptionPattern("MERCHANT_LABELED", 
             Pattern.compile("\\bMerchant(?:\\s+Name|\\s+ID)?[:\\s]*:([A-Za-z0-9\\s&\\-]+?)(?=\\s+(?:Date|Axis|Card|on|\\d{2}/\\d{2}/\\d{4})|\\r?\\n|$)", Pattern.CASE_INSENSITIVE), 95),

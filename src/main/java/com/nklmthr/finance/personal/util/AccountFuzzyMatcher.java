@@ -60,6 +60,9 @@ public class AccountFuzzyMatcher {
                 normalizedDescription
             );
 
+            // Log score for each account for debugging
+            logger.info("Fuzzy score for '{}': {}", account.name(), score);
+
             if (score > highestScore) {
                 highestScore = score;
                 bestMatch = account;

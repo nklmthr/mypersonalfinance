@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import api from "../auth/api";
 import dayjs from "dayjs";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -10,733 +10,20 @@ import "nprogress/nprogress.css";
 import useDebounce from "../hooks/useDebounce";
 import { useErrorModal } from "../auth/ErrorModalContext";
 
-// ---- helpers: tree + flatten ----
-function buildTree(categories) {
-	const map = {};
-	const roots = [];
+// Import extracted components
+import FetchToolbar from "./transactions/components/FetchToolbar";
+import SearchSelect from "./transactions/components/SearchSelect";
+import TransactionForm from "./transactions/components/TransactionForm";
+import TransferForm from "./transactions/components/TransferForm";
+import TransactionSplit from "./transactions/components/TransactionSplit";
+import TransactionComparisonModal from "./transactions/components/TransactionComparisonModal";
+import TransactionDetailsModal from "./transactions/components/TransactionDetailsModal";
+import { buildTree, flattenCategories } from "./transactions/utils/utils";
 
-	(categories || []).forEach((cat) => {
-		map[cat.id] = { ...cat, children: [] };
-	});
-
-	(categories || []).forEach((cat) => {
-		if (cat.parentId) {
-			map[cat.parentId]?.children.push(map[cat.id]);
-		} else {
-			roots.push(map[cat.id]);
-		}
-	});
-
-	return roots;
-}
-
-function FetchToolbar({
-    availableServices,
-    selectedServices,
-    setSelectedServices,
-    refreshing,
-    triggerDataExtraction,
-    currentTotal,
-}) {
-    // Function to determine color based on amount in lakhs
-    // Negative amounts (expenses) → red, Positive amounts (income/savings) → green
-    const getColorForAmount = (amount) => {
-        const lakhs = amount / 100000;
-        
-        // Very negative (< -3L): dark red
-        if (lakhs < -3) {
-            return { bg: 'bg-red-200', text: 'text-red-950', border: 'border-red-500' };
-        }
-        // Moderately negative (-3L to -2L): red
-        else if (lakhs < -2) {
-            return { bg: 'bg-red-100', text: 'text-red-900', border: 'border-red-400' };
-        }
-        // Slightly negative (-2L to -1L): orange
-        else if (lakhs < -1) {
-            return { bg: 'bg-orange-100', text: 'text-orange-900', border: 'border-orange-300' };
-        }
-        // Near zero (-1L to 1L): yellow
-        else if (lakhs < 1) {
-            return { bg: 'bg-yellow-100', text: 'text-yellow-900', border: 'border-yellow-300' };
-        }
-        // Slightly positive (1L to 2L): light green
-        else if (lakhs < 2) {
-            return { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300' };
-        }
-        // Moderately positive (2L to 3L): green
-        else if (lakhs < 3) {
-            return { bg: 'bg-green-200', text: 'text-green-900', border: 'border-green-400' };
-        }
-        // Very positive (≥ 3L): dark green
-        else {
-            return { bg: 'bg-green-300', text: 'text-green-950', border: 'border-green-500' };
-        }
-    };
-
-    const colors = getColorForAmount(currentTotal);
-
-    return (
-        <div className="w-full bg-white border border-blue-200 rounded-md p-3 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2 justify-between">
-                <div className="flex items-center gap-2">
-                    <select
-                        value={selectedServices.length === availableServices.length ? 'ALL' : (selectedServices[0] || 'ALL')}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === 'ALL') {
-                                setSelectedServices(availableServices);
-                            } else {
-                                setSelectedServices([val]);
-                            }
-                        }}
-                        className="border px-3 py-2 rounded text-sm min-w-[260px] bg-blue-50"
-                        title="Select a data extraction service or All"
-                    >
-                        <option value="ALL">All Services</option>
-                        {(availableServices || []).map((svc) => (
-                            <option key={svc} value={svc}>{svc}</option>
-                        ))}
-                    </select>
-                    <button
-                        onClick={() => triggerDataExtraction(selectedServices)}
-                        disabled={refreshing}
-                        className={`${refreshing 
-                            ? 'bg-gray-400 cursor-not-allowed' 
-                            : 'bg-purple-600 hover:bg-purple-700'
-                        } text-white px-4 py-2 rounded text-sm shadow`}
-                        title="Fetch new transactions from bank/email services (NOT for page refresh - transactions auto-load on filter change)"
-                    >
-                        Fetch
-                    </button>
-                </div>
-                <div
-                    className={`${colors.bg} ${colors.text} ${colors.border} border-2 px-4 py-2 rounded text-sm shadow-md font-semibold`}
-                    title={`Total transactions amount: ₹${currentTotal.toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                    })}`}
-                >
-                    Total: ₹{currentTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function flattenCategories(categories, prefix = "") {
-	let flat = [];
-	const sorted = [...(categories || [])].sort((a, b) => {
-		const childDiff = (a?.children?.length || 0) - (b?.children?.length || 0);
-		if (childDiff !== 0) return childDiff;
-		return (a?.name || "").localeCompare(b?.name || "", undefined, { sensitivity: "base" });
-	});
-	for (const c of sorted) {
-		flat.push({ id: c.id, name: prefix + c.name });
-		if (c.children?.length > 0) {
-			flat = flat.concat(flattenCategories(c.children, prefix + "— "));
-		}
-	}
-	return flat;
-}
-
-// Reusable searchable select (combobox) for Accounts/Categories
-function SearchSelect({ options, value, onChange, placeholder, error = false, disabled = false }) {
-    const [open, setOpen] = useState(false);
-    const [query, setQuery] = useState("");
-    const containerRef = React.useRef(null);
-
-    const normalize = (s) => (s || "")
-        .toLowerCase()
-        .replace(/[-–—]+/g, " ") // ignore indent dashes
-        .replace(/\s+/g, " ");
-
-    const selected = options.find(o => o.id === value);
-
-    useEffect(() => {
-        // Display the selected option name, including "All" options
-        if (selected) {
-            setQuery(selected.name);
-        } else {
-            setQuery("");
-        }
-    }, [value, selected?.name]);
-
-    useEffect(() => {
-        const handler = (e) => {
-            if (containerRef.current && !containerRef.current.contains(e.target)) {
-                setOpen(false);
-            }
-        };
-        document.addEventListener('click', handler);
-        return () => document.removeEventListener('click', handler);
-    }, []);
-
-    const filtered = options.filter(o => normalize(o.name).includes(normalize(query)));
-
-    // Auto-select when a single non-placeholder option remains
-    useEffect(() => {
-        if (!open || disabled) return;
-        const norm = normalize(query);
-        if (!norm) return; // only after user types something
-        const filteredNonPlaceholder = options.filter(o => (o.id || o.id === 0) && normalize(o.name).includes(norm));
-        if (filteredNonPlaceholder.length === 1) {
-            const only = filteredNonPlaceholder[0];
-            if (only.id !== value) {
-                onChange(only.id);
-            }
-            setOpen(false);
-        }
-    }, [query, open, options, value, onChange, disabled]);
-
-    const handleSelectOption = (option) => {
-        if (disabled) return;
-        onChange(option.id);
-        // Set query to the selected name immediately
-        setQuery(option.name);
-        setOpen(false);
-    };
-
-    return (
-        <div ref={containerRef} className="relative w-full">
-            <input
-                value={query}
-                onChange={(e) => { if (!disabled) { setQuery(e.target.value); setOpen(true); } }}
-                onFocus={() => { if (!disabled) { setOpen(true); setQuery(""); } }}
-                placeholder={placeholder}
-                aria-invalid={error ? "true" : "false"}
-                disabled={disabled}
-                className={`border px-2 py-1 rounded text-sm w-full ${error ? 'border-red-500' : ''} ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-            />
-            {open && !disabled && (
-                <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-auto w-full mt-1">
-                    {filtered.map(o => (
-                        <div
-                            key={o.id || 'all'}
-                            className={`px-2 py-1 text-sm cursor-pointer hover:bg-blue-50 ${o.id === value ? 'bg-blue-100' : ''}`}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleSelectOption(o)}
-                        >
-                            {o.name}
-                        </div>
-                    ))}
-                    {filtered.length === 0 && (
-                        <div className="px-2 py-1 text-xs text-gray-500">No matches</div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ---- forms ----
-function TransactionForm({
-	transaction,
-	setTransaction,
-	onCancel,
-	onSubmit,
-	accounts,
-	categories,
-	mode,
-}) {
-	// Local state for date input to handle typing vs validation for automation tools
-	const [dateInputValue, setDateInputValue] = useState(
-		transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : ""
-	);
-	const [errors, setErrors] = useState({});
-
-	// Keep local input in sync when transaction changes (edit mode)
-	useEffect(() => {
-		setDateInputValue(transaction.date ? dayjs(transaction.date).format("DD/MM/YYYY HH:mm") : "");
-	}, [transaction.date]);
-
-	useEffect(() => {
-		const handler = (e) => e.key === "Escape" && onCancel();
-		document.addEventListener("keydown", handler);
-		return () => document.removeEventListener("keydown", handler);
-	}, [onCancel]);
-
-	const treeCategories = buildTree(categories);
-	const rootHomeForm = treeCategories.filter((cat) => cat?.name === "Home");
-	const limitedTreeForm = rootHomeForm.length > 0 ? rootHomeForm : treeCategories;
-	const flattened = flattenCategories(limitedTreeForm);
-
-	const submit = () => {
-		// Validate required fields
-		const newErrors = {};
-		if (!dateInputValue.trim()) newErrors.date = "Required";
-		if (!transaction.accountId) newErrors.accountId = "Required";
-		if (transaction.amount === undefined || transaction.amount === null || String(transaction.amount).trim() === "") newErrors.amount = "Required";
-		if (!transaction.currency) newErrors.currency = "Required";
-		if (!transaction.categoryId) newErrors.categoryId = "Required";
-		if (!transaction.type) newErrors.type = "Required";
-		if (!transaction.description || !transaction.description.trim()) newErrors.description = "Required";
-
-		if (Object.keys(newErrors).length > 0) {
-			setErrors(newErrors);
-			const fieldMap = { date: "Date", accountId: "Account", amount: "Amount", currency: "Currency", categoryId: "Category", type: "Type", description: "Description" };
-			const missing = Object.keys(newErrors).map((k) => fieldMap[k]).join(", ");
-			alert(`Please fill required fields: ${missing}`);
-			return;
-		}
-
-		let finalDate = transaction.date;
-		if (dateInputValue.trim()) {
-			try {
-				let parsedDate;
-				const value = dateInputValue.trim();
-				// Try DD/MM/YYYY HH:MM
-				if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}\s\d{1,2}:\d{2}$/)) {
-					const [datePart, timePart] = value.split(' ');
-					const [day, month, year] = datePart.split('/');
-					const [hour, minute] = timePart.split(':');
-					parsedDate = dayjs(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute}:00`);
-				}
-				// DD/MM/YYYY (no time)
-				else if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
-					const [day, month, year] = value.split('/');
-					parsedDate = dayjs(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00`);
-				}
-				// YYYY-MM-DD HH:MM
-				else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}\s\d{1,2}:\d{2}$/)) {
-					const [datePart, timePart] = value.split(' ');
-					const [hour, minute] = timePart.split(':');
-					parsedDate = dayjs(`${datePart}T${hour.padStart(2, '0')}:${minute}:00`);
-				}
-				// YYYY-MM-DDTHH:MM
-				else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}T\d{1,2}:\d{2}$/)) {
-					parsedDate = dayjs(`${value}:00`);
-				}
-				// YYYY-MM-DD (no time)
-				else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
-					parsedDate = dayjs(`${value}T12:00:00`);
-				}
-				else {
-					parsedDate = dayjs(value);
-				}
-
-				if (parsedDate.isValid()) {
-					finalDate = parsedDate.format("YYYY-MM-DDTHH:mm:ss");
-				}
-			} catch (error) {
-				// ignore parsing error and fall back to transaction.date
-			}
-		}
-		onSubmit({
-			...transaction,
-			amount: parseFloat(transaction.amount),
-			date: finalDate,
-		});
-	};
-
-	return (
-		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-			<form
-				onSubmit={(e) => {
-					e.preventDefault();
-					submit();
-				}}
-				className="bg-white p-6 rounded shadow-lg w-full max-w-xl space-y-4"
-			>
-				<h3 className="text-lg font-semibold">
-					{mode === "add" ? "Add" : "Edit"} Transaction
-				</h3>
-
-			{/* Date */}
-			<div>
-			<label className="block text-sm font-medium mb-1">Date & Time<span className="text-red-600">*</span></label>
-				<input
-					type="text"
-					placeholder="DD/MM/YYYY HH:MM or YYYY-MM-DD HH:MM"
-					value={dateInputValue}
-					onChange={(e) => { setDateInputValue(e.target.value); setErrors((er) => ({ ...er, date: undefined })); }}
-					onBlur={(e) => {
-						const value = e.target.value.trim();
-						if (!value) {
-							setTransaction((t) => ({ ...t, date: "" }));
-							return;
-						}
-						try {
-							let parsedDate;
-							if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}\s\d{1,2}:\d{2}$/)) {
-								const [datePart, timePart] = value.split(' ');
-								const [day, month, year] = datePart.split('/');
-								const [hour, minute] = timePart.split(':');
-								parsedDate = dayjs(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute}:00`);
-							}
-							else if (value.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
-								const [day, month, year] = value.split('/');
-								parsedDate = dayjs(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00`);
-							}
-							else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}\s\d{1,2}:\d{2}$/)) {
-								const [datePart, timePart] = value.split(' ');
-								const [hour, minute] = timePart.split(':');
-								parsedDate = dayjs(`${datePart}T${hour.padStart(2, '0')}:${minute}:00`);
-							}
-							else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}T\d{1,2}:\d{2}$/)) {
-								parsedDate = dayjs(`${value}:00`);
-							}
-							else if (value.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
-								parsedDate = dayjs(`${value}T12:00:00`);
-							}
-							else {
-								parsedDate = dayjs(value);
-							}
-							if (parsedDate.isValid()) {
-								setTransaction((t) => ({ ...t, date: parsedDate.format("YYYY-MM-DDTHH:mm:ss") }));
-								setDateInputValue(parsedDate.format("DD/MM/YYYY HH:mm"));
-							} else {
-								e.target.style.borderColor = "red";
-								setTimeout(() => { e.target.style.borderColor = ""; }, 2000);
-							}
-						} catch (error) {
-							e.target.style.borderColor = "red";
-							setTimeout(() => { e.target.style.borderColor = ""; }, 2000);
-						}
-					}}
-					className={`w-full border rounded px-3 py-2 ${errors.date ? 'border-red-500' : ''}`}
-					required
-				/>
-				{errors.date && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-				<p className="text-xs text-gray-500 mt-1">
-					Accepted: "28/09/2025 14:30", "28/09/2025", "2025-09-28 14:30", "2025-09-28T14:30"
-				</p>
-			</div>
-
-			{/* Account, Amount & Currency */}
-			<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-				<div>
-					<label className="block text-sm font-medium mb-1">Account<span className="text-red-600">*</span></label>
-				<SearchSelect
-					options={[{ id: "", name: "All Accounts" }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
-					value={transaction.accountId || ""}
-					onChange={(val) => { setTransaction((t) => ({ ...t, accountId: val })); setErrors((e) => ({ ...e, accountId: undefined })); }}
-					placeholder="Account"
-					error={Boolean(errors.accountId)}
-					disabled={!!(transaction.parentId || transaction.parent)}
-				/>
-				{errors.accountId && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-				{(transaction.parentId || transaction.parent) && (
-					<div className="text-xs text-gray-600 mt-1">⚠️ Child transaction accounts cannot be modified.</div>
-				)}
-				</div>
-				<div>
-					<label className="block text-sm font-medium mb-1">Amount<span className="text-red-600">*</span></label>
-					<input
-						type="number"
-						placeholder="Amount"
-						value={transaction.amount}
-						onChange={(e) => { setTransaction((t) => ({ ...t, amount: e.target.value })); setErrors((er) => ({ ...er, amount: undefined })); }}
-						className={`w-full border rounded px-3 py-2 ${errors.amount ? 'border-red-500' : ''} ${transaction.parentId || transaction.parent ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-						disabled={!!(transaction.parentId || transaction.parent)}
-						title={transaction.parentId || transaction.parent ? "Cannot change amount of a child transaction" : ""}
-						required
-					/>
-					{errors.amount && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-					{(transaction.parentId || transaction.parent) && (
-						<div className="text-xs text-gray-600 mt-1">⚠️ Child transaction amounts cannot be modified. Edit the parent split instead.</div>
-					)}
-				</div>
-					<div>
-						<label className="block text-sm font-medium mb-1">Currency<span className="text-red-600">*</span></label>
-						<select
-							className={`w-full border rounded px-3 py-2 ${errors.currency ? 'border-red-500' : ''}`}
-							value={transaction.currency || "INR"}
-							onChange={(e) => { setTransaction((t) => ({ ...t, currency: e.target.value })); setErrors((er) => ({ ...er, currency: undefined })); }}
-						>
-							<option value="INR">INR</option>
-							<option value="USD">USD</option>
-							<option value="EUR">EUR</option>
-							<option value="GBP">GBP</option>
-							<option value="JPY">JPY</option>
-							<option value="AUD">AUD</option>
-							<option value="CAD">CAD</option>
-							<option value="CNY">CNY</option>
-							<option value="SGD">SGD</option>
-							<option value="AED">AED</option>
-						</select>
-						{errors.currency && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-					</div>
-				</div>
-
-				{/* Category & Transaction Type */}
-				<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-					<div>
-					<label className="block text-sm font-medium mb-1">Category<span className="text-red-600">*</span></label>
-					<SearchSelect
-						options={flattened.map(c => ({ id: c.id, name: c.name }))}
-						value={transaction.categoryId || ""}
-						onChange={(val) => { setTransaction((t) => ({ ...t, categoryId: val })); setErrors((e) => ({ ...e, categoryId: undefined })); }}
-						placeholder="Category"
-						error={Boolean(errors.categoryId)}
-					/>
-					{errors.categoryId && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-					</div>
-				<div>
-					<label className="block text-sm font-medium mb-1">Type<span className="text-red-600">*</span></label>
-					<select
-						className={`w-full border rounded px-3 py-2 ${errors.type ? 'border-red-500' : ''} ${transaction.parentId || transaction.parent ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-						value={transaction.type || "DEBIT"}
-						onChange={(e) => { setTransaction((t) => ({ ...t, type: e.target.value })); setErrors((er) => ({ ...er, type: undefined })); }}
-						disabled={!!(transaction.parentId || transaction.parent)}
-						title={transaction.parentId || transaction.parent ? "Cannot change type of a child transaction" : ""}
-					>
-						<option value="DEBIT">Debit</option>
-						<option value="CREDIT">Credit</option>
-					</select>
-					{errors.type && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-					{(transaction.parentId || transaction.parent) && (
-						<div className="text-xs text-gray-600 mt-1">⚠️ Child transaction types cannot be modified.</div>
-					)}
-				</div>
-				</div>
-
-				{/* Description */}
-				<div>
-				<label className="block text-sm font-medium mb-1">Description<span className="text-red-600">*</span></label>
-					<input
-						type="text"
-						placeholder="Description"
-						value={transaction.description || ""}
-					onChange={(e) => { setTransaction((t) => ({ ...t, description: e.target.value })); setErrors((er) => ({ ...er, description: undefined })); }}
-					className={`w-full border rounded px-3 py-2 ${errors.description ? 'border-red-500' : ''}`}
-						required
-					/>
-				{errors.description && (<div className="text-xs text-red-600 mt-1">Required</div>)}
-				</div>
-
-				{/* Explanation */}
-				<div>
-					<label className="block text-sm font-medium mb-1">Explanation</label>
-					<textarea
-						placeholder="Explanation (optional)"
-						value={transaction.explanation || ""}
-						onChange={(e) =>
-							setTransaction((t) => ({ ...t, explanation: e.target.value }))
-						}
-						className="w-full border rounded px-3 py-2"
-					/>
-				</div>
-
-				{/* Actions */}
-				<div className="flex justify-end space-x-2">
-					<button
-						type="button"
-						onClick={onCancel}
-						className="px-4 py-1 border rounded"
-					>
-						Cancel
-					</button>
-					<button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
-						{mode === "add" ? "Add" : "Save"}
-					</button>
-				</div>
-			</form>
-		</div>
-	);
-}
-
-function TransferForm({ transaction, setTransaction, onCancel, onSubmit, accounts }) {
-	useEffect(() => {
-		const handler = (e) => e.key === "Escape" && onCancel();
-		document.addEventListener("keydown", handler);
-		return () => document.removeEventListener("keydown", handler);
-	}, [onCancel]);
-
-	return (
-		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-			<form
-				onSubmit={(e) => {
-					e.preventDefault();
-					onSubmit();
-				}}
-				className="bg-white p-6 rounded shadow-lg w-full max-w-md space-y-4"
-			>
-				<h3 className="text-lg font-semibold">Transfer Funds</h3>
-
-				<div>
-					<span className="text-sm">From Account</span>
-					<div className="mt-1 block w-full border rounded px-2 py-1 bg-gray-100">
-						{accounts.find((a) => a.id === transaction.accountId)?.name || "Unknown"}
-					</div>
-				</div>
-				<div>
-					<span className="text-sm">Amount</span>
-					<div className="mt-1 block w-full border rounded px-2 py-1 bg-gray-100">
-						₹{transaction.amount}
-					</div>
-				</div>
-				<label className="block">
-					<span className="text-sm">To Account</span>
-					<SearchSelect
-						options={[{ id: "", name: "— Select —" }, ...accounts.filter(a => a.id !== transaction.accountId).map(a => ({ id: a.id, name: a.name }))]}
-						value={transaction.destinationAccountId || ""}
-						onChange={(val) => setTransaction((tx) => ({ ...tx, destinationAccountId: val }))}
-						placeholder="To Account"
-					/>
-				</label>
-
-				<label className="block">
-					<span className="text-sm">Explanation</span>
-					<input
-						type="text"
-						className="mt-1 block w-full border rounded px-2 py-1"
-						value={transaction.explanation || ""}
-						onChange={(e) =>
-							setTransaction((tx) => ({ ...tx, explanation: e.target.value }))
-						}
-					/>
-				</label>
-
-				<div className="flex justify-end space-x-2">
-					<button type="button" onClick={onCancel} className="px-4 py-1">
-						Cancel
-					</button>
-					<button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
-						Transfer
-					</button>
-				</div>
-			</form>
-		</div>
-	);
-}
-
-function TransactionSplit({ transaction, setTransaction, onCancel, onSubmit, categories }) {
-	const [children, setChildren] = useState(() =>
-		(transaction?.children || []).map((c) => ({
-			...c,
-			categoryId: c.category?.id || "",
-		}))
-	);
-
-	// Update children if transaction changes
-	useEffect(() => {
-		if (transaction?.children) {
-			setChildren(
-				transaction.children.map((c) => ({
-					...c,
-					categoryId: c.category?.id || "",
-				}))
-			);
-		}
-	}, [transaction]);
-
-	// Escape key handler
-	useEffect(() => {
-		const handler = (e) => {
-			if (e.key === "Escape") {
-				onCancel();
-			}
-		};
-		document.addEventListener("keydown", handler);
-		return () => document.removeEventListener("keydown", handler);
-	}, [onCancel]);
-
-	const addChild = () => {
-		setChildren([
-			...children,
-			{
-				description: "",
-				amount: "",
-				categoryId: "",
-			},
-		]);
-	};
-
-	const treeCategories = buildTree(categories);
-	const rootHome = treeCategories.filter((cat) => cat?.name === "Home");
-	const limitedTree = rootHome.length > 0 ? rootHome : treeCategories;
-	const flattened = flattenCategories(limitedTree);
-
-	const updateChild = (index, key, value) => {
-		const updated = [...children];
-		updated[index][key] = value;
-		setChildren(updated);
-	};
-
-	const submit = () => {
-		const total = children.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
-		const parentAmt = parseFloat(transaction.amount);
-		if (isNaN(parentAmt) || Math.abs(total - parentAmt) > 1) {
-			alert(
-				`Child transaction amounts must sum up to ₹${isNaN(parentAmt) ? 0 : parentAmt
-				}. Entered total: ₹${total}`
-			);
-			return;
-		}
-		const enrichedChildren = children.map((c) => ({
-			...c,
-			date: transaction.date,
-			type: transaction.type,
-			accountId: transaction.accountId,
-		}));
-		onSubmit({
-			...transaction,
-			children: enrichedChildren,
-		});
-	};
-
-	return (
-		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-			<form
-				onSubmit={(e) => {
-					e.preventDefault();
-					submit();
-				}}
-				className="bg-white p-6 rounded shadow-lg w-full max-w-2xl space-y-4"
-			>
-				<h3 className="text-lg font-semibold">Split Transaction</h3>
-
-				<div className="grid grid-cols-3 gap-2 font-bold text-sm">
-					<span>Description</span>
-					<span>Amount</span>
-					<span>Category</span>
-				</div>
-
-				{children.map((child, idx) => (
-					<div key={idx} className="grid grid-cols-3 gap-2">
-						<input
-							type="text"
-							value={child.description}
-							onChange={(e) => updateChild(idx, "description", e.target.value)}
-							className="border rounded px-2 py-1"
-						/>
-						<input
-							type="number"
-							value={child.amount}
-							onChange={(e) => updateChild(idx, "amount", e.target.value)}
-							className="border rounded px-2 py-1"
-						/>
-					<SearchSelect
-						options={flattened.map(c => ({ id: c.id, name: c.name }))}
-						value={child.categoryId || ""}
-						onChange={(val) => updateChild(idx, "categoryId", val)}
-						placeholder="Category"
-					/>
-					</div>
-				))}
-
-				<button
-					type="button"
-					onClick={addChild}
-					className="bg-gray-200 px-4 py-1 rounded text-sm"
-				>
-					+ Add Child
-				</button>
-
-				<div className="flex justify-end space-x-2">
-					<button type="button" onClick={onCancel} className="px-4 py-1">
-						Cancel
-					</button>
-					<button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
-						Split
-					</button>
-				</div>
-			</form>
-		</div>
-	);
-}
 
 // ---- main ----
 export default function Transactions() {
+	const navigate = useNavigate();
 	const { showModal } = useErrorModal();
 	const [transactions, setTransactions] = useState([]);
 	const [expandedParents, setExpandedParents] = useState({});
@@ -820,8 +107,8 @@ const [filterMode, setFilterMode] = useState(searchParams.get("date") ? "date" :
 useEffect(() => {
     (async () => {
         try {
-            const res = await api.get('/data-extraction/services');
-            const list = res.data?.services || [];
+            const res = await api.get('/data-extraction/configurations');
+            const list = res.data?.configurations || [];
             setAvailableServices(list);
             setSelectedServices(list);
         } catch (err) {
@@ -968,16 +255,19 @@ const triggerDataExtraction = async (servicesToRun) => {
 
 	const performDataExtraction = async (servicesToRun, resolve) => {
 		try {
-        const qs = servicesToRun && servicesToRun.length ? `?services=${encodeURIComponent(servicesToRun.join(','))}` : '';
-        
-        // The backend request blocks until extraction completes (typically 15-20 seconds)
-        const response = await api.post(`/data-extraction/trigger${qs}`);
+			// Prepare request body with configurations array
+			const requestBody = servicesToRun && servicesToRun.length > 0
+				? { configurations: servicesToRun }
+				: {};
+			
+			// The backend request blocks until extraction completes (typically 15-20 seconds)
+			const response = await api.post('/data-extraction/trigger', requestBody);
 			
 			if (response.data.status === 'started') {
 				// Backend has completed extraction, now refresh transactions
 				try {
 					await fetchData();
-					showModal(`Data extraction completed!\n\nTransactions have been refreshed. ${response.data.services.length} service(s) processed.`);
+					showModal(`Data extraction completed!\n\nTransactions have been refreshed. ${response.data.configurations.length} service(s) processed.`);
 				} catch (err) {
 					console.error('Error refreshing transactions:', err);
 					showModal('Data extraction completed but failed to refresh transactions. Please refresh the page manually.');
@@ -1038,181 +328,47 @@ const triggerDataExtraction = async (servicesToRun) => {
 		}, 0);
 	}, [transactions, expandedParents]);
 
-	// Helper function to create professional transaction comparison modal
+	// Helper function to create professional transaction comparison modal (with GPT data)
 	const createComparisonModal = (tx) => {
-		const hasGptData = tx.gptDescription || tx.gptAmount || tx.gptExplanation || tx.gptType || tx.gptAccount;
+		return <TransactionComparisonModal tx={tx} />;
+	};
+
+	// Helper function to create simple transaction details modal (without GPT data)
+	const createDetailsModal = (tx) => {
+		return <TransactionDetailsModal tx={tx} />;
+	};
+
+	const handleTransferLinkClick = async (linkedTransferId, e) => {
+		e.stopPropagation(); // Prevent event bubbling
 		
-		return (
-			<div className="max-h-[70vh] overflow-y-auto">
-				{/* Header */}
-				<div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-lg border border-blue-200 mb-3 sticky top-0 z-10">
-					<div className="flex justify-between items-center text-sm">
-						<div>
-							<span className="text-xs text-gray-600 uppercase tracking-wide">Transaction Date</span>
-							<div className="font-semibold text-gray-800">{new Date(tx.date).toLocaleString('en-IN', { 
-								year: 'numeric', 
-								month: 'short', 
-								day: 'numeric', 
-								hour: '2-digit', 
-								minute: '2-digit' 
-							})}</div>
-						</div>
-						<div className="text-right">
-							<span className="text-xs text-gray-600">See account comparison below ↓</span>
-						</div>
-					</div>
-				</div>
-
-				{/* Comparison Table */}
-				<div className="border border-gray-300 rounded-lg overflow-hidden">
-					<table className="w-full text-sm">
-						<thead className="bg-gradient-to-r from-gray-100 to-blue-50 border-b-2 border-gray-300">
-							<tr>
-								<th className="px-3 py-2 text-left font-bold text-gray-700 w-32">Attribute</th>
-								<th className="px-3 py-2 text-left font-bold text-gray-700 border-l border-gray-300">📊 Extracted</th>
-								<th className="px-3 py-2 text-left font-bold text-blue-700 border-l-2 border-blue-300">🤖 AI Analyzed</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-gray-200">
-							{/* Amount */}
-							<tr className="hover:bg-gray-50">
-								<td className="px-3 py-2 font-semibold text-gray-700 align-top">💰 Amount</td>
-								<td className="px-3 py-2 border-l border-gray-200 align-top">
-									<span className={`text-lg font-bold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-										₹{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-									</span>
-								</td>
-								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
-									{tx.gptAmount ? (
-										<span className={`text-lg font-bold ${tx.gptType === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-											{tx.currency || "INR"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-										</span>
-									) : (
-										<span className="text-gray-400 italic">Not analyzed</span>
-									)}
-								</td>
-							</tr>
-
-							{/* Type */}
-							<tr className="hover:bg-gray-50">
-								<td className="px-3 py-2 font-semibold text-gray-700 align-top">🔄 Type</td>
-								<td className="px-3 py-2 border-l border-gray-200 align-top">
-									<span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
-										tx.type === "DEBIT" ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
-									}`}>
-										{tx.type}
-									</span>
-								</td>
-								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
-									{tx.gptType ? (
-										<span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
-											tx.gptType === "DEBIT" ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
-										}`}>
-											{tx.gptType}
-										</span>
-									) : (
-										<span className="text-gray-400 italic">Not analyzed</span>
-									)}
-								</td>
-							</tr>
-
-							{/* Account */}
-							<tr className="hover:bg-gray-50">
-								<td className="px-3 py-2 font-semibold text-gray-700 align-top">🏦 Account</td>
-								<td className="px-3 py-2 border-l border-gray-200 align-top">
-									<div className="space-y-0.5">
-										<div className="font-medium text-gray-800">{tx.account?.name}</div>
-										<div className="text-xs text-gray-600">{tx.account?.institution?.description}</div>
-										<div className="text-xs text-gray-500">{tx.account?.accountType?.name}</div>
-									</div>
-								</td>
-								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
-									{tx.gptAccount ? (
-										<div className="space-y-0.5">
-											<div className="font-medium text-gray-800">{tx.gptAccount.name}</div>
-											<div className="text-xs text-gray-600">{tx.gptAccount.institution?.description}</div>
-											<div className="text-xs text-gray-500">{tx.gptAccount.accountType?.name}</div>
-										</div>
-									) : (
-										<span className="text-gray-400 italic">Not analyzed</span>
-									)}
-								</td>
-							</tr>
-
-							{/* Description */}
-							<tr className="hover:bg-gray-50">
-								<td className="px-3 py-2 font-semibold text-gray-700 align-top">📝 Description</td>
-								<td className="px-3 py-2 border-l border-gray-200 align-top">
-									<div className="max-h-24 overflow-y-auto bg-gray-50 p-2 rounded border border-gray-300">
-										<p className="text-sm whitespace-pre-wrap break-words">
-											{tx.description || <span className="text-gray-400 italic">Not available</span>}
-										</p>
-									</div>
-								</td>
-								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
-									<div className="max-h-24 overflow-y-auto bg-blue-50 p-2 rounded border border-blue-300">
-										<p className="text-sm whitespace-pre-wrap break-words">
-											{tx.gptDescription || <span className="text-gray-400 italic">Not analyzed</span>}
-										</p>
-									</div>
-								</td>
-							</tr>
-
-							{/* Explanation */}
-							<tr className="hover:bg-gray-50">
-								<td className="px-3 py-2 font-semibold text-gray-700 align-top">💭 Explanation</td>
-								<td className="px-3 py-2 border-l border-gray-200 align-top">
-									<div className="max-h-24 overflow-y-auto bg-gray-50 p-2 rounded border border-gray-300">
-										<p className="text-sm whitespace-pre-wrap break-words">
-											{tx.explanation || <span className="text-gray-400 italic">Not available</span>}
-										</p>
-									</div>
-								</td>
-								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
-									<div className="max-h-24 overflow-y-auto bg-blue-50 p-2 rounded border border-blue-300">
-										<p className="text-sm whitespace-pre-wrap break-words">
-											{tx.gptExplanation || <span className="text-gray-400 italic">Not analyzed</span>}
-										</p>
-									</div>
-								</td>
-							</tr>
-
-							{/* Currency */}
-							<tr className="hover:bg-gray-50">
-								<td className="px-3 py-2 font-semibold text-gray-700 align-top">💱 Currency</td>
-								<td className="px-3 py-2 border-l border-gray-200 align-top">
-									{tx.currency ? (
-										<span className="inline-flex items-center px-3 py-1 bg-gray-100 text-gray-800 rounded-md font-semibold">
-											{tx.currency}
-										</span>
-									) : (
-										<span className="text-gray-400 italic">INR (default)</span>
-									)}
-								</td>
-								<td className="px-3 py-2 border-l-2 border-blue-200 align-top">
-									{tx.gptCurrency ? (
-										<span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-md font-semibold">
-											{tx.gptCurrency}
-										</span>
-									) : (
-										<span className="text-gray-400 italic">Not analyzed</span>
-									)}
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-
-				{/* Info Footer */}
-				<div className="mt-3 text-center">
-					<p className="text-xs text-gray-600">
-						{hasGptData 
-							? "✨ AI analysis available for this transaction" 
-							: "ℹ️ No AI analysis performed"}
-					</p>
-				</div>
-			</div>
-		);
+		// First, try to find the linked transaction in the current page's transactions
+		let linkedTx = transactions.find(tx => tx.id === linkedTransferId);
+		
+		// If not found on current page, fetch it from API
+		if (!linkedTx) {
+			try {
+				setLoading(true);
+				NProgress.start();
+				const response = await api.get(`/transactions/${linkedTransferId}`);
+				linkedTx = response.data;
+			} catch (err) {
+				console.error("Failed to fetch linked transaction:", err);
+				showModal(`Failed to fetch linked transaction: ${err.response?.data?.message || err.message}`);
+				return;
+			} finally {
+				NProgress.done();
+				setLoading(false);
+			}
+		}
+		
+		// Open the appropriate modal with the linked transaction
+		if (linkedTx) {
+			const hasGpt = typeof linkedTx.gptDescription === 'string' && linkedTx.gptDescription.trim().length > 0;
+			setModalContent({
+				title: "Linked Transfer Transaction",
+				content: hasGpt ? createComparisonModal(linkedTx) : createDetailsModal(linkedTx),
+			});
+		}
 	};
 
 	const renderRow = (tx, isChild = false, index = 0) => {
@@ -1250,11 +406,22 @@ const triggerDataExtraction = async (servicesToRun) => {
 								{expandedParents[tx.id] ? "▼" : "▶"}
 							</button>
 						)}
-						<span className="truncate">{tx.shortDescription}</span>
+						<span 
+							className="truncate cursor-pointer hover:text-blue-600" 
+							title={hasGpt ? "✨ Click to view AI analysis comparison" : "Click to view transaction details"}
+							onClick={() =>
+								setModalContent({
+									title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
+									content: hasGpt ? createComparisonModal(tx) : createDetailsModal(tx),
+								})
+							}
+						>
+							{tx.shortDescription}
+						</span>
 						{hasGpt && (
 							<button
-								title="AI analysis available"
-								className="text-blue-700 px-1 ml-1"
+								title="✨ AI analysis available - Click description to compare"
+								className="text-blue-700 px-1 ml-1 cursor-pointer"
 								onClick={() =>
 									setModalContent({
 										title: "Transaction Analysis & Comparison",
@@ -1265,14 +432,14 @@ const triggerDataExtraction = async (servicesToRun) => {
 								✨
 							</button>
 						)}
-						{isDescTrimmed && (
+						{isDescTrimmed && !hasGpt && (
 							<button
-								title="View full description"
-								className="text-gray-700 px-1"
+								title="View full description and details"
+								className="text-gray-700 px-1 cursor-pointer"
 								onClick={() =>
 									setModalContent({
-										title: "Transaction Analysis & Comparison",
-										content: createComparisonModal(tx),
+										title: "Transaction Details",
+										content: createDetailsModal(tx),
 									})
 								}
 							>
@@ -1280,20 +447,17 @@ const triggerDataExtraction = async (servicesToRun) => {
 							</button>
 						)}
 					</div>
-					<div className="text-xs text-gray-500 break-words">
+					<div 
+						className="text-xs text-gray-500 break-words cursor-pointer hover:text-blue-600" 
+						title={hasGpt ? "✨ Click to view AI analysis comparison" : "Click to view transaction details"}
+						onClick={() =>
+							setModalContent({
+								title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
+								content: hasGpt ? createComparisonModal(tx) : createDetailsModal(tx),
+							})
+						}
+					>
 						{tx.shortExplanation}
-						{/* Show original description if GPT description is being used as primary */}
-						{tx.gptDescription && tx.gptDescription !== tx.description && tx.description && (
-							<div className="text-gray-400 mt-1">
-								Original: {tx.description.length > 40 ? tx.description.substring(0, 40) + "..." : tx.description}
-							</div>
-						)}
-						{/* Show original explanation if GPT explanation is being used as primary */}
-						{tx.gptExplanation && tx.gptExplanation !== tx.explanation && tx.explanation && (
-							<div className="text-gray-400 mt-1 italic">
-								Original: {tx.explanation.length > 50 ? tx.explanation.substring(0, 50) + "..." : tx.explanation}
-							</div>
-						)}
 					</div>
 				</div>
 
@@ -1311,14 +475,37 @@ const triggerDataExtraction = async (servicesToRun) => {
 					<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">
 						{tx.type}
 					</span>
-					{tx.linkedTransferId && (
-						<span 
-							className="ml-2 text-xs bg-purple-100 text-purple-700 rounded px-2 py-0.5 inline-flex items-center gap-1"
-							title={`Transfer linked to transaction: ${tx.linkedTransferId}`}
-						>
-							🔗 Transfer
-						</span>
-					)}
+					{(() => {
+						// Check if this transaction has a linkedTransferId (points to another)
+						const linkedId = tx.linkedTransferId;
+						
+						// Also check if another transaction on this page references this one (reverse link)
+						// This handles the case where Transaction B has linkedTransferId pointing to Transaction A
+						const reverseLinkedTx = transactions.find(otherTx => 
+							otherTx.id !== tx.id && otherTx.linkedTransferId === tx.id
+						);
+						
+						// Show link if either direction exists
+						const hasLink = linkedId || reverseLinkedTx;
+						const linkTargetId = linkedId || (reverseLinkedTx ? reverseLinkedTx.id : null);
+						
+						if (hasLink && linkTargetId) {
+							return (
+								<button
+									onClick={(e) => {
+										e.stopPropagation();
+										handleTransferLinkClick(linkTargetId, e);
+									}}
+									className="ml-2 text-xs bg-purple-100 text-purple-700 rounded px-2 py-0.5 inline-flex items-center gap-1 hover:bg-purple-200 cursor-pointer transition-colors"
+									title={`Click to view linked transfer transaction: ${linkTargetId}`}
+									type="button"
+								>
+									🔗 Transfer
+								</button>
+							);
+						}
+						return null;
+					})()}
 					{tx.gptAmount && tx.gptAmount !== tx.amount && (
 						<div className="text-xs text-blue-600 mt-1">
 							🤖 GPT: {tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
@@ -2145,46 +1332,81 @@ function TransactionPageButtons({
 			)}
 
 			{modalContent && (
-				<div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-					<div className="bg-white rounded-lg shadow-lg max-w-md w-full p-4">
-						<h2 className="text-lg font-semibold mb-2">{modalContent.title}</h2>
-						<div className="text-sm text-gray-700 mb-4">{modalContent.content}</div>
-						<button
-							onClick={() => setModalContent(null)}
-							className="text-blue-600 hover:underline text-sm"
-						>
-							Close
-						</button>
-					</div>
-				</div>
-			)}
-
-			{deleteConfirmation && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-					<div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-						<div className="p-6">
-							<h2 className="text-xl font-semibold text-gray-900 mb-2">Delete Transaction</h2>
-							<p className="text-gray-600 mb-6">
-								Are you sure you want to delete this transaction? This action cannot be undone.
-							</p>
-							<div className="flex gap-3 justify-end">
-								<button
-									onClick={() => setDeleteConfirmation(null)}
-									className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors"
-								>
-									Cancel
-								</button>
-								<button
-									onClick={confirmDelete}
-									className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md font-medium transition-colors"
-								>
-									Delete
-								</button>
-							</div>
+				<div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+					<div className={`bg-white rounded-lg shadow-lg w-full p-4 my-2 sm:my-4 ${
+						modalContent.title === "Transaction Details" 
+							? "max-w-[95vw] sm:max-w-lg md:max-w-2xl" 
+							: "max-w-[95vw] sm:max-w-xl md:max-w-3xl lg:max-w-4xl"
+					}`}>
+						<h2 className="text-base sm:text-lg font-semibold mb-3">{modalContent.title}</h2>
+						<div className="text-xs sm:text-sm text-gray-700 mb-3 max-h-[70vh] sm:max-h-[75vh] overflow-y-auto overflow-x-hidden">
+							{modalContent.content}
+						</div>
+						<div className="flex justify-end">
+							<button
+								onClick={() => setModalContent(null)}
+								className="text-blue-600 hover:underline text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+							>
+								Close
+							</button>
 						</div>
 					</div>
 				</div>
 			)}
+
+			{deleteConfirmation && (() => {
+				// Find the transaction being deleted
+				const txToDelete = transactions.find(tx => tx.id === deleteConfirmation);
+				
+				// Check if this transaction has a linked transfer (points to another)
+				const hasLinkedTransfer = txToDelete?.linkedTransferId;
+				
+				// Check if another transaction points to this one (reverse link)
+				const isReferencedByTransfer = transactions.some(tx => 
+					tx.linkedTransferId === deleteConfirmation && tx.id !== deleteConfirmation
+				);
+				
+				// Determine if this is part of a transfer (either direction)
+				const isPartOfTransfer = hasLinkedTransfer || isReferencedByTransfer;
+				
+				return (
+					<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+						<div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+							<div className="p-6">
+								<h2 className="text-xl font-semibold text-gray-900 mb-2">Delete Transaction</h2>
+								{isPartOfTransfer ? (
+									<div className="mb-6">
+										<p className="text-gray-600 mb-3">
+											This transaction is part of a transfer. Deleting it will delete <strong className="text-red-600">both transactions</strong> (debit and credit sides of the transfer).
+										</p>
+										<p className="text-sm text-gray-500 italic">
+											This action cannot be undone.
+										</p>
+									</div>
+								) : (
+									<p className="text-gray-600 mb-6">
+										Are you sure you want to delete this transaction? This action cannot be undone.
+									</p>
+								)}
+								<div className="flex gap-3 justify-end">
+									<button
+										onClick={() => setDeleteConfirmation(null)}
+										className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors"
+									>
+										Cancel
+									</button>
+									<button
+										onClick={confirmDelete}
+										className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md font-medium transition-colors"
+									>
+										Delete
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				);
+			})()}
 
 			{editTx && accounts.length > 0 && categories.length > 0 && (
 				<TransactionForm

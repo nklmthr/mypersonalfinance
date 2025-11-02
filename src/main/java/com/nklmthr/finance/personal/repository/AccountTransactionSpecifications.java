@@ -32,6 +32,25 @@ public class AccountTransactionSpecifications {
 	public static Specification<AccountTransaction> isRootTransaction() {
 		return (root, query, cb) -> cb.isNull(root.get("parent"));
 	}
+	
+	public static Specification<AccountTransaction> isLeafTransaction() {
+		return (root, query, cb) -> {
+			// A leaf transaction is either:
+			// 1. A root transaction with no children (parent IS NULL)
+			// 2. A child transaction (parent IS NOT NULL)
+			// In other words: exclude transactions that have children
+			// We can detect "has children" by checking if this transaction appears as a parent
+			
+			// Subquery to check if transaction has children
+			var subquery = query.subquery(Long.class);
+			var subRoot = subquery.from(AccountTransaction.class);
+			subquery.select(cb.count(subRoot));
+			subquery.where(cb.equal(subRoot.get("parent"), root.get("id")));
+			
+			// Return transactions that have 0 children
+			return cb.equal(subquery, 0L);
+		};
+	}
 
 	public static Specification<AccountTransaction> hasCategory(Set<String> categoryIds) {
 		return (root, query, cb) -> root.get("category").get("id").in(categoryIds);

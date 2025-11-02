@@ -9,9 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.RequestParam;
 
 import com.nklmthr.finance.personal.service.DataExtractionService;
 
@@ -25,31 +25,48 @@ public class DataExtractionController {
     private DataExtractionService dataExtractionService;
 
     /**
-     * Manually trigger all data extraction services
+     * Manually trigger data extraction for specific configurations or all
      * Returns immediately while processing runs in background
+     * @param request Optional body with "configurations" array. If empty/null, triggers all.
      */
     @PostMapping("/trigger")
     public ResponseEntity<Map<String, Object>> triggerDataExtraction(
-        @RequestParam(name = "services", required = false) List<String> services
-    ) {
+            @RequestBody(required = false) Map<String, Object> request) {
         logger.info("Manual data extraction trigger requested");
         
         try {
-            // Start async processing - all or subset
-            List<String> triggeredServices;
-            if (services == null || services.isEmpty()) {
-                dataExtractionService.triggerAllDataExtractionServices();
-                triggeredServices = dataExtractionService.getAvailableServices();
-            } else {
-                dataExtractionService.triggerSpecificServices(services);
-                triggeredServices = services;
+            List<String> configsToTrigger = null;
+            
+            // Check if specific configurations were requested
+            if (request != null && request.containsKey("configurations")) {
+                Object configs = request.get("configurations");
+                if (configs instanceof List<?>) {
+                    configsToTrigger = ((List<?>) configs).stream()
+                            .filter(obj -> obj instanceof String)
+                            .map(obj -> (String) obj)
+                            .toList();
+                }
             }
             
-            return ResponseEntity.ok(Map.of(
-                "status", "started",
-                "message", "Data extraction started in background. Check logs for progress.",
-                "services", triggeredServices
-            ));
+            // Trigger selected or all configurations
+            if (configsToTrigger != null && !configsToTrigger.isEmpty()) {
+                logger.info("Triggering specific configurations: {}", configsToTrigger);
+                dataExtractionService.triggerSpecificDataExtractionServices(configsToTrigger);
+                return ResponseEntity.ok(Map.of(
+                    "status", "started",
+                    "message", "Data extraction started in background for selected banks.",
+                    "configurations", configsToTrigger
+                ));
+            } else {
+                logger.info("Triggering all configurations");
+                dataExtractionService.triggerAllDataExtractionServices();
+                List<String> allServices = dataExtractionService.getAvailableServices();
+                return ResponseEntity.ok(Map.of(
+                    "status", "started",
+                    "message", "Data extraction started in background for all banks.",
+                    "configurations", allServices
+                ));
+            }
         } catch (Exception e) {
             logger.error("Failed to trigger data extraction", e);
             return ResponseEntity.internalServerError()
@@ -61,20 +78,20 @@ public class DataExtractionController {
     }
 
     /**
-     * Get list of available data extraction services
+     * Get list of available bank configurations
      */
-    @GetMapping("/services")
-    public ResponseEntity<Map<String, Object>> getAvailableServices() {
+    @GetMapping("/configurations")
+    public ResponseEntity<Map<String, Object>> getAvailableConfigurations() {
         try {
-            List<String> services = dataExtractionService.getAvailableServices();
+            List<String> configurations = dataExtractionService.getAvailableServices();
             return ResponseEntity.ok(Map.of(
-                "services", services,
-                "count", services.size()
+                "configurations", configurations,
+                "count", configurations.size()
             ));
         } catch (Exception e) {
-            logger.error("Failed to get available services", e);
+            logger.error("Failed to get available configurations", e);
             return ResponseEntity.internalServerError()
-                .body(Map.of("error", "Failed to get services: " + e.getMessage()));
+                .body(Map.of("error", "Failed to get configurations: " + e.getMessage()));
         }
     }
 }
