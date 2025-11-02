@@ -378,7 +378,6 @@ const triggerDataExtraction = async (servicesToRun) => {
 				? "bg-blue-50"
 				: "bg-blue-100";
 		const hasGpt = typeof tx.gptDescription === 'string' && tx.gptDescription.trim().length > 0;
-		const isDescTrimmed = Boolean((tx.gptDescription || tx.description) && (tx.gptDescription || tx.description) !== tx.shortDescription);
 		return (
 			<div
 				key={tx.id}
@@ -408,7 +407,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 						)}
 						<span 
 							className="truncate cursor-pointer hover:text-blue-600" 
-							title={hasGpt ? "✨ Click to view AI analysis comparison" : "Click to view transaction details"}
+							title={hasGpt ? "✨ Click to view AI analysis comparison" : "🔍 Click to view transaction details"}
 							onClick={() =>
 								setModalContent({
 									title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
@@ -418,30 +417,31 @@ const triggerDataExtraction = async (servicesToRun) => {
 						>
 							{tx.shortDescription}
 						</span>
-						{hasGpt && (
+						{hasGpt ? (
 							<button
-								title="✨ AI analysis available - Click description to compare"
-								className="text-blue-700 px-1 ml-1 cursor-pointer"
-								onClick={() =>
+								title="✨ AI analysis available - Click to view comparison"
+								className="text-blue-700 px-1 ml-1 cursor-pointer hover:text-blue-900"
+								onClick={(e) => {
+									e.stopPropagation();
 									setModalContent({
 										title: "Transaction Analysis & Comparison",
 										content: createComparisonModal(tx),
-									})
-								}
+									});
+								}}
 							>
 								✨
 							</button>
-						)}
-						{isDescTrimmed && !hasGpt && (
+						) : (
 							<button
-								title="View full description and details"
-								className="text-gray-700 px-1 cursor-pointer"
-								onClick={() =>
+								title="🔍 Click to view full transaction details"
+								className="text-gray-700 px-1 ml-1 cursor-pointer hover:text-gray-900"
+								onClick={(e) => {
+									e.stopPropagation();
 									setModalContent({
 										title: "Transaction Details",
 										content: createDetailsModal(tx),
-									})
-								}
+									});
+								}}
 							>
 								🔍
 							</button>
@@ -449,7 +449,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 					</div>
 					<div 
 						className="text-xs text-gray-500 break-words cursor-pointer hover:text-blue-600" 
-						title={hasGpt ? "✨ Click to view AI analysis comparison" : "Click to view transaction details"}
+						title={hasGpt ? "✨ Click to view AI analysis comparison" : "🔍 Click to view transaction details"}
 						onClick={() =>
 							setModalContent({
 								title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
