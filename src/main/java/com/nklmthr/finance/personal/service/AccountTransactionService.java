@@ -143,6 +143,11 @@ public class AccountTransactionService {
 		credit.setCategory(categoryService.getTransferCategory());
 		credit.setAppUser(appUser);
 		credit.setGptAccount(toAccount);
+		// Clear GPT fields for transfer credit transaction to avoid showing incorrect enriched data
+		credit.setGptDescription(null);
+		credit.setGptExplanation(null);
+		credit.setGptAmount(null);
+		credit.setGptType(null);
 		
 		// Save credit first to get its ID
 		credit = accountTransactionRepository.save(credit);
