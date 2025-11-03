@@ -42,11 +42,32 @@ public class AccountTransactionController {
             @RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String month,
             @RequestParam(required = false) String date,
 			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
-			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search) {
+			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String search,
+			@RequestParam(required = false) String sortBy,
+			@RequestParam(required = false) String sortDir) {
 		logger.debug(
-                "Fetching transactions - page: {}, size: {}, month: {}, date: {}, accountId: {}, type: {}, categoryId: {}, search: {}",
-                page, size, month, date, accountId, type, categoryId, search);
-		return transactionService.getFilteredTransactions(PageRequest.of(page, size, Sort.by("date").descending()),
+                "Fetching transactions - page: {}, size: {}, month: {}, date: {}, accountId: {}, type: {}, categoryId: {}, search: {}, sortBy: {}, sortDir: {}",
+                page, size, month, date, accountId, type, categoryId, search, sortBy, sortDir);
+		
+		// Validate sortBy parameter - if not provided, use default date descending
+		Sort sort;
+		if (sortBy != null && !sortBy.isEmpty()) {
+			if ("amount".equalsIgnoreCase(sortBy)) {
+				sort = "asc".equalsIgnoreCase(sortDir) 
+					? Sort.by("amount").ascending() 
+					: Sort.by("amount").descending();
+			} else {
+				// Default to date sorting
+				sort = "asc".equalsIgnoreCase(sortDir) 
+					? Sort.by("date").ascending() 
+					: Sort.by("date").descending();
+			}
+		} else {
+			// No sort specified - use default date descending
+			sort = Sort.by("date").descending();
+		}
+		
+		return transactionService.getFilteredTransactions(PageRequest.of(page, size, sort),
                 month, date, accountId, type, search, categoryId);
 	}
 

@@ -34,7 +34,7 @@ export default function TransferForm({ transaction, setTransaction, onCancel, on
 				<label className="block">
 					<span className="text-sm">To Account</span>
 					<SearchSelect
-						options={[{ id: "", name: "— Select —" }, ...accounts.filter(a => a.id !== transaction.accountId).map(a => ({ id: a.id, name: a.name }))]}
+						options={[{ id: "", name: "— Select —" }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
 						value={transaction.destinationAccountId || ""}
 						onChange={(val) => setTransaction((tx) => ({ ...tx, destinationAccountId: val }))}
 						placeholder="To Account"

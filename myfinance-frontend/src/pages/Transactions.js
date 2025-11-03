@@ -52,7 +52,7 @@ export default function Transactions() {
 
 	  // Apply overrides (new values for filters)
 	  Object.entries(overrides).forEach(([key, value]) => {
-	    if (value && value !== "ALL") {
+	    if (value && value !== "ALL" && value !== null && value !== undefined) {
 	      params.set(key, value);
 	    } else {
 	      params.delete(key); // remove empty/default values from URL
@@ -77,6 +77,10 @@ export default function Transactions() {
 const [refreshing, setRefreshing] = useState(false);
 const [availableServices, setAvailableServices] = useState([]);
 const [selectedServices, setSelectedServices] = useState([]);
+
+// Sorting state - null means no sort (default)
+const [sortBy, setSortBy] = useState(searchParams.get("sortBy") || null);
+const [sortDir, setSortDir] = useState(searchParams.get("sortDir") || null);
 
 // Unified date filter: choose Month or Date (default Month unless URL has date)
 const [filterMode, setFilterMode] = useState(searchParams.get("date") ? "date" : "month");
@@ -133,6 +137,12 @@ useEffect(() => {
 				search: search || "",
 			});
 
+			// Only add sort parameters if sorting is active
+			if (sortBy && sortDir) {
+				params.set("sortBy", sortBy);
+				params.set("sortDir", sortDir);
+			}
+
             if (filterMode === 'month' && filterMonth) {
                 params.set('month', filterMonth);
             }
@@ -178,7 +188,7 @@ useEffect(() => {
 	useEffect(() => {
 		setCurrentTotal(0);
 		fetchData();
-    }, [page, pageSize, filterMode, filterMonth, filterDate, filterAccount, filterType, filterCategory, debouncedSearch]);
+    }, [page, pageSize, filterMode, filterMonth, filterDate, filterAccount, filterType, filterCategory, debouncedSearch, sortBy, sortDir]);
 
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
@@ -408,8 +418,8 @@ const triggerDataExtraction = async (servicesToRun) => {
 						<span 
 							className="truncate cursor-pointer hover:text-blue-600" 
 							title={hasGpt ? "✨ Click to view AI analysis comparison" : "🔍 Click to view transaction details"}
-							onClick={() =>
-								setModalContent({
+								onClick={() =>
+									setModalContent({
 									title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
 									content: hasGpt ? createComparisonModal(tx) : createDetailsModal(tx),
 								})
@@ -499,8 +509,8 @@ const triggerDataExtraction = async (servicesToRun) => {
 									className="ml-2 text-xs bg-purple-100 text-purple-700 rounded px-2 py-0.5 inline-flex items-center gap-1 hover:bg-purple-200 cursor-pointer transition-colors"
 									title={`Click to view linked transfer transaction: ${linkTargetId}`}
 									type="button"
-								>
-									🔗 Transfer
+						>
+							🔗 Transfer
 								</button>
 							);
 						}
@@ -974,7 +984,8 @@ function TransactionPageButtons({
 
                 {/* Section 2: Filters in two rows */}
                 <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm space-y-2">
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-center">
+                    {/* First row: Date, Type, and Search */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center">
                     <select
                         value={filterMode}
                         onChange={(e) => {
@@ -1007,13 +1018,6 @@ function TransactionPageButtons({
                             className="border px-2 py-1 rounded text-sm w-full"
                         />
                     )}
-                        <SearchSelect
-                            options={[{ id: '', name: 'All Accounts' }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
-                            value={filterAccount}
-                            onChange={(val) => { setFilterAccount(val); updateUrlParams({ accountId: val }); }}
-                            placeholder="Account"
-                        />
-
                     <select
                         value={filterType}
                         onChange={(e) => {setFilterType(e.target.value); updateUrlParams({ type: e.target.value });}}
@@ -1023,7 +1027,6 @@ function TransactionPageButtons({
                         <option value="CREDIT">Credit</option>
                         <option value="DEBIT">Debit</option>
                     </select>
-
                     <input
                         value={search}
                         onChange={(e) => {setSearch(e.target.value); updateUrlParams({ search: e.target.value }); setPage(0);}}
@@ -1031,63 +1034,25 @@ function TransactionPageButtons({
                         className="border px-2 py-1 rounded text-sm w-full"
                     />
                     </div>
-                    <div className="flex gap-2 items-center">
+                    {/* Second row: Account and Category */}
+                    <div className="grid grid-cols-2 md:grid-cols-2 gap-2 items-center">
+                        <SearchSelect
+                            options={[{ id: '', name: 'All Accounts' }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
+                            value={filterAccount}
+                            onChange={(val) => { setFilterAccount(val); updateUrlParams({ accountId: val }); }}
+                            placeholder="Account"
+                        />
                         <SearchSelect
                             options={[{ id: '', name: 'All Categories' }, ...flattened.map(c => ({ id: c.id, name: c.name }))]}
                             value={filterCategory}
                             onChange={(val) => { setFilterCategory(val); updateUrlParams({ categoryId: val }); }}
                             placeholder="Category"
                         />
-                        <div className="flex gap-1 ml-auto">
-                            <button
-                                onClick={() => {
-                                    setFilterAccount('');
-                                    setFilterCategory('');
-                                    setFilterType('ALL');
-                                    setSearch('');
-                                    setPage(0);
-                                    updateUrlParams({ 
-                                        accountId: '', 
-                                        categoryId: '', 
-                                        type: 'ALL', 
-                                        search: '' 
-                                    });
-                                }}
-                                className="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600 whitespace-nowrap"
-                                title="Reset filters (keeps month/date selection, clears account, category, type, and search)"
-                            >
-                                Reset
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setFilterMonth('');
-                                    setFilterDate('');
-                                    setFilterMode('month');
-                                    setFilterAccount('');
-                                    setFilterCategory('');
-                                    setFilterType('ALL');
-                                    setSearch('');
-                                    setPage(0);
-                                    updateUrlParams({ 
-                                        month: '', 
-                                        date: '', 
-                                        accountId: '', 
-                                        categoryId: '', 
-                                        type: 'ALL', 
-                                        search: '' 
-                                    });
-                                }}
-                                className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600 whitespace-nowrap"
-                                title="Clear all filters including date selections (resets everything to default)"
-                            >
-                                Clear All
-                            </button>
-                        </div>
                     </div>
                 </div>
 
-                {/* Section 3: Actions (Add + Export) */}
-				<div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm grid grid-cols-4 sm:flex sm:flex-wrap sm:items-center gap-2">
+                {/* Combined Section: Actions (Add + Export + Sort + Reset/Clear) */}
+				<div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm flex flex-wrap items-center gap-2">
                     <button
                         onClick={() =>
                             setEditTx({
@@ -1138,7 +1103,7 @@ function TransactionPageButtons({
                             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                             saveAs(blob, 'transactions.csv');
                         }}
-                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600"
                         title="Export filtered transactions to CSV file (comma-separated values, opens in Excel/Sheets)"
                     >
                         CSV
@@ -1177,7 +1142,7 @@ function TransactionPageButtons({
                             const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
                             saveAs(blob, 'transactions.xlsx');
                         }}
-                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600"
                         title="Export filtered transactions to Excel file (.xlsx format, preserves formatting)"
                     >
                         XLSX
@@ -1222,12 +1187,143 @@ function TransactionPageButtons({
                             });
                             doc.save('transactions.pdf');
                         }}
-                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600 w-full sm:w-auto"
+                        className="bg-blue-500 text-white px-2 py-1 text-xs sm:px-2 sm:py-1 sm:text-sm rounded hover:bg-blue-600"
                         title="Export filtered transactions to PDF file (printable/shareable document format)"
                     >
                         PDF
                     </button>
-					<div className="col-span-4 sm:ml-auto text-right text-xs sm:text-sm">
+
+                    {/* Vertical separator */}
+                    <div className="h-6 w-px bg-gray-300 mx-1"></div>
+
+                    {/* Sort buttons */}
+                    <span className="text-xs sm:text-sm font-semibold text-gray-700">Sort:</span>
+                    <button
+                        onClick={() => {
+                            setPage(0);
+                            if (sortBy === "date") {
+                                if (sortDir === "asc") {
+                                    // Second click: change to descending
+                                    setSortDir("desc");
+                                    updateUrlParams({ sortBy: "date", sortDir: "desc" });
+                                } else {
+                                    // Third click: remove sort
+                                    setSortBy(null);
+                                    setSortDir(null);
+                                    updateUrlParams({ sortBy: null, sortDir: null });
+                                }
+                            } else {
+                                // First click: set to ascending
+                                setSortBy("date");
+                                setSortDir("asc");
+                                updateUrlParams({ sortBy: "date", sortDir: "asc" });
+                            }
+                        }}
+                        className={`px-2 py-1 text-xs sm:text-sm rounded transition-colors ${
+                            sortBy === "date"
+                                ? "bg-blue-500 text-white"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                        title={
+                            sortBy === "date"
+                                ? sortDir === "asc"
+                                    ? "Sort by date (descending) - Click to change"
+                                    : "Clear date sort - Click to remove"
+                                : "Sort by date (ascending)"
+                        }
+                    >
+                        Date {sortBy === "date" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                    </button>
+                    <button
+                        onClick={() => {
+                            setPage(0);
+                            if (sortBy === "amount") {
+                                if (sortDir === "asc") {
+                                    // Second click: change to descending
+                                    setSortDir("desc");
+                                    updateUrlParams({ sortBy: "amount", sortDir: "desc" });
+                                } else {
+                                    // Third click: remove sort
+                                    setSortBy(null);
+                                    setSortDir(null);
+                                    updateUrlParams({ sortBy: null, sortDir: null });
+                                }
+                            } else {
+                                // First click: set to ascending
+                                setSortBy("amount");
+                                setSortDir("asc");
+                                updateUrlParams({ sortBy: "amount", sortDir: "asc" });
+                            }
+                        }}
+                        className={`px-2 py-1 text-xs sm:text-sm rounded transition-colors ${
+                            sortBy === "amount"
+                                ? "bg-blue-500 text-white"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                        title={
+                            sortBy === "amount"
+                                ? sortDir === "asc"
+                                    ? "Sort by amount (descending) - Click to change"
+                                    : "Clear amount sort - Click to remove"
+                                : "Sort by amount (ascending)"
+                        }
+                    >
+                        Amount {sortBy === "amount" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                    </button>
+
+                    {/* Vertical separator */}
+                    <div className="h-6 w-px bg-gray-300 mx-1"></div>
+
+                    {/* Reset/Clear All buttons */}
+                    <button
+                        onClick={() => {
+                            setFilterAccount('');
+                            setFilterCategory('');
+                            setFilterType('ALL');
+                            setSearch('');
+                            setPage(0);
+                            updateUrlParams({ 
+                                accountId: '', 
+                                categoryId: '', 
+                                type: 'ALL', 
+                                search: '' 
+                            });
+                        }}
+                        className="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600 whitespace-nowrap"
+                        title="Reset filters (keeps month/date selection, clears account, category, type, and search)"
+                    >
+                        Reset
+                    </button>
+                    <button
+                        onClick={() => {
+                            setFilterMonth('');
+                            setFilterDate('');
+                            setFilterMode('month');
+                            setFilterAccount('');
+                            setFilterCategory('');
+                            setFilterType('ALL');
+                            setSearch('');
+                            setSortBy(null);
+                            setSortDir(null);
+                            setPage(0);
+                            updateUrlParams({ 
+                                month: '', 
+                                date: '', 
+                                accountId: '', 
+                                categoryId: '', 
+                                type: 'ALL', 
+                                search: '',
+                                sortBy: null,
+                                sortDir: null
+                            });
+                        }}
+                        className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600 whitespace-nowrap"
+                        title="Clear all filters including date selections (resets everything to default)"
+                    >
+                        Clear All
+                    </button>
+
+					<div className="ml-auto text-right text-xs sm:text-sm">
 						<div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg px-3 py-1.5 shadow-sm">
 							<span className="font-semibold text-gray-700">Current Page:</span>
 							<div className="flex items-center gap-3 divide-x divide-gray-300">
@@ -1343,12 +1439,12 @@ function TransactionPageButtons({
 							{modalContent.content}
 						</div>
 						<div className="flex justify-end">
-							<button
-								onClick={() => setModalContent(null)}
+						<button
+							onClick={() => setModalContent(null)}
 								className="text-blue-600 hover:underline text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
-							>
-								Close
-							</button>
+						>
+							Close
+						</button>
 						</div>
 					</div>
 				</div>
@@ -1370,10 +1466,10 @@ function TransactionPageButtons({
 				const isPartOfTransfer = hasLinkedTransfer || isReferencedByTransfer;
 				
 				return (
-					<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-						<div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-							<div className="p-6">
-								<h2 className="text-xl font-semibold text-gray-900 mb-2">Delete Transaction</h2>
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+						<div className="p-6">
+							<h2 className="text-xl font-semibold text-gray-900 mb-2">Delete Transaction</h2>
 								{isPartOfTransfer ? (
 									<div className="mb-6">
 										<p className="text-gray-600 mb-3">
@@ -1384,27 +1480,27 @@ function TransactionPageButtons({
 										</p>
 									</div>
 								) : (
-									<p className="text-gray-600 mb-6">
-										Are you sure you want to delete this transaction? This action cannot be undone.
-									</p>
+							<p className="text-gray-600 mb-6">
+								Are you sure you want to delete this transaction? This action cannot be undone.
+							</p>
 								)}
-								<div className="flex gap-3 justify-end">
-									<button
-										onClick={() => setDeleteConfirmation(null)}
-										className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors"
-									>
-										Cancel
-									</button>
-									<button
-										onClick={confirmDelete}
-										className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md font-medium transition-colors"
-									>
-										Delete
-									</button>
-								</div>
+							<div className="flex gap-3 justify-end">
+								<button
+									onClick={() => setDeleteConfirmation(null)}
+									className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors"
+								>
+									Cancel
+								</button>
+								<button
+									onClick={confirmDelete}
+									className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md font-medium transition-colors"
+								>
+									Delete
+								</button>
 							</div>
 						</div>
 					</div>
+				</div>
 				);
 			})()}
 
