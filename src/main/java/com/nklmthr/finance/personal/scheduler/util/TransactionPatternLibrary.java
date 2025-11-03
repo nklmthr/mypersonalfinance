@@ -92,11 +92,12 @@ public class TransactionPatternLibrary {
         new DescriptionPattern("MERCHANT_LABELED", 
             Pattern.compile("\\bMerchant(?:\\s+Name|\\s+ID)?[:\\s]*:([A-Za-z0-9\\s&\\-]+?)(?=\\s+(?:Date|Axis|Card|on|\\d{2}/\\d{2}/\\d{4})|\\r?\\n|$)", Pattern.CASE_INSENSITIVE), 95),
         
-        // Format: "Info: MERCHANT_NAME" - ICICI format
+        // Format: "Info: MERCHANT_NAME" - ICICI format (includes asterisk for PAY* patterns)
+        // This should match "Info: PAY*Jubilant FoodWorks." and extract "PAY*Jubilant FoodWorks"
         new DescriptionPattern("INFO_LABELED", 
-            Pattern.compile("Info[:\\s]+([A-Za-z0-9\\s&\\-\\.]+?)(?:\\.|$)"), 92),
+            Pattern.compile("Info[:\\s]+([A-Za-z0-9\\s&\\-\\.*]+?)(?:\\.|$)"), 92),
         
-        // Format: "at MERCHANT_NAME" or "at ATM-WDL/AXPR/246" - Higher priority than BY_PAYEE
+        // Format: "at MERCHANT_NAME" or "at ATM-WDL/AXPR/246" or "at PAY*MERCHANT" - Higher priority than BY_PAYEE
         new DescriptionPattern("MERCHANT_AT_ON", 
             Pattern.compile("\\bat\\s+([A-Za-z0-9\\s&\\-\\./*]+?)(?:\\s+on\\s+\\d|\\s*\\.|$)"), 91),
         

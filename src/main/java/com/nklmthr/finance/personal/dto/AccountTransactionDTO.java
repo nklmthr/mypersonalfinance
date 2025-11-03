@@ -30,16 +30,14 @@ public record AccountTransactionDTO(
 	String gptCurrency
 ) {
 	public String getShortDescription() {
-		// Prioritize GPT description over original description
-		String primaryDescription = gptDescription != null && !gptDescription.trim().isEmpty() ? gptDescription : description;
-		return primaryDescription != null ? primaryDescription.length() > 40 ? primaryDescription.substring(0, 40) + "..." : primaryDescription
+		// Use only description field - GPT fields are only for comparison, not display
+		return description != null ? description.length() > 40 ? description.substring(0, 40) + "..." : description
 				: null;
 	}
 
 	public String getShortExplanation() {
-		// Prioritize GPT explanation over original explanation
-		String primaryExplanation = gptExplanation != null && !gptExplanation.trim().isEmpty() ? gptExplanation : explanation;
-		return primaryExplanation != null ? primaryExplanation.length() > 60 ? primaryExplanation.substring(0, 60) + "..." : primaryExplanation
+		// Use only explanation field - GPT fields are only for comparison, not display
+		return explanation != null ? explanation.length() > 60 ? explanation.substring(0, 60) + "..." : explanation
 				: null;
 	}
 

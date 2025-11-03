@@ -516,12 +516,6 @@ const triggerDataExtraction = async (servicesToRun) => {
 						}
 						return null;
 					})()}
-					{tx.gptAmount && tx.gptAmount !== tx.amount && (
-						<div className="text-xs text-blue-600 mt-1">
-							🤖 GPT: {tx.currency || "₹"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-							{tx.gptType && tx.gptType !== tx.type && ` (${tx.gptType})`}
-						</div>
-					)}
 					<br />
 					<span className="text-xs text-gray-500">{tx.account?.name}</span>
 				</div>
