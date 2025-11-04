@@ -2,20 +2,25 @@ package com.nklmthr.finance.personal.model;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.hibernate.annotations.UuidGenerator;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.nklmthr.finance.personal.enums.TransactionType;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -107,7 +112,7 @@ public class AccountTransaction {
 	private String currency;
 	
 	@Lob
-    @Column(columnDefinition = "MEDIUMTEXT")
+	@Column(columnDefinition = "MEDIUMTEXT")
 	@ToString.Exclude
 	private String rawData;
 	
@@ -131,5 +136,48 @@ public class AccountTransaction {
 	
 	@Column
 	private String gptCurrency;
+
+	@OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+	@ToString.Exclude
+	@Builder.Default
+	private List<TransactionLabel> transactionLabels = new ArrayList<>();
+
+	// Helper methods to work with labels
+	public List<Label> getLabels() {
+		if (transactionLabels == null) {
+			return new ArrayList<>();
+		}
+		return transactionLabels.stream()
+			.map(TransactionLabel::getLabel)
+			.toList();
+	}
+
+	public void addLabel(Label label, AppUser appUser) {
+		if (transactionLabels == null) {
+			transactionLabels = new ArrayList<>();
+		}
+		TransactionLabel transactionLabel = TransactionLabel.builder()
+			.transaction(this)
+			.label(label)
+			.appUser(appUser)
+			.build();
+		transactionLabels.add(transactionLabel);
+	}
+
+	public void removeLabel(Label label) {
+		if (transactionLabels != null) {
+			transactionLabels.removeIf(tl -> tl.getLabel().getId().equals(label.getId()));
+		}
+	}
+
+	public void setLabels(List<Label> labels, AppUser appUser) {
+		if (transactionLabels == null) {
+			transactionLabels = new ArrayList<>();
+		}
+		transactionLabels.clear();
+		if (labels != null) {
+			labels.forEach(label -> addLabel(label, appUser));
+		}
+	}
 
 }

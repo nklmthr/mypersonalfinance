@@ -18,6 +18,7 @@ import TransferForm from "./transactions/components/TransferForm";
 import TransactionSplit from "./transactions/components/TransactionSplit";
 import TransactionComparisonModal from "./transactions/components/TransactionComparisonModal";
 import TransactionDetailsModal from "./transactions/components/TransactionDetailsModal";
+import LabelInput from "./transactions/components/LabelInput";
 import { buildTree, flattenCategories } from "./transactions/utils/utils";
 
 
@@ -33,6 +34,7 @@ export default function Transactions() {
 	const [editTx, setEditTx] = useState(null);
 	const [splitTx, setSplitTx] = useState(null);
 	const [transferTx, setTransferTx] = useState(null);
+	const [labelEditTx, setLabelEditTx] = useState(null);
 	const [loading, setLoading] = useState(false);
 	const [page, setPage] = useState(0);
 	const [totalPages, setTotalPages] = useState(0);
@@ -70,6 +72,9 @@ export default function Transactions() {
 	const [filterCategory, setFilterCategory] = useState(
 		searchParams.get("categoryId") || ""
 	);
+	const [filterLabel, setFilterLabel] = useState(
+		searchParams.get("labelId") || ""
+	);
 	const [search, setSearch] = useState(
 	  searchParams.get("search") || ""
 	);
@@ -77,6 +82,7 @@ export default function Transactions() {
 const [refreshing, setRefreshing] = useState(false);
 const [availableServices, setAvailableServices] = useState([]);
 const [selectedServices, setSelectedServices] = useState([]);
+const [labels, setLabels] = useState([]);
 
 // Sorting state - null means no sort (default)
 const [sortBy, setSortBy] = useState(searchParams.get("sortBy") || null);
@@ -91,7 +97,9 @@ const [filterMode, setFilterMode] = useState(searchParams.get("date") ? "date" :
 	useEffect(() => {
 		const handleEscKey = (e) => {
 			if (e.key === "Escape") {
-				if (modalContent) {
+				if (labelEditTx) {
+					setLabelEditTx(null);
+				} else if (modalContent) {
 					setModalContent(null);
 				} else if (deleteConfirmation) {
 					setDeleteConfirmation(null);
@@ -99,11 +107,11 @@ const [filterMode, setFilterMode] = useState(searchParams.get("date") ? "date" :
 			}
 		};
 		
-		if (modalContent || deleteConfirmation) {
+		if (modalContent || deleteConfirmation || labelEditTx) {
 			document.addEventListener("keydown", handleEscKey);
 			return () => document.removeEventListener("keydown", handleEscKey);
 		}
-	}, [modalContent, deleteConfirmation]);
+	}, [modalContent, deleteConfirmation, labelEditTx]);
 
 	NProgress.configure({ showSpinner: false });
 
@@ -153,17 +161,22 @@ useEffect(() => {
 			if (filterCategory) {
 				params.append("categoryId", filterCategory);
 			}
+			if (filterLabel) {
+				params.append("labelId", filterLabel);
+			}
 
-			const [txRes, accRes, catRes, currentTotalRes] = await Promise.all([
+			const [txRes, accRes, catRes, labelsRes, currentTotalRes] = await Promise.all([
 				api.get(`/transactions?${params.toString()}`),
 				api.get(`/accounts`),
 				api.get(`/categories`),
+				api.get(`/labels`),
 				api.get(`/transactions/currentTotal?${params.toString()}`),
 			]);
 			setTransactions(txRes.data.content);
 			setTotalPages(txRes.data.totalPages);
 			setAccounts(accRes.data);
 			setCategories(catRes.data);
+			setLabels(labelsRes.data);
 			setTotalCount(txRes.data.totalElements);
 			setCurrentTotal(currentTotalRes.data);
 		} catch (error) {
@@ -188,23 +201,24 @@ useEffect(() => {
 	useEffect(() => {
 		setCurrentTotal(0);
 		fetchData();
-    }, [page, pageSize, filterMode, filterMonth, filterDate, filterAccount, filterType, filterCategory, debouncedSearch, sortBy, sortDir]);
+    }, [page, pageSize, filterMode, filterMonth, filterDate, filterAccount, filterType, filterCategory, filterLabel, debouncedSearch, sortBy, sortDir]);
 
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
 		NProgress.start();
 		try {
-			const payload = {
-				description: tx.description,
-				explanation: tx.explanation || "",
-				amount: tx.amount,
-				date: tx.date,
-				type: tx.type,
-				currency: tx.currency || null,
-				account: { id: tx.accountId },
-				category: tx.categoryId ? { id: tx.categoryId } : null,
-				parent: tx.parentId ? { id: tx.parentId } : null,
-			};
+		const payload = {
+			description: tx.description,
+			explanation: tx.explanation || "",
+			amount: tx.amount,
+			date: tx.date,
+			type: tx.type,
+			currency: tx.currency || null,
+			account: { id: tx.accountId },
+			category: tx.categoryId ? { id: tx.categoryId } : null,
+			parent: tx.parentId ? { id: tx.parentId } : null,
+			labels: tx.labels || [],
+		};
 			console.log("Sending payload to backend:", payload);
 			console.log("Date being sent:", tx.date);
 			await api[method](url, payload);
@@ -220,6 +234,35 @@ useEffect(() => {
 
 	const deleteTx = async (id) => {
 		setDeleteConfirmation(id);
+	};
+
+	const updateLabels = async (tx, newLabels) => {
+		setLoading(true);
+		NProgress.start();
+		try {
+			const payload = {
+				id: tx.id,
+				description: tx.description,
+				explanation: tx.explanation || "",
+				amount: tx.amount,
+				date: tx.date,
+				type: tx.type,
+				currency: tx.currency || null,
+				account: { id: tx.account?.id },
+				category: tx.category ? { id: tx.category.id } : null,
+				parentId: tx.parentId || null,
+				labels: newLabels || [],
+			};
+			console.log("Updating labels:", payload);
+			await api.put(`/transactions/${tx.id}`, payload);
+			await fetchData();
+			setLabelEditTx(null);
+		} catch (err) {
+			console.error("Failed to update labels:", err);
+		} finally {
+			NProgress.done();
+			setLoading(false);
+		}
 	};
 
 	const confirmDelete = async () => {
@@ -469,6 +512,45 @@ const triggerDataExtraction = async (servicesToRun) => {
 					>
 						{tx.shortExplanation}
 					</div>
+					
+					{/* Label Icon */}
+					<button
+						title={tx.labels && tx.labels.length > 0 ? `Edit labels (${tx.labels.length})` : "Add labels"}
+						className={`text-sm px-1 ml-1 cursor-pointer transition-colors ${
+							tx.labels && tx.labels.length > 0 
+								? "text-blue-600 hover:text-blue-800" 
+								: "text-gray-400 hover:text-gray-600"
+						}`}
+						onClick={(e) => {
+							e.stopPropagation();
+							setLabelEditTx({
+								...tx,
+								labels: tx.labels || []
+							});
+						}}
+					>
+						{tx.labels && tx.labels.length > 0 ? "🏷️" : "🏷"}
+					</button>
+					
+					{/* Display labels if any */}
+					{tx.labels && tx.labels.length > 0 && (
+						<div className="flex flex-wrap gap-1 mt-1">
+							{tx.labels.slice(0, 3).map((label, idx) => (
+								<span
+									key={label.id || label.name || idx}
+									className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs"
+									title={label.name}
+								>
+									{label.name}
+								</span>
+							))}
+							{tx.labels.length > 3 && (
+								<span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+									+{tx.labels.length - 3}
+								</span>
+							)}
+						</div>
+					)}
 				</div>
 
 				<div className="text-gray-700">
@@ -591,6 +673,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 								accountId: tx.account?.id,
 								categoryId: tx.category?.id,
 								currency: tx.currency || 'INR',
+								labels: tx.labels || [],
 							})
 						}
 						title="Edit transaction details (amount, description, category, etc.)"
@@ -720,6 +803,7 @@ function TransactionPageButtons({
 									amount: 0,
 									date: dayjs().format('YYYY-MM-DDTHH:mm'),
 									type: 'DEBIT',
+									labels: [],
 								currency: 'INR',
 									accountId: '',
 									categoryId: '',
@@ -739,6 +823,7 @@ function TransactionPageButtons({
 									search,
 								});
 								if (filterCategory) params.append('categoryId', filterCategory);
+								if (filterLabel) params.append('labelId', filterLabel);
 								const res = await api.get(`/transactions/export?${params}`).catch((err) => {
 									if (err.response?.status === 401) {
 										localStorage.removeItem('authToken');
@@ -774,6 +859,7 @@ function TransactionPageButtons({
 									search,
 								});
 								if (filterCategory) params.append('categoryId', filterCategory);
+								if (filterLabel) params.append('labelId', filterLabel);
 								const res = await api.get(`/transactions/export?${params}`).catch((err) => {
 									if (err.response?.status === 401) {
 										localStorage.removeItem('authToken');
@@ -812,6 +898,7 @@ function TransactionPageButtons({
 									search,
 								});
 								if (filterCategory) params.append('categoryId', filterCategory);
+								if (filterLabel) params.append('labelId', filterLabel);
 
 								const res = await api.get(`/transactions/export?${params}`).catch((err) => {
 									if (err.response?.status === 401) {
@@ -1028,8 +1115,8 @@ function TransactionPageButtons({
                         className="border px-2 py-1 rounded text-sm w-full"
                     />
                     </div>
-                    {/* Second row: Account and Category */}
-                    <div className="grid grid-cols-2 md:grid-cols-2 gap-2 items-center">
+                    {/* Second row: Account, Category, and Label */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-center">
                         <SearchSelect
                             options={[{ id: '', name: 'All Accounts' }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
                             value={filterAccount}
@@ -1041,6 +1128,12 @@ function TransactionPageButtons({
                             value={filterCategory}
                             onChange={(val) => { setFilterCategory(val); updateUrlParams({ categoryId: val }); }}
                             placeholder="Category"
+                        />
+                        <SearchSelect
+                            options={[{ id: '', name: 'All Labels' }, ...labels.map(l => ({ id: l.id, name: l.name }))]}
+                            value={filterLabel}
+                            onChange={(val) => { setFilterLabel(val); updateUrlParams({ labelId: val }); }}
+                            placeholder="Label"
                         />
                     </div>
                 </div>
@@ -1056,6 +1149,7 @@ function TransactionPageButtons({
                                 amount: 0,
                                 date: dayjs().format('YYYY-MM-DDTHH:mm'),
                                 type: 'DEBIT',
+                                labels: [],
 								currency: 'INR',
                                 accountId: '',
                                 categoryId: '',
@@ -1076,6 +1170,7 @@ function TransactionPageButtons({
                                 search: debouncedSearch,
                             });
                             if (filterCategory) params.append('categoryId', filterCategory);
+                            if (filterLabel) params.append('labelId', filterLabel);
                             const res = await api.get(`/transactions/export?${params}`).catch((err) => {
                                 if (err.response?.status === 401) {
                                     localStorage.removeItem('authToken');
@@ -1112,6 +1207,7 @@ function TransactionPageButtons({
                                 search: debouncedSearch,
                             });
                             if (filterCategory) params.append('categoryId', filterCategory);
+                            if (filterLabel) params.append('labelId', filterLabel);
                             const res = await api.get(`/transactions/export?${params}`).catch((err) => {
                                 if (err.response?.status === 401) {
                                     localStorage.removeItem('authToken');
@@ -1151,6 +1247,7 @@ function TransactionPageButtons({
                                 search: debouncedSearch,
                             });
                             if (filterCategory) params.append('categoryId', filterCategory);
+                            if (filterLabel) params.append('labelId', filterLabel);
                             const res = await api.get(`/transactions/export?${params}`).catch((err) => {
                                 if (err.response?.status === 401) {
                                     localStorage.removeItem('authToken');
@@ -1273,18 +1370,20 @@ function TransactionPageButtons({
                         onClick={() => {
                             setFilterAccount('');
                             setFilterCategory('');
+                            setFilterLabel('');
                             setFilterType('ALL');
                             setSearch('');
                             setPage(0);
                             updateUrlParams({ 
                                 accountId: '', 
                                 categoryId: '', 
+                                labelId: '',
                                 type: 'ALL', 
                                 search: '' 
                             });
                         }}
                         className="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600 whitespace-nowrap"
-                        title="Reset filters (keeps month/date selection, clears account, category, type, and search)"
+                        title="Reset filters (keeps month/date selection, clears account, category, label, type, and search)"
                     >
                         Reset
                     </button>
@@ -1295,6 +1394,7 @@ function TransactionPageButtons({
                             setFilterMode('month');
                             setFilterAccount('');
                             setFilterCategory('');
+                            setFilterLabel('');
                             setFilterType('ALL');
                             setSearch('');
                             setSortBy(null);
@@ -1305,6 +1405,7 @@ function TransactionPageButtons({
                                 date: '', 
                                 accountId: '', 
                                 categoryId: '', 
+                                labelId: '',
                                 type: 'ALL', 
                                 search: '',
                                 sortBy: null,
@@ -1419,6 +1520,73 @@ function TransactionPageButtons({
 					}}
 					accounts={accounts}
 				/>
+			)}
+
+			{labelEditTx && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+					<div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+						<div className="flex justify-between items-center mb-4">
+							<h2 className="text-lg font-semibold text-gray-800">
+								Edit Labels
+							</h2>
+							<button
+								onClick={() => setLabelEditTx(null)}
+								className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+								title="Close"
+							>
+								×
+							</button>
+						</div>
+
+						<div className="mb-4">
+							<div className="text-sm text-gray-600 mb-2">
+								<strong>Transaction:</strong> {labelEditTx.description}
+							</div>
+							<div className="text-xs text-gray-500 mb-3">
+								Amount: {labelEditTx.currency || "₹"}
+								{(typeof labelEditTx.amount === "number" ? labelEditTx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+								{" • "}
+								{dayjs(labelEditTx.date).format("DD MMM YYYY")}
+							</div>
+						</div>
+
+						<div className="mb-4">
+							<label className="block text-sm font-medium text-gray-700 mb-2">
+								Labels
+							</label>
+							<LabelInput
+								value={labelEditTx.labels || []}
+								onChange={(newLabels) => {
+									setLabelEditTx({
+										...labelEditTx,
+										labels: newLabels
+									});
+								}}
+								placeholder="Add or search labels..."
+							/>
+							<p className="text-xs text-gray-500 mt-2">
+								Type to search existing labels or press Enter to create new ones
+							</p>
+						</div>
+
+						<div className="flex gap-2 justify-end">
+							<button
+								onClick={() => setLabelEditTx(null)}
+								className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+							>
+								Cancel
+							</button>
+							<button
+								onClick={() => {
+									updateLabels(labelEditTx, labelEditTx.labels);
+								}}
+								className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+							>
+								Save Labels
+							</button>
+						</div>
+					</div>
+				</div>
 			)}
 
 			{modalContent && (

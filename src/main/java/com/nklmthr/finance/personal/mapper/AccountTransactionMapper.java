@@ -9,7 +9,7 @@ import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 
 
-@Mapper(componentModel = "spring", uses = { AccountMapper.class, CategoryMapper.class })
+@Mapper(componentModel = "spring", uses = { AccountMapper.class, CategoryMapper.class, LabelMapper.class })
 public interface AccountTransactionMapper extends GenericMapper<AccountTransactionDTO, AccountTransaction> {
 
 
@@ -23,6 +23,7 @@ public interface AccountTransactionMapper extends GenericMapper<AccountTransacti
 	@Mapping(target = "currency", source = "currency")
 	@Mapping(target = "gptAccount", source = "gptAccount")
 	@Mapping(target = "gptCurrency", source = "gptCurrency")
+	@Mapping(target = "labels", source = "labels")
 	@Mapping(target="shortDescription", ignore = true)
 	@Mapping(target="shortExplanation", ignore = true)
 	@Mapping(target="children", ignore = true)
@@ -46,6 +47,7 @@ public interface AccountTransactionMapper extends GenericMapper<AccountTransacti
 	@Mapping(target = "currency", source = "currency")
 	@Mapping(target = "gptAccount", source = "gptAccount")
 	@Mapping(target = "gptCurrency", source = "gptCurrency")
+	@Mapping(target = "transactionLabels", ignore = true)
 	AccountTransaction toEntity(AccountTransactionDTO dto);
 
 	@Mapping(target="shortDescription", ignore = true)

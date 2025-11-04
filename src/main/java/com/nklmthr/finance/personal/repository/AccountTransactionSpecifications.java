@@ -56,6 +56,13 @@ public class AccountTransactionSpecifications {
 		return (root, query, cb) -> root.get("category").get("id").in(categoryIds);
 	}
 
+	public static Specification<AccountTransaction> hasLabel(String labelId) {
+		return (root, query, cb) -> {
+			var join = root.join("transactionLabels");
+			return cb.equal(join.get("label").get("id"), labelId);
+		};
+	}
+
 	public static Specification<AccountTransaction> matchesSearch(String search) {
 		return (Root<AccountTransaction> root, CriteriaQuery<?> query, CriteriaBuilder cb) -> {
 			Predicate combined;

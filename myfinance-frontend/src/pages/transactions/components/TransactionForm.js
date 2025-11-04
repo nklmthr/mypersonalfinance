@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import dayjs from "dayjs";
 import SearchSelect from "./SearchSelect";
+import LabelInput from "./LabelInput";
 import { buildTree, flattenCategories } from "../utils/utils";
 
 export default function TransactionForm({
@@ -288,6 +289,16 @@ export default function TransactionForm({
 							setTransaction((t) => ({ ...t, explanation: e.target.value }))
 						}
 						className="w-full border rounded px-3 py-2"
+					/>
+				</div>
+
+				{/* Labels */}
+				<div>
+					<label className="block text-sm font-medium mb-1">Labels</label>
+					<LabelInput
+						value={transaction.labels || []}
+						onChange={(labels) => setTransaction((t) => ({ ...t, labels }))}
+						placeholder="Add labels..."
 					/>
 				</div>
 

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -66,6 +67,9 @@ public class AccountTransactionService {
 	private CategoryService categoryService;
 
 	@Autowired
+	private LabelService labelService;
+
+	@Autowired
 	AccountTransactionMapper accountTransactionMapper;
 	
 	@Autowired
@@ -73,6 +77,9 @@ public class AccountTransactionService {
 	
 	@Autowired
 	CategoryMapper categoryMapper;
+	
+	@Autowired
+	com.nklmthr.finance.personal.mapper.LabelMapper labelMapper;
 	
 	@PersistenceContext
 	private EntityManager entityManager;
@@ -84,6 +91,25 @@ public class AccountTransactionService {
 	private static final String DATA_VERSION_V20 = "V2.0";
 	// Fuzzy match time window in seconds
 	private static final long MATCH_TIME_WINDOW_SECONDS = 60;
+
+	private void processLabels(AccountTransaction entity, AccountTransactionDTO dto, AppUser appUser) {
+		if (dto.labels() != null && !dto.labels().isEmpty()) {
+			List<com.nklmthr.finance.personal.model.Label> labels = dto.labels().stream()
+				.map(labelDTO -> {
+					if (labelDTO.id() != null) {
+						// Existing label - find by ID or name
+						return labelService.findOrCreateLabel(appUser, labelDTO.name());
+					} else {
+						// New label - create it
+						return labelService.findOrCreateLabel(appUser, labelDTO.name());
+					}
+				})
+				.collect(Collectors.toList());
+			entity.setLabels(labels, appUser);
+		} else {
+			entity.setLabels(new ArrayList<>(), appUser);
+		}
+	}
 
 	@Transactional
 	public void createTransfer(TransferRequest request) throws Exception {
@@ -401,6 +427,9 @@ public class AccountTransactionService {
 			txUpdateEntity.setGptType(existingTx.getGptType());
 			// Keep currency from the incoming update (already mapped by mapper)
 			
+			// Process labels
+			processLabels(txUpdateEntity, txUpdate, appUser);
+			
 			if (oldType == TransactionType.DEBIT) {
 				oldAccount.setBalance(oldAccount.getBalance().add(oldAmount));
 			} else if (oldType == TransactionType.CREDIT) {
@@ -502,6 +531,8 @@ public class AccountTransactionService {
 		if (entity.getGptAccount() == null) {
 			entity.setGptAccount(entity.getAccount());
 		}
+		// Process labels
+		processLabels(entity, transaction, appUser);
 		return save(entity, appUser);
 	}
 
@@ -704,7 +735,7 @@ public class AccountTransactionService {
 	}
 
 private Specification<AccountTransaction> buildTransactionSpec(String month, String date, String accountId, String type,
-            String search, String categoryId, boolean rootOnly) {
+            String search, String categoryId, String labelId, boolean rootOnly) {
 
 		AppUser appUser = appUserService.getCurrentUser();
 		Specification<AccountTransaction> spec = Specification.where(null);
@@ -719,6 +750,9 @@ private Specification<AccountTransaction> buildTransactionSpec(String month, Str
 			// When filtering by category, only include leaf transactions (no children)
 			// This ensures we don't double-count split transactions
 			spec = spec.and(AccountTransactionSpecifications.isLeafTransaction());
+		}
+		if (StringUtils.isNotBlank(labelId)) {
+			spec = spec.and(AccountTransactionSpecifications.hasLabel(labelId));
 		}
 		if (StringUtils.isNotBlank(accountId)) {
 			spec = spec.and(AccountTransactionSpecifications.hasAccount(accountId));
@@ -745,13 +779,13 @@ private Specification<AccountTransaction> buildTransactionSpec(String month, Str
 	
 	@Transactional
 public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month, String date, String accountId, String type,
-            String categoryId, String search) {
+            String categoryId, String labelId, String search) {
 		logger.info(
-				"Fetching transactions for export for month: {}, accountId: {}, type: {}, search: {}, categoryId: {}",
-				month, accountId, type, search, categoryId);
+				"Fetching transactions for export for month: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}",
+				month, accountId, type, search, categoryId, labelId);
     Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
-                ? buildTransactionSpec(month, date, accountId, type, search, categoryId, false)
-                : buildTransactionSpec(month, date, accountId, type, search, null, true);
+                ? buildTransactionSpec(month, date, accountId, type, search, categoryId, labelId, false)
+                : buildTransactionSpec(month, date, accountId, type, search, null, labelId, true);
 		List<AccountTransaction> list = accountTransactionRepository.findAll(spec,
 				Sort.by(Sort.Direction.DESC, "date"));
 		logger.info("Total transactions found for export: {}", list.size());
@@ -759,12 +793,12 @@ public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month
 	}
 
 public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, String month, String date, String accountId,
-            String type, String search, String categoryId) {
-		logger.info("Fetching transactions for month: {}, accountId: {}, type: {}, search: {}, categoryId: {}", month,
-				accountId, type, search, categoryId);
+            String type, String search, String categoryId, String labelId) {
+		logger.info("Fetching transactions for month: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}", month,
+				accountId, type, search, categoryId, labelId);
     Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
-                ? buildTransactionSpec(month, date, accountId, type, search, categoryId, false)
-                : buildTransactionSpec(month, date, accountId, type, search, null, true);
+                ? buildTransactionSpec(month, date, accountId, type, search, categoryId, labelId, false)
+                : buildTransactionSpec(month, date, accountId, type, search, null, labelId, true);
 		
 		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
 		logger.info("Total transactions found: {}", page.getTotalElements());
@@ -812,7 +846,8 @@ public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, St
 		            tx.getGptType(),
 		            tx.getCurrency(),
 		            accountMapper.toDTO(tx.getGptAccount()),
-		            tx.getGptCurrency()
+		            tx.getGptCurrency(),
+		            tx.getLabels() != null ? labelMapper.toDTOList(tx.getLabels()) : List.of()
 		        );
 			    })
 			    .toList();
@@ -820,13 +855,13 @@ public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, St
 	}
 
 
-public BigDecimal getCurrentTotal(String month, String date, String accountId, String type, String search, String categoryId) {
-        logger.info("Calculating current total for month: {}, date: {}, accountId: {}, type: {}, search: {}, categoryId: {}",
-                month, date, accountId, type, search, categoryId);
+public BigDecimal getCurrentTotal(String month, String date, String accountId, String type, String search, String categoryId, String labelId) {
+        logger.info("Calculating current total for month: {}, date: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}",
+                month, date, accountId, type, search, categoryId, labelId);
         
         Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
-                ? buildTransactionSpec(month, date, accountId, type, search, categoryId, false)
-                : buildTransactionSpec(month, date, accountId, type, search, null, true);
+                ? buildTransactionSpec(month, date, accountId, type, search, categoryId, labelId, false)
+                : buildTransactionSpec(month, date, accountId, type, search, null, labelId, true);
         
         // Calculate total using database-level aggregation
         BigDecimal total = calculateTotalWithSpec(spec);
@@ -868,18 +903,18 @@ public BigDecimal getCurrentTotal(String month, String date, String accountId, S
         return result != null ? result : BigDecimal.ZERO;
     }
 
-// --- Backward-compatible overloads (without 'date') for existing tests/integrations ---
+// --- Backward-compatible overloads (without 'date' and 'labelId') for existing tests/integrations ---
 public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, String month, String accountId,
         String type, String search, String categoryId) {
-    return getFilteredTransactions(pageable, month, null, accountId, type, search, categoryId);
+    return getFilteredTransactions(pageable, month, null, accountId, type, search, categoryId, null);
 }
 
 public BigDecimal getCurrentTotal(String month, String accountId, String type, String search, String categoryId) {
-    return getCurrentTotal(month, null, accountId, type, search, categoryId);
+    return getCurrentTotal(month, null, accountId, type, search, categoryId, null);
 }
 
 public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month, String accountId, String type,
         String categoryId, String search) {
-    return getFilteredTransactionsForExport(month, null, accountId, type, categoryId, search);
+    return getFilteredTransactionsForExport(month, null, accountId, type, categoryId, null, search);
 }
 }

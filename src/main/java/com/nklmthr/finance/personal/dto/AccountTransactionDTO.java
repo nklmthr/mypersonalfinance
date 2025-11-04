@@ -27,7 +27,8 @@ public record AccountTransactionDTO(
 	TransactionType gptType,
 	String currency,
 	AccountDTO gptAccount,
-	String gptCurrency
+	String gptCurrency,
+	List<LabelDTO> labels
 ) {
 	public String getShortDescription() {
 		// Use only description field - GPT fields are only for comparison, not display
