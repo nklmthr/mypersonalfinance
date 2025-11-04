@@ -515,7 +515,43 @@ public class AccountTransactionService {
 	@Transactional
 	public AccountTransactionDTO save(AccountTransactionDTO transaction) {
 		AppUser appUser = appUserService.getCurrentUser();
-		AccountTransaction entity = accountTransactionMapper.toEntity(transaction);
+		
+		// Check if this is an update (has ID) or a new transaction
+		AccountTransaction entity;
+		if (transaction.id() != null) {
+			// UPDATE: Load existing entity from database
+			entity = accountTransactionRepository.findByAppUserAndId(appUser, transaction.id())
+					.orElseThrow(() -> new IllegalArgumentException("Transaction not found for user: " + appUser.getUsername()));
+			
+			// Update fields from DTO
+			entity.setDate(transaction.date());
+			entity.setAmount(transaction.amount());
+			entity.setDescription(transaction.description());
+			entity.setExplanation(transaction.explanation());
+			entity.setType(transaction.type());
+			entity.setCurrency(transaction.currency());
+			
+			// Update account if changed
+			if (transaction.account() != null && transaction.account().id() != null) {
+				entity.setAccount(accountRepository.findByAppUserAndId(appUser, transaction.account().id())
+						.orElseThrow(() -> new IllegalArgumentException("Account not found")));
+			}
+			
+			// Update category if changed
+			if (transaction.category() != null && transaction.category().getId() != null) {
+				entity.setCategory(categoryService.getCategoryById(appUser, transaction.category().getId()));
+			}
+			
+			// Update gptAccount if changed
+			if (transaction.gptAccount() != null && transaction.gptAccount().id() != null) {
+				entity.setGptAccount(accountRepository.findByAppUserAndId(appUser, transaction.gptAccount().id())
+						.orElseThrow(() -> new IllegalArgumentException("GPT Account not found")));
+			}
+		} else {
+			// NEW: Create entity from DTO
+			entity = accountTransactionMapper.toEntity(transaction);
+		}
+		
 		// For controller-created transactions, set gptAccount to the same as account
 		if (entity.getGptAccount() == null) {
 			entity.setGptAccount(entity.getAccount());
