@@ -3,7 +3,9 @@ package com.nklmthr.finance.personal.model;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.hibernate.annotations.UuidGenerator;
 
@@ -91,6 +93,7 @@ public class AccountTransaction {
 	private String linkedTransferId;
 
 	@ManyToOne(optional = false)
+	@JoinColumn(name = "app_user_id", nullable = false)
 	@JsonIgnore
 	@ToString.Exclude
 	private AppUser appUser;
@@ -174,9 +177,25 @@ public class AccountTransaction {
 		if (transactionLabels == null) {
 			transactionLabels = new ArrayList<>();
 		}
-		transactionLabels.clear();
+		
+		// Get the current label IDs
+		Set<String> currentLabelIds = transactionLabels.stream()
+			.map(tl -> tl.getLabel().getId())
+			.collect(java.util.stream.Collectors.toSet());
+		
+		// Get the new label IDs
+		Set<String> newLabelIds = (labels != null) 
+			? labels.stream().map(Label::getId).collect(java.util.stream.Collectors.toSet())
+			: new HashSet<>();
+		
+		// Remove labels that are no longer present
+		transactionLabels.removeIf(tl -> !newLabelIds.contains(tl.getLabel().getId()));
+		
+		// Add new labels that aren't already present
 		if (labels != null) {
-			labels.forEach(label -> addLabel(label, appUser));
+			labels.stream()
+				.filter(label -> !currentLabelIds.contains(label.getId()))
+				.forEach(label -> addLabel(label, appUser));
 		}
 	}
 

@@ -49,6 +49,12 @@ export default function Transactions() {
 	const [filterDate, setFilterDate] = useState(
 		searchParams.get("date") || ""
 	);
+	const [filterStartDate, setFilterStartDate] = useState(
+		searchParams.get("startDate") || ""
+	);
+	const [filterEndDate, setFilterEndDate] = useState(
+		searchParams.get("endDate") || ""
+	);
 	const updateUrlParams = (overrides = {}) => {
 	  const params = new URLSearchParams(searchParams);
 
@@ -88,8 +94,10 @@ const [labels, setLabels] = useState([]);
 const [sortBy, setSortBy] = useState(searchParams.get("sortBy") || null);
 const [sortDir, setSortDir] = useState(searchParams.get("sortDir") || null);
 
-// Unified date filter: choose Month or Date (default Month unless URL has date)
-const [filterMode, setFilterMode] = useState(searchParams.get("date") ? "date" : "month");
+// Unified date filter: choose Month, Date, or Range (default Month unless URL has date or startDate)
+const [filterMode, setFilterMode] = useState(
+	searchParams.get("startDate") ? "range" : searchParams.get("date") ? "date" : "month"
+);
 
 // (moved to top-level above)
 
@@ -157,6 +165,10 @@ useEffect(() => {
             if (filterMode === 'date' && filterDate) {
                 params.set('date', filterDate);
             }
+            if (filterMode === 'range' && filterStartDate && filterEndDate) {
+                params.set('startDate', filterStartDate);
+                params.set('endDate', filterEndDate);
+            }
 
 			if (filterCategory) {
 				params.append("categoryId", filterCategory);
@@ -201,7 +213,7 @@ useEffect(() => {
 	useEffect(() => {
 		setCurrentTotal(0);
 		fetchData();
-    }, [page, pageSize, filterMode, filterMonth, filterDate, filterAccount, filterType, filterCategory, filterLabel, debouncedSearch, sortBy, sortDir]);
+    }, [page, pageSize, filterMode, filterMonth, filterDate, filterStartDate, filterEndDate, filterAccount, filterType, filterCategory, filterLabel, debouncedSearch, sortBy, sortDir]);
 
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
@@ -1066,38 +1078,60 @@ function TransactionPageButtons({
                 {/* Section 2: Filters in two rows */}
                 <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm space-y-2">
                     {/* First row: Date, Type, and Search */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center">
+                    <div className={`grid grid-cols-2 gap-2 items-center ${filterMode === 'range' ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
                     <select
                         value={filterMode}
                         onChange={(e) => {
                             const val = e.target.value;
                             setFilterMode(val);
                             if (val === 'month') {
-                                updateUrlParams({ date: '' });
-                            } else {
-                                updateUrlParams({ month: '' });
+                                updateUrlParams({ date: '', startDate: '', endDate: '' });
+                            } else if (val === 'date') {
+                                updateUrlParams({ month: '', startDate: '', endDate: '' });
+                            } else if (val === 'range') {
+                                updateUrlParams({ month: '', date: '' });
                             }
                         }}
                         className="border px-2 py-1 rounded text-sm w-full"
-                        title="Choose Month or Date filter"
+                        title="Choose Month, Date, or Range filter"
                     >
                         <option value="month">By Month</option>
                         <option value="date">By Date</option>
+                        <option value="range">By Range</option>
                     </select>
                     {filterMode === 'month' ? (
                         <input
                             type="month"
                             value={filterMonth}
-                            onChange={(e) => { setFilterMonth(e.target.value); updateUrlParams({ month: e.target.value, date: '' }); }}
+                            onChange={(e) => { setFilterMonth(e.target.value); updateUrlParams({ month: e.target.value, date: '', startDate: '', endDate: '' }); }}
                             className="border px-2 py-1 rounded text-sm w-full"
                         />
-                    ) : (
+                    ) : filterMode === 'date' ? (
                         <input
                             type="date"
                             value={filterDate}
-                            onChange={(e) => { setFilterDate(e.target.value); updateUrlParams({ date: e.target.value, month: '' }); }}
+                            onChange={(e) => { setFilterDate(e.target.value); updateUrlParams({ date: e.target.value, month: '', startDate: '', endDate: '' }); }}
                             className="border px-2 py-1 rounded text-sm w-full"
                         />
+                    ) : (
+                        <>
+                            <input
+                                type="date"
+                                value={filterStartDate}
+                                onChange={(e) => { setFilterStartDate(e.target.value); updateUrlParams({ startDate: e.target.value, month: '', date: '' }); }}
+                                placeholder="Start Date"
+                                className="border px-2 py-1 rounded text-sm w-full"
+                                title="Start date for range filter"
+                            />
+                            <input
+                                type="date"
+                                value={filterEndDate}
+                                onChange={(e) => { setFilterEndDate(e.target.value); updateUrlParams({ endDate: e.target.value, month: '', date: '' }); }}
+                                placeholder="End Date"
+                                className="border px-2 py-1 rounded text-sm w-full"
+                                title="End date for range filter"
+                            />
+                        </>
                     )}
                     <select
                         value={filterType}
@@ -1165,6 +1199,7 @@ function TransactionPageButtons({
                             const params = new URLSearchParams({
                                 ...(filterMode === 'month' && filterMonth ? { month: filterMonth } : {}),
                                 ...(filterMode === 'date' && filterDate ? { date: filterDate } : {}),
+                                ...(filterMode === 'range' && filterStartDate && filterEndDate ? { startDate: filterStartDate, endDate: filterEndDate } : {}),
                                 accountId: filterAccount,
                                 type: filterType,
                                 search: debouncedSearch,
@@ -1202,6 +1237,7 @@ function TransactionPageButtons({
                             const params = new URLSearchParams({
                                 ...(filterMode === 'month' && filterMonth ? { month: filterMonth } : {}),
                                 ...(filterMode === 'date' && filterDate ? { date: filterDate } : {}),
+                                ...(filterMode === 'range' && filterStartDate && filterEndDate ? { startDate: filterStartDate, endDate: filterEndDate } : {}),
                                 accountId: filterAccount,
                                 type: filterType,
                                 search: debouncedSearch,
@@ -1242,6 +1278,7 @@ function TransactionPageButtons({
                             const params = new URLSearchParams({
                                 ...(filterMode === 'month' && filterMonth ? { month: filterMonth } : {}),
                                 ...(filterMode === 'date' && filterDate ? { date: filterDate } : {}),
+                                ...(filterMode === 'range' && filterStartDate && filterEndDate ? { startDate: filterStartDate, endDate: filterEndDate } : {}),
                                 accountId: filterAccount,
                                 type: filterType,
                                 search: debouncedSearch,
@@ -1391,6 +1428,8 @@ function TransactionPageButtons({
                         onClick={() => {
                             setFilterMonth('');
                             setFilterDate('');
+                            setFilterStartDate('');
+                            setFilterEndDate('');
                             setFilterMode('month');
                             setFilterAccount('');
                             setFilterCategory('');
@@ -1403,6 +1442,8 @@ function TransactionPageButtons({
                             updateUrlParams({ 
                                 month: '', 
                                 date: '', 
+                                startDate: '', 
+                                endDate: '', 
                                 accountId: '', 
                                 categoryId: '', 
                                 labelId: '',
