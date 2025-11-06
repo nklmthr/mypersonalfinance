@@ -376,22 +376,12 @@ const triggerDataExtraction = async (servicesToRun) => {
 			const amount = typeof tx.amount === "number" ? tx.amount : 0;
 			// CREDIT adds to sum, DEBIT subtracts from sum
 			const multiplier = tx.type === "CREDIT" ? 1 : -1;
-			let total = sum + (amount * multiplier);
 			
-			// Include child amounts if expanded
-			if (expandedParents[tx.id] && Array.isArray(tx.children)) {
-				tx.children.forEach((child) => {
-					if (typeof child === "object" && child !== null) {
-						const childAmount = typeof child.amount === "number" ? child.amount : 0;
-						const childMultiplier = child.type === "CREDIT" ? 1 : -1;
-						total += (childAmount * childMultiplier);
-					}
-				});
-			}
-			
-			return total;
+			// Only add parent amounts since backend returns parent with sum of children
+			// Do NOT add child amounts separately to avoid double-counting
+			return sum + (amount * multiplier);
 		}, 0);
-	}, [transactions, expandedParents]);
+	}, [transactions]);
 
 	// Helper function to create professional transaction comparison modal (with GPT data)
 	const createComparisonModal = (tx) => {
