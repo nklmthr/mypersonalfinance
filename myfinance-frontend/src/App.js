@@ -26,16 +26,16 @@ export default function App() {
 					<Route path="/logout" element={<Logout />} />
 					<Route path="/signup" element={<Signup />} />
 					{/* Protected Routes */}
-					<Route
-						path="/"
-						element={
-							<RequireAuth>
-								<DashboardLayout pageTitle="🏠 Home">
-									<Transactions />
-								</DashboardLayout>
-							</RequireAuth>
-						}
-					/>
+				<Route
+					path="/"
+					element={
+						<RequireAuth>
+							<DashboardLayout pageTitle="🏠 Home">
+								<Overview />
+							</DashboardLayout>
+						</RequireAuth>
+					}
+				/>
 					<Route
 						path="/uploaded-statements"
 						element={

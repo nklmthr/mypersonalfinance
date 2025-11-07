@@ -1,6 +1,7 @@
 package com.nklmthr.finance.personal.controller;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -49,7 +50,7 @@ class CategorySpendControllerTest {
 
     @Test
     void get_returnsList() throws Exception {
-        when(service.getCategorySpendingLast6Months()).thenReturn(List.of(new CategorySpendDTO()));
+        when(service.getCategorySpendingLastMonths(anyInt())).thenReturn(List.of(new CategorySpendDTO()));
         mvc.perform(get("/api/category-spends"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", hasSize(1)));

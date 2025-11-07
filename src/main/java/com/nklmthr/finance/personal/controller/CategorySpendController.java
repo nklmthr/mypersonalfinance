@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.dto.CategorySpendDTO;
@@ -19,8 +20,9 @@ public class CategorySpendController {
 	private CategorySpendService categorySpendService;
 
 	@GetMapping
-	public ResponseEntity<List<CategorySpendDTO>> getCategorySpendForMonth() {
-		List<CategorySpendDTO> spends = categorySpendService.getCategorySpendingLast6Months();
+	public ResponseEntity<List<CategorySpendDTO>> getCategorySpendForMonth(
+			@RequestParam(defaultValue = "12") int months) {
+		List<CategorySpendDTO> spends = categorySpendService.getCategorySpendingLastMonths(months);
 		return ResponseEntity.ok(spends);
 	}
 }

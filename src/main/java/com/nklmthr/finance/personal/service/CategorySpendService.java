@@ -32,12 +32,12 @@ public class CategorySpendService {
 	@Autowired
 	private AccountTransactionRepository accountTransactionRepository;
 
-	public List<CategorySpendDTO> getCategorySpendingLast6Months() {
+	public List<CategorySpendDTO> getCategorySpendingLastMonths(int months) {
 		AppUser user = appUserService.getCurrentUser();
-		logger.info("Fetching category spending for user: {}", user.getUsername());
-		LocalDate sixMonthsAgo = LocalDate.now().withDayOfMonth(1).minusMonths(5);
+		logger.info("Fetching category spending for last {} months for user: {}", months, user.getUsername());
+		LocalDate startDate = LocalDate.now().withDayOfMonth(1).minusMonths(months - 1);
 		List<CategoryMonthlyProjection> projections = accountTransactionRepository.getCategoryMonthlySpend(user.getId(),
-				sixMonthsAgo,
+				startDate,
 				List.of(categoryService.getTransferCategory().getId(),
 						categoryService.getSplitTrnsactionCategory().getId()));
 		logger.info("Found {} category monthly projections for user: {}", projections.size(), user.getUsername());

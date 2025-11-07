@@ -40,20 +40,21 @@ class CategorySpendServiceTest {
     }
 
     @Test
-    void getCategorySpendingLast6Months_buildsHierarchyAndTotals() {
+    void getCategorySpendingLastMonths_buildsHierarchyAndTotals() {
         lenient().when(categoryService.getNonClassifiedCategory()).thenReturn(dummy("nc"));
         lenient().when(categoryService.getTransferCategory()).thenReturn(dummy("tr"));
         lenient().when(categoryService.getSplitTrnsactionCategory()).thenReturn(dummy("sp"));
 
         LocalDate month = LocalDate.now();
-        LocalDate sixMonthsAgo = month.withDayOfMonth(1).minusMonths(5);
+        int months = 6;
+        LocalDate startDate = month.withDayOfMonth(1).minusMonths(months - 1);
 
         CategoryMonthlyProjection p1 = projection("c1","Food", null, month.toString(), 100.0);
         CategoryMonthlyProjection p2 = projection("c2","Dining","c1", month.toString(), 50.0);
-        when(repo.getCategoryMonthlySpend(user.getId(), sixMonthsAgo, List.of("tr","sp")))
+        when(repo.getCategoryMonthlySpend(user.getId(), startDate, List.of("tr","sp")))
             .thenReturn(List.of(p1, p2));
 
-        List<CategorySpendDTO> roots = service.getCategorySpendingLast6Months();
+        List<CategorySpendDTO> roots = service.getCategorySpendingLastMonths(months);
         assertThat(roots).hasSize(1);
         assertThat(roots.get(0).getChildren()).extracting("id").contains("c2");
     }
