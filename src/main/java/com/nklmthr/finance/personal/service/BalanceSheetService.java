@@ -61,12 +61,22 @@ public class BalanceSheetService {
 
 		String monthLabel = formatMonth(date);
 
-		LocalDate fromDate = date.minusDays(7);
-		LocalDate toDate = date.plusDays(7);
-		logger.debug("Generating balance sheet for user: " + appUser.getUsername() + " for month: " + monthLabel
-				+ " from: " + fromDate + " to: " + toDate);
+		// Search around first day of next month ±7 days
+		// This catches snapshots taken at end of current month or beginning of next month
+		LocalDate nextMonthFirst = date.plusMonths(1).withDayOfMonth(1);
+		LocalDate fromDate = nextMonthFirst.minusDays(7);
+		LocalDate toDate = nextMonthFirst.plusDays(7);
+		
+		logger.info("=== Generating balance sheet for user: " + appUser.getUsername() + " for month: " + monthLabel);
+		logger.info("=== Target date: " + date + ", Next month first: " + nextMonthFirst);
+		logger.info("=== Searching from: " + fromDate + " to: " + toDate);
+		logger.info("=== Searching from datetime: " + fromDate.atStartOfDay() + " to: " + toDate.atStartOfDay());
+		
 		List<AccountBalanceSnapshot> snapshots = accountBalanceSnapshotRepository.findByAppUserAndSnapshotRange(appUser,
 				fromDate.atStartOfDay(), toDate.atStartOfDay());
+
+		logger.info("=== Found " + snapshots.size() + " snapshots for month: " + monthLabel);
+		snapshots.forEach(s -> logger.info("===   Snapshot date: " + s.getSnapshotDate() + ", Account: " + s.getAccount().getName() + ", Balance: " + s.getBalance()));
 
 		Map<String, BigDecimal> classificationTotals = new LinkedHashMap<>();
 		BigDecimal total = BigDecimal.ZERO;
