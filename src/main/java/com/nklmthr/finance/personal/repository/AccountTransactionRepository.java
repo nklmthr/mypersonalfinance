@@ -21,6 +21,7 @@ import org.springframework.stereotype.Repository;
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.UploadedStatement;
 
 @Repository
@@ -159,5 +160,41 @@ public interface AccountTransactionRepository
             "account", "account.accountType", "account.institution"
     })
 	Optional<AccountTransaction> findByAppUserAndLinkedTransferId(AppUser appUser, String linkedTransferId);
+
+	/**
+	 * Find average amount by category and date range for prediction calculations
+	 * Returns: [avgAmount, transactionType, count]
+	 */
+	@Query("""
+		SELECT AVG(t.amount), t.type, COUNT(t)
+		FROM AccountTransaction t
+		WHERE t.appUser = :appUser
+		  AND t.category = :category
+		  AND t.date >= :startDate
+		  AND t.date <= :endDate
+		  AND t.parent IS NULL
+		GROUP BY t.type
+		ORDER BY COUNT(t) DESC
+	""")
+	List<Object[]> findAverageAmountByCategoryAndDateRange(
+		@Param("appUser") AppUser appUser,
+		@Param("category") Category category,
+		@Param("startDate") LocalDateTime startDate,
+		@Param("endDate") LocalDateTime endDate
+	);
+	
+	/**
+	 * Find all transactions for a user, category, and date range (for prediction historical mapping)
+	 */
+	@Query("SELECT t FROM AccountTransaction t WHERE t.appUser = :appUser " +
+	       "AND t.category = :category " +
+	       "AND t.date >= :startDate AND t.date <= :endDate " +
+	       "AND t.parent IS NULL " +
+	       "ORDER BY t.date DESC")
+	List<AccountTransaction> findByAppUserAndCategoryAndDateBetween(
+			@Param("appUser") AppUser appUser,
+			@Param("category") Category category,
+			@Param("startDate") LocalDateTime startDate,
+			@Param("endDate") LocalDateTime endDate);
 
 }

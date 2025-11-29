@@ -15,6 +15,7 @@ import Signup from "./pages/Signup";
 import Overview from "./pages/Overview";
 import Profile from "./pages/Profile";
 import UploadedStatements from "./pages/UploadedStatements";
+import PredictionRules from "./pages/PredictionRules";
 import { ErrorModalProvider } from "./auth/ErrorModalContext";
 export default function App() {
 	return (
@@ -123,6 +124,16 @@ export default function App() {
 							<RequireAuth>
 								<DashboardLayout pageTitle="💸 Transactions">
 									<Transactions />
+								</DashboardLayout>
+							</RequireAuth>
+						}
+					/>
+					<Route
+						path="/prediction-rules"
+						element={
+							<RequireAuth>
+								<DashboardLayout pageTitle="📊 Prediction Rules">
+									<PredictionRules />
 								</DashboardLayout>
 							</RequireAuth>
 						}

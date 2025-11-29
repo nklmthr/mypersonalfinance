@@ -20,6 +20,7 @@ public class AccountFuzzyMatcher {
     private static final FuzzyScore fuzzyScore = new FuzzyScore(java.util.Locale.ENGLISH);
     private static final int MINIMUM_MATCH_SCORE = 5;
     private static final int EXACT_MATCH_BONUS = 10; // Bonus for exact substring matches
+    private static final int ACCOUNT_NUMBER_BONUS = 100; // Very high bonus for account number matches
 
     /**
      * Match result containing the matched account and confidence score
@@ -117,6 +118,14 @@ public class AccountFuzzyMatcher {
         score += safeFuzzyScore(instName, rawData) * 3; // Much higher weight for institution in rawData
         score += safeFuzzyScore(instName, description) * 2; // Higher weight for institution
         
+        // Account type bonus for matching transaction type (e.g., "credit card" in email = CCA account)
+        if (rawData.contains("credit card") && accType.equals("cca")) {
+            score += EXACT_MATCH_BONUS * 3; // Triple bonus for credit card type match
+        }
+        if (rawData.contains("savings") && accType.equals("svg")) {
+            score += EXACT_MATCH_BONUS * 3; // Triple bonus for savings type match
+        }
+        
         // Critical: Bonus for exact institution name match
         if (rawData.contains(instName)) {
             score += EXACT_MATCH_BONUS * 3; // Triple bonus for institution in rawData
@@ -125,23 +134,23 @@ public class AccountFuzzyMatcher {
             score += EXACT_MATCH_BONUS * 2; // Double bonus for institution in description
         }
 
-        // Account number matching (higher weight)
+        // Account number matching (highest weight - critical for credit cards)
         if (account.accountNumber() != null && !account.accountNumber().trim().isEmpty()) {
             if (!normalizedAccountDetail.isEmpty()) {
-                score += safeFuzzyScore(normalizedAccountDetail, accNumber) * 3;
-                // Bonus for exact match
+                score += safeFuzzyScore(normalizedAccountDetail, accNumber) * 5;
+                // High bonus for exact match in account detail
                 if (normalizedAccountDetail.contains(accNumber)) {
-                    score += EXACT_MATCH_BONUS;
+                    score += ACCOUNT_NUMBER_BONUS;
                 }
             }
-            score += safeFuzzyScore(accNumber, rawData) * 3;
-            score += safeFuzzyScore(accNumber, description) * 2;
-            // Bonus for exact matches in transaction data
+            score += safeFuzzyScore(accNumber, rawData) * 5;
+            score += safeFuzzyScore(accNumber, description) * 3;
+            // Very high bonus for exact matches in transaction data
             if (rawData.contains(accNumber)) {
-                score += EXACT_MATCH_BONUS;
+                score += ACCOUNT_NUMBER_BONUS;
             }
             if (description.contains(accNumber)) {
-                score += EXACT_MATCH_BONUS / 2;
+                score += ACCOUNT_NUMBER_BONUS / 2;
             }
         }
 

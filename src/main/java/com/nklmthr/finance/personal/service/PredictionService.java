@@ -1,0 +1,375 @@
+package com.nklmthr.finance.personal.service;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.nklmthr.finance.personal.enums.PredictionType;
+import com.nklmthr.finance.personal.enums.TransactionType;
+import com.nklmthr.finance.personal.model.AccountTransaction;
+import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.model.Category;
+import com.nklmthr.finance.personal.model.PredictedTransaction;
+import com.nklmthr.finance.personal.model.PredictionActualTxnMapping;
+import com.nklmthr.finance.personal.model.PredictionHistoricalTxnMapping;
+import com.nklmthr.finance.personal.model.PredictionRule;
+import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
+import com.nklmthr.finance.personal.repository.PredictedTransactionRepository;
+import com.nklmthr.finance.personal.repository.PredictionActualTxnMappingRepository;
+import com.nklmthr.finance.personal.repository.PredictionHistoricalTxnMappingRepository;
+import com.nklmthr.finance.personal.repository.PredictionRuleRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class PredictionService {
+
+	private final PredictionRuleRepository predictionRuleRepository;
+	private final PredictedTransactionRepository predictedTransactionRepository;
+	private final AccountTransactionRepository accountTransactionRepository;
+	private final AppUserService appUserService;
+	private final PredictionHistoricalTxnMappingRepository historicalMappingRepository;
+	private final PredictionActualTxnMappingRepository actualMappingRepository;
+
+	/**
+	 * Get all prediction rules for a user
+	 */
+	public List<PredictionRule> getAllRulesForUser() {
+		AppUser user = appUserService.getCurrentUser();
+		return predictionRuleRepository.findByAppUser(user);
+	}
+
+	/**
+	 * Get enabled prediction rules for a user
+	 */
+	public List<PredictionRule> getEnabledRulesForUser(AppUser user) {
+		return predictionRuleRepository.findByAppUserAndEnabledTrue(user);
+	}
+
+	/**
+	 * Get a specific prediction rule by ID
+	 */
+	public Optional<PredictionRule> getRuleById(String id) {
+		return predictionRuleRepository.findById(id);
+	}
+
+	/**
+	 * Create or update a prediction rule
+	 */
+	@Transactional
+	public PredictionRule saveRule(PredictionRule rule) {
+		// Get fresh user from security context
+		AppUser user = appUserService.getCurrentUser();
+		
+		// Set app user if not already set
+		if (rule.getAppUser() == null) {
+			rule.setAppUser(user);
+		}
+		
+		return predictionRuleRepository.save(rule);
+	}
+
+	/**
+	 * Delete a prediction rule and all its predicted transactions
+	 */
+	@Transactional
+	public void deleteRule(String id) {
+		Optional<PredictionRule> ruleOpt = predictionRuleRepository.findById(id);
+		if (ruleOpt.isPresent()) {
+			predictedTransactionRepository.deleteByPredictionRule(ruleOpt.get());
+			predictionRuleRepository.deleteById(id);
+		}
+	}
+
+	/**
+	 * Get predicted transactions for a specific month
+	 */
+	public List<PredictedTransaction> getPredictionsForMonth(String month) {
+		AppUser user = appUserService.getCurrentUser();
+		return predictedTransactionRepository.findByAppUserAndPredictionMonthAndVisibleTrue(user, month);
+	}
+
+	/**
+	 * Get predicted transactions for a month range
+	 */
+	public List<PredictedTransaction> getPredictionsForMonthRange(String startMonth, String endMonth) {
+		AppUser user = appUserService.getCurrentUser();
+		return predictedTransactionRepository.findByAppUserAndMonthRange(user, startMonth, endMonth);
+	}
+
+	/**
+	 * Regenerate predictions for a specific rule
+	 */
+	@Transactional
+	public void regeneratePredictionsForRule(String ruleId, int monthsAhead) {
+		Optional<PredictionRule> ruleOpt = predictionRuleRepository.findById(ruleId);
+		if (ruleOpt.isEmpty()) {
+			return;
+		}
+		
+		PredictionRule rule = ruleOpt.get();
+		YearMonth currentMonth = YearMonth.now();
+
+		for (int i = 1; i <= monthsAhead; i++) {
+			YearMonth targetMonth = currentMonth.plusMonths(i);
+			
+			// Skip if this is a yearly prediction and current month doesn't match
+			if (rule.getPredictionType() == PredictionType.YEARLY) {
+				if (rule.getSpecificMonth() == null || 
+				    rule.getSpecificMonth() != targetMonth.getMonthValue()) {
+					continue;
+				}
+			}
+			
+			String monthString = targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+			
+			// Delete existing prediction and its mappings if any
+			predictedTransactionRepository.findByPredictionRuleAndPredictionMonth(rule, monthString)
+				.ifPresent(existingPrediction -> {
+					// Delete mappings first (cascade should handle this, but being explicit)
+					historicalMappingRepository.deleteByPredictedTransaction(existingPrediction);
+					actualMappingRepository.deleteByPredictedTransaction(existingPrediction);
+					predictedTransactionRepository.delete(existingPrediction);
+				});
+			
+			// Calculate and create new prediction
+			PredictedTransaction prediction = calculatePrediction(rule.getAppUser(), rule, targetMonth);
+			if (prediction != null) {
+				// Save prediction first
+				PredictedTransaction savedPrediction = predictedTransactionRepository.save(prediction);
+				// Then create historical mappings
+				createHistoricalMappings(savedPrediction, rule, targetMonth);
+			}
+		}
+	}
+
+	/**
+	 * Calculate prediction based on historical transactions
+	 */
+	private PredictedTransaction calculatePrediction(AppUser user, PredictionRule rule, YearMonth targetMonth) {
+		Category category = rule.getCategory();
+		int lookbackMonths = rule.getLookbackMonths();
+		
+		// Calculate the date range for lookback
+		YearMonth startMonth = targetMonth.minusMonths(lookbackMonths);
+		LocalDateTime startDate = startMonth.atDay(1).atStartOfDay();
+		LocalDateTime endDate = targetMonth.minusMonths(1).atEndOfMonth().atTime(23, 59, 59);
+		
+		// Get historical transactions for this category
+		List<Object[]> results = accountTransactionRepository
+			.findAverageAmountByCategoryAndDateRange(user, category, startDate, endDate);
+		
+		if (results.isEmpty() || results.get(0) == null) {
+			log.debug("No historical data found for category: {} in date range: {} to {}", 
+				category.getName(), startDate, endDate);
+			return null;
+		}
+		
+		Object[] result = results.get(0);
+		
+		// Convert to BigDecimal - handle both Double and BigDecimal from database
+		BigDecimal avgAmount;
+		if (result[0] instanceof Double) {
+			avgAmount = BigDecimal.valueOf((Double) result[0]);
+		} else if (result[0] instanceof BigDecimal) {
+			avgAmount = (BigDecimal) result[0];
+		} else if (result[0] == null) {
+			return null;
+		} else {
+			// Fallback: try to parse as string
+			avgAmount = new BigDecimal(result[0].toString());
+		}
+		
+		TransactionType txType = (TransactionType) result[1];
+		Long count = (Long) result[2];
+		
+		if (avgAmount == null || avgAmount.compareTo(BigDecimal.ZERO) == 0) {
+			return null;
+		}
+		
+		// Round to 2 decimal places
+		avgAmount = avgAmount.setScale(2, RoundingMode.HALF_UP);
+		
+		// Build description
+		String description = String.format("Predicted %s for %s", 
+			category.getName(), 
+			targetMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")));
+		
+		String explanation = String.format("Based on average of %d transaction(s) from past %d month(s)", 
+			count, lookbackMonths);
+		
+		// Create predicted transaction
+		PredictedTransaction prediction = PredictedTransaction.builder()
+			.appUser(user)
+			.predictionRule(rule)
+			.category(category)
+			.predictedAmount(avgAmount)
+			.remainingAmount(avgAmount)  // Initially, remaining equals predicted
+			.actualSpent(BigDecimal.ZERO)  // No spending yet
+			.transactionType(txType)
+			.predictionMonth(targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM")))
+			.description(description)
+			.explanation(explanation)
+			.currency("INR")
+			.calculationDate(LocalDateTime.now())
+			.basedOnTransactionCount(count.intValue())
+			.visible(true)
+			.build();
+		
+		// Note: We don't save prediction here or create mappings
+		// The caller (regeneratePredictionsForRule or generatePredictions) will save it
+		// and call createHistoricalMappings afterwards
+		return prediction;
+	}
+	
+	/**
+	 * Create mappings between a predicted transaction and the historical transactions used for calculation
+	 */
+	@Transactional
+	public void createHistoricalMappings(PredictedTransaction prediction, PredictionRule rule, YearMonth targetMonth) {
+		AppUser user = prediction.getAppUser();
+		Category category = rule.getCategory();
+		int lookbackMonths = rule.getLookbackMonths();
+		
+		// Calculate the same date range used for prediction
+		YearMonth startMonth = targetMonth.minusMonths(lookbackMonths);
+		LocalDateTime startDate = startMonth.atDay(1).atStartOfDay();
+		LocalDateTime endDate = targetMonth.minusMonths(1).atEndOfMonth().atTime(23, 59, 59);
+		
+		// Get all historical transactions for this category in the lookback period
+		List<AccountTransaction> historicalTxns = accountTransactionRepository
+			.findByAppUserAndCategoryAndDateBetween(user, category, startDate, endDate);
+		
+		// Create mappings for each historical transaction
+		for (AccountTransaction historicalTxn : historicalTxns) {
+			PredictionHistoricalTxnMapping mapping = PredictionHistoricalTxnMapping.builder()
+				.predictedTransaction(prediction)
+				.historicalTransaction(historicalTxn)
+				.build();
+			historicalMappingRepository.save(mapping);
+		}
+		
+		log.debug("Created {} historical transaction mappings for prediction {}", 
+			historicalTxns.size(), prediction.getId());
+	}
+
+	/**
+	 * Adjust predicted transaction when an actual transaction is added
+	 * Reduces remainingAmount and increases actualSpent
+	 */
+	@Transactional
+	public void adjustPredictionForActualTransaction(AccountTransaction actualTransaction) {
+		// Get the transaction's year-month
+		LocalDateTime txDate = actualTransaction.getDate();
+		YearMonth txMonth = YearMonth.from(txDate);
+		String monthString = txMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+		
+		// Find matching prediction for this category and month
+		List<PredictedTransaction> predictions = predictedTransactionRepository
+			.findByAppUserAndCategoryAndPredictionMonth(
+				actualTransaction.getAppUser(), 
+				actualTransaction.getCategory(), 
+				monthString
+			);
+		
+		if (predictions.isEmpty()) {
+			log.debug("No prediction found for category {} in month {}", 
+				actualTransaction.getCategory().getName(), monthString);
+			return;
+		}
+		
+		PredictedTransaction prediction = predictions.get(0);
+		
+		// Only adjust for transactions of the same type (DEBIT/CREDIT)
+		if (!prediction.getTransactionType().equals(actualTransaction.getType())) {
+			return;
+		}
+		
+		BigDecimal txAmount = actualTransaction.getAmount();
+		
+		// Update actual spent
+		BigDecimal newActualSpent = prediction.getActualSpent().add(txAmount);
+		prediction.setActualSpent(newActualSpent);
+		
+		// Update remaining amount
+		BigDecimal newRemaining = prediction.getPredictedAmount().subtract(newActualSpent);
+		prediction.setRemainingAmount(newRemaining);
+		
+		predictedTransactionRepository.save(prediction);
+		
+		// Create mapping to track this actual transaction
+		PredictionActualTxnMapping actualMapping = PredictionActualTxnMapping.builder()
+			.predictedTransaction(prediction)
+			.actualTransaction(actualTransaction)
+			.amountApplied(txAmount)
+			.build();
+		actualMappingRepository.save(actualMapping);
+		
+		log.info("Adjusted prediction for category {} in {}: predicted={}, actual={}, remaining={}", 
+			actualTransaction.getCategory().getName(), 
+			monthString,
+			prediction.getPredictedAmount(),
+			newActualSpent,
+			newRemaining);
+	}
+
+	/**
+	 * Check if a prediction rule exists for a category
+	 */
+	public boolean ruleExistsForCategory(Category category) {
+		AppUser user = appUserService.getCurrentUser();
+		return predictionRuleRepository.existsByAppUserAndCategory(user, category);
+	}
+
+	/**
+	 * Get prediction rule for a specific category
+	 */
+	public Optional<PredictionRule> getRuleForCategory(Category category) {
+		AppUser user = appUserService.getCurrentUser();
+		return predictionRuleRepository.findByAppUserAndCategory(user, category);
+	}
+	
+	/**
+	 * Generate predictions for the next N months based on enabled rules
+	 */
+	@Transactional
+	public void generatePredictions(int monthsAhead) {
+		AppUser user = appUserService.getCurrentUser();
+		List<PredictionRule> enabledRules = getEnabledRulesForUser(user);
+		YearMonth currentMonth = YearMonth.now();
+
+		for (PredictionRule rule : enabledRules) {
+			for (int i = 1; i <= monthsAhead; i++) {
+				YearMonth targetMonth = currentMonth.plusMonths(i);
+				
+				// Skip if this is a yearly prediction and current month doesn't match
+				if (rule.getPredictionType() == PredictionType.YEARLY) {
+					if (rule.getSpecificMonth() == null || 
+					    rule.getSpecificMonth() != targetMonth.getMonthValue()) {
+						continue;
+					}
+				}
+				
+				PredictedTransaction prediction = calculatePrediction(user, rule, targetMonth);
+				if (prediction != null) {
+					// Save prediction first
+					PredictedTransaction savedPrediction = predictedTransactionRepository.save(prediction);
+					// Then create historical mappings
+					createHistoricalMappings(savedPrediction, rule, targetMonth);
+				}
+			}
+		}
+	}
+}
+

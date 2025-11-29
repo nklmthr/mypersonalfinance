@@ -46,8 +46,13 @@ export default function OverviewPage() {
 		if (value === 0) return "₹0";
 		const absValue = Math.abs(value);
 		
+		// For values >= 1 crore (10,000,000), show in crores
+		if (absValue >= 10000000) {
+			const crores = value / 10000000;
+			return `₹${crores.toFixed(2)}Cr`;
+		}
 		// For values >= 1 lakh (100,000), show in lakhs
-		if (absValue >= 100000) {
+		else if (absValue >= 100000) {
 			const lakhs = value / 100000;
 			return `₹${lakhs.toFixed(1)}L`;
 		}

@@ -81,6 +81,9 @@ public class AccountTransactionService {
 	@Autowired
 	com.nklmthr.finance.personal.mapper.LabelMapper labelMapper;
 	
+	@Autowired
+	private PredictionService predictionService;
+	
 	@PersistenceContext
 	private EntityManager entityManager;
 
@@ -558,7 +561,19 @@ public class AccountTransactionService {
 		}
 		// Process labels
 		processLabels(entity, transaction, appUser);
-		return save(entity, appUser);
+		AccountTransactionDTO result = save(entity, appUser);
+		
+		// Adjust predictions if this transaction has a category
+		if (entity.getCategory() != null) {
+			try {
+				predictionService.adjustPredictionForActualTransaction(entity);
+			} catch (Exception e) {
+				// Log but don't fail the transaction if prediction adjustment fails
+				logger.warn("Failed to adjust prediction for transaction {}: {}", entity.getId(), e.getMessage());
+			}
+		}
+		
+		return result;
 	}
 
 	@Transactional

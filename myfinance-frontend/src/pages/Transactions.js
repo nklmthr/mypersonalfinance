@@ -27,6 +27,10 @@ export default function Transactions() {
 	const navigate = useNavigate();
 	const { showModal } = useErrorModal();
 	const [transactions, setTransactions] = useState([]);
+	const [predictedTransactions, setPredictedTransactions] = useState([]);
+	const [showPredicted, setShowPredicted] = useState(false);
+	const [linkedTxns, setLinkedTxns] = useState(null);
+	const [activeTab, setActiveTab] = useState('historical'); // For prediction details modal tabs
 	const [expandedParents, setExpandedParents] = useState({});
 	const [accounts, setAccounts] = useState([]);
 	const [currentTotal, setCurrentTotal] = useState(0);
@@ -177,13 +181,22 @@ useEffect(() => {
 				params.append("labelId", filterLabel);
 			}
 
-			const [txRes, accRes, catRes, labelsRes, currentTotalRes] = await Promise.all([
+			const promises = [
 				api.get(`/transactions?${params.toString()}`),
 				api.get(`/accounts`),
 				api.get(`/categories`),
 				api.get(`/labels`),
 				api.get(`/transactions/currentTotal?${params.toString()}`),
-			]);
+			];
+
+			// Fetch predicted transactions if enabled and viewing a month
+			if (showPredicted && filterMode === 'month' && filterMonth) {
+				promises.push(api.get(`/predicted-transactions?month=${filterMonth}`));
+			}
+
+			const results = await Promise.all(promises);
+			const [txRes, accRes, catRes, labelsRes, currentTotalRes, predictedRes] = results;
+
 			setTransactions(txRes.data.content);
 			setTotalPages(txRes.data.totalPages);
 			setAccounts(accRes.data);
@@ -191,6 +204,13 @@ useEffect(() => {
 			setLabels(labelsRes.data);
 			setTotalCount(txRes.data.totalElements);
 			setCurrentTotal(currentTotalRes.data);
+			
+			// Set predicted transactions if fetched
+			if (predictedRes) {
+				setPredictedTransactions(predictedRes.data || []);
+			} else {
+				setPredictedTransactions([]);
+			}
 		} catch (error) {
 			if (error.response?.status === 401) {
 				localStorage.removeItem("authToken");
@@ -213,7 +233,7 @@ useEffect(() => {
 	useEffect(() => {
 		setCurrentTotal(0);
 		fetchData();
-    }, [page, pageSize, filterMode, filterMonth, filterDate, filterStartDate, filterEndDate, filterAccount, filterType, filterCategory, filterLabel, debouncedSearch, sortBy, sortDir]);
+    }, [page, pageSize, filterMode, filterMonth, filterDate, filterStartDate, filterEndDate, filterAccount, filterType, filterCategory, filterLabel, debouncedSearch, sortBy, sortDir, showPredicted]);
 
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
@@ -392,6 +412,134 @@ const triggerDataExtraction = async (servicesToRun) => {
 	const createDetailsModal = (tx) => {
 		return <TransactionDetailsModal tx={tx} />;
 	};
+	
+	const fetchLinkedTransactions = async (predictionId) => {
+		try {
+			NProgress.start();
+			const res = await api.get(`/predicted-transactions/${predictionId}/linked-transactions`);
+			setLinkedTxns(res.data);
+			setActiveTab('historical'); // Reset to historical tab
+			setModalContent({
+				title: "🔗 Prediction Transaction Details",
+				content: null // Will be rendered dynamically in the modal
+			});
+		} catch (error) {
+			console.error("Failed to fetch linked transactions", error);
+			showModal(error.response?.data || "Failed to fetch linked transactions");
+		} finally {
+			NProgress.done();
+		}
+	};
+	
+	const createPredictionDetailsModal = (data) => {
+		const { historicalTransactions, actualTransactions, prediction } = data;
+		
+		return (
+			<div className="space-y-4">
+				{/* Prediction Summary */}
+				<div className="bg-blue-50 p-3 rounded">
+					<h4 className="font-semibold text-gray-800 mb-2">Prediction Summary</h4>
+					<div className="text-sm space-y-1">
+						<div className="flex justify-between">
+							<span>Predicted Amount:</span>
+							<span className="font-semibold">₹{(prediction.predictedAmount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+						</div>
+						<div className="flex justify-between">
+							<span>Actual Spent:</span>
+							<span className="font-semibold text-red-600">₹{(prediction.actualSpent || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+						</div>
+						<div className="flex justify-between">
+							<span>Remaining:</span>
+							<span className={`font-semibold ${(prediction.remainingAmount || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+								₹{(prediction.remainingAmount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}
+							</span>
+						</div>
+					</div>
+				</div>
+				
+				{/* Tabs */}
+				<div className="border-b border-gray-200">
+					<div className="flex space-x-1">
+						<button
+							onClick={() => setActiveTab('historical')}
+							className={`px-4 py-2 font-medium text-sm transition-colors ${
+								activeTab === 'historical'
+									? 'border-b-2 border-blue-600 text-blue-600'
+									: 'text-gray-600 hover:text-gray-800'
+							}`}
+						>
+							📊 Historical Transactions ({historicalTransactions.length})
+						</button>
+						<button
+							onClick={() => setActiveTab('actual')}
+							className={`px-4 py-2 font-medium text-sm transition-colors ${
+								activeTab === 'actual'
+									? 'border-b-2 border-green-600 text-green-600'
+									: 'text-gray-600 hover:text-gray-800'
+							}`}
+						>
+							💰 Actual Transactions ({actualTransactions.length})
+						</button>
+					</div>
+				</div>
+				
+				{/* Tab Content */}
+				<div className="max-h-96 overflow-y-auto">
+					{activeTab === 'historical' && (
+						<div className="space-y-2">
+							<p className="text-xs text-gray-600 mb-2">
+								These transactions were used to calculate the predicted amount
+							</p>
+							{historicalTransactions.map(tx => (
+								<div key={tx.id} className="text-sm bg-gray-50 p-3 rounded border border-gray-200 hover:bg-gray-100 transition-colors">
+									<div className="flex justify-between items-start">
+										<span className="flex-1 truncate font-medium">{tx.shortDescription || tx.description}</span>
+										<span className="font-semibold ml-2 text-red-600">
+											₹{(tx.amount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}
+										</span>
+									</div>
+									<div className="text-xs text-gray-500 mt-1">
+										{new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+									</div>
+								</div>
+							))}
+							{historicalTransactions.length === 0 && (
+								<div className="text-sm text-gray-500 italic text-center py-8">
+									No historical transactions found
+								</div>
+							)}
+						</div>
+					)}
+					
+					{activeTab === 'actual' && (
+						<div className="space-y-2">
+							<p className="text-xs text-gray-600 mb-2">
+								These transactions have been applied against this prediction
+							</p>
+							{actualTransactions.map(tx => (
+								<div key={tx.id} className="text-sm bg-green-50 p-3 rounded border border-green-200 hover:bg-green-100 transition-colors">
+									<div className="flex justify-between items-start">
+										<span className="flex-1 truncate font-medium">{tx.shortDescription || tx.description}</span>
+										<span className="font-semibold ml-2 text-red-600">
+											₹{(tx.amount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}
+										</span>
+									</div>
+									<div className="text-xs text-gray-500 mt-1">
+										{new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+									</div>
+								</div>
+							))}
+							{actualTransactions.length === 0 && (
+								<div className="text-sm text-gray-500 italic text-center py-8">
+									No actual transactions yet for this prediction
+								</div>
+							)}
+						</div>
+					)}
+				</div>
+			</div>
+		);
+	};
 
 	const handleTransferLinkClick = async (linkedTransferId, e) => {
 		e.stopPropagation(); // Prevent event bubbling
@@ -426,20 +574,27 @@ const triggerDataExtraction = async (servicesToRun) => {
 		}
 	};
 
-	const renderRow = (tx, isChild = false, index = 0) => {
-		const baseColor = isChild
+	const renderRow = (tx, isChild = false, index = 0, isPredicted = false) => {
+		const baseColor = isPredicted
+			? "bg-yellow-50 border-2 border-yellow-300"
+			: isChild
 			? "bg-gray-50 border-dashed"
 			: index % 2 === 0
 				? "bg-blue-50"
 				: "bg-blue-100";
-		const hasGpt = typeof tx.gptDescription === 'string' && tx.gptDescription.trim().length > 0;
+		const hasGpt = !isPredicted && typeof tx.gptDescription === 'string' && tx.gptDescription.trim().length > 0;
 		return (
 			<div
 				key={tx.id}
 				className={`grid grid-cols-1 sm:grid-cols-[24px_3fr_2fr_2fr_1fr_2fr] gap-2 py-2 px-3 rounded border items-center text-sm ${baseColor} border-gray-200`}
 			>
 				<div className="text-xs sm:col-span-1 hidden sm:block">
-					{!isChild && tx.children?.length > 0 && (
+					{isPredicted && (
+						<span className="text-yellow-600" title="Predicted Transaction">
+							📊
+						</span>
+					)}
+					{!isChild && !isPredicted && tx.children?.length > 0 && (
 						<button
 							onClick={() => toggleExpand(tx.id)}
 							className="text-gray-600 hover:text-black"
@@ -450,8 +605,15 @@ const triggerDataExtraction = async (servicesToRun) => {
 				</div>
 
 				<div className={`flex flex-col ${isChild ? 'pl-3' : ''}`}>
+					{isPredicted && (
+						<div className="flex items-center gap-1 mb-1">
+							<span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded font-semibold">
+								PREDICTED
+							</span>
+						</div>
+					)}
 					<div className="flex items-center gap-1 truncate font-medium text-gray-800">
-						{!isChild && tx.children?.length > 0 && (
+						{!isChild && !isPredicted && tx.children?.length > 0 && (
 							<button
 								title="Toggle children"
 								className="text-gray-600 hover:text-black sm:hidden"
@@ -461,18 +623,17 @@ const triggerDataExtraction = async (servicesToRun) => {
 							</button>
 						)}
 						<span 
-							className="truncate cursor-pointer hover:text-blue-600" 
-							title={hasGpt ? "✨ Click to view AI analysis comparison" : "🔍 Click to view transaction details"}
-								onClick={() =>
-									setModalContent({
+							className={`truncate ${!isPredicted ? 'cursor-pointer hover:text-blue-600' : ''}`}
+							title={isPredicted ? "Predicted transaction based on historical data" : (hasGpt ? "✨ Click to view AI analysis comparison" : "🔍 Click to view transaction details")}
+							onClick={!isPredicted ? () =>
+								setModalContent({
 									title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
 									content: hasGpt ? createComparisonModal(tx) : createDetailsModal(tx),
-								})
-							}
+								}) : undefined}
 						>
-							{tx.shortDescription}
+							{isPredicted ? tx.description : tx.shortDescription}
 						</span>
-						{hasGpt ? (
+						{!isPredicted && hasGpt ? (
 							<button
 								title="✨ AI analysis available - Click to view comparison"
 								className="text-blue-700 px-1 ml-1 cursor-pointer hover:text-blue-900"
@@ -486,7 +647,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 							>
 								✨
 							</button>
-						) : (
+						) : !isPredicted ? (
 							<button
 								title="🔍 Click to view full transaction details"
 								className="text-gray-700 px-1 ml-1 cursor-pointer hover:text-gray-900"
@@ -500,76 +661,121 @@ const triggerDataExtraction = async (servicesToRun) => {
 							>
 								🔍
 							</button>
-						)}
+						) : null}
 					</div>
 					<div 
-						className="text-xs text-gray-500 break-words cursor-pointer hover:text-blue-600" 
-						title={hasGpt ? "✨ Click to view AI analysis comparison" : "🔍 Click to view transaction details"}
-						onClick={() =>
+						className={`text-xs text-gray-500 break-words ${!isPredicted ? 'cursor-pointer hover:text-blue-600' : ''}`}
+						title={isPredicted ? tx.explanation : (hasGpt ? "✨ Click to view AI analysis comparison" : "🔍 Click to view transaction details")}
+						onClick={!isPredicted ? () =>
 							setModalContent({
 								title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
 								content: hasGpt ? createComparisonModal(tx) : createDetailsModal(tx),
-							})
-						}
+							}) : undefined}
 					>
-						{tx.shortExplanation}
+						{isPredicted ? tx.explanation : tx.shortExplanation}
 					</div>
 					
-					{/* Label Icon */}
-					<button
-						title={tx.labels && tx.labels.length > 0 ? `Edit labels (${tx.labels.length})` : "Add labels"}
-						className={`text-sm px-1 ml-1 cursor-pointer transition-colors ${
-							tx.labels && tx.labels.length > 0 
-								? "text-blue-600 hover:text-blue-800" 
-								: "text-gray-400 hover:text-gray-600"
-						}`}
-						onClick={(e) => {
-							e.stopPropagation();
-							setLabelEditTx({
-								...tx,
-								labels: tx.labels || []
-							});
-						}}
-					>
-						{tx.labels && tx.labels.length > 0 ? "🏷️" : "🏷"}
-					</button>
+					{isPredicted && (
+						<button
+							onClick={(e) => {
+								e.stopPropagation();
+								fetchLinkedTransactions(tx.id);
+							}}
+							className="text-xs bg-blue-100 text-blue-700 rounded px-2 py-0.5 hover:bg-blue-200 transition-colors mt-1 inline-block"
+							title="View historical and actual transactions linked to this prediction"
+						>
+							🔗 View Details
+						</button>
+					)}
 					
-					{/* Display labels if any */}
-					{tx.labels && tx.labels.length > 0 && (
-						<div className="flex flex-wrap gap-1 mt-1">
-							{tx.labels.slice(0, 3).map((label, idx) => (
-								<span
-									key={label.id || label.name || idx}
-									className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs"
-									title={label.name}
-								>
-									{label.name}
-								</span>
-							))}
-							{tx.labels.length > 3 && (
-								<span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-									+{tx.labels.length - 3}
-								</span>
+					{!isPredicted && (
+						<>
+							{/* Label Icon */}
+							<button
+								title={tx.labels && tx.labels.length > 0 ? `Edit labels (${tx.labels.length})` : "Add labels"}
+								className={`text-sm px-1 ml-1 cursor-pointer transition-colors ${
+									tx.labels && tx.labels.length > 0 
+										? "text-blue-600 hover:text-blue-800" 
+										: "text-gray-400 hover:text-gray-600"
+								}`}
+								onClick={(e) => {
+									e.stopPropagation();
+									setLabelEditTx({
+										...tx,
+										labels: tx.labels || []
+									});
+								}}
+							>
+								{tx.labels && tx.labels.length > 0 ? "🏷️" : "🏷"}
+							</button>
+							
+							{/* Display labels if any */}
+							{tx.labels && tx.labels.length > 0 && (
+								<div className="flex flex-wrap gap-1 mt-1">
+									{tx.labels.slice(0, 3).map((label, idx) => (
+										<span
+											key={label.id || label.name || idx}
+											className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs"
+											title={label.name}
+										>
+											{label.name}
+										</span>
+									))}
+									{tx.labels.length > 3 && (
+										<span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+											+{tx.labels.length - 3}
+										</span>
+									)}
+								</div>
 							)}
-						</div>
+						</>
 					)}
 				</div>
 
 				<div className="text-gray-700">
 					<span
-						className={`font-semibold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"
-							}`}
+						className={`font-semibold ${
+							isPredicted
+								? (tx.remainingAmount < 0 ? "text-red-600" : "text-yellow-700")
+								: (isPredicted ? tx.transactionType : tx.type) === "DEBIT"
+								? "text-red-600"
+								: "text-green-600"
+						}`}
 					>
 						{tx.currency || "₹"}
-						{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString(
-							"en-IN",
-							{ minimumFractionDigits: 2 }
+						{isPredicted && tx.remainingAmount !== undefined ? (
+							<>
+								{(typeof tx.remainingAmount === "number" 
+									? tx.remainingAmount 
+									: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+								<span className="text-xs text-gray-500 ml-1">
+									/ {(typeof tx.predictedAmount === "number" 
+										? tx.predictedAmount 
+										: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+								</span>
+							</>
+						) : (
+							(typeof (isPredicted ? tx.predictedAmount : tx.amount) === "number" 
+								? (isPredicted ? tx.predictedAmount : tx.amount) 
+								: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })
 						)}
 					</span>
 					<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">
-						{tx.type}
+						{isPredicted ? tx.transactionType : tx.type}
 					</span>
-					{(() => {
+					{isPredicted && tx.remainingAmount < 0 && (
+						<div className="text-xs text-red-600 font-semibold mt-1">
+							⚠️ Over budget by ₹{Math.abs(tx.remainingAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+						</div>
+					)}
+					{isPredicted && tx.actualSpent > 0 && (
+						<div className="text-xs text-gray-600 mt-1">
+							Spent: ₹{(typeof tx.actualSpent === "number" 
+								? tx.actualSpent 
+								: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+						</div>
+					)}
+					{!isPredicted && (() => {
 						// Check if this transaction has a linkedTransferId (points to another)
 						const linkedId = tx.linkedTransferId;
 						
@@ -601,35 +807,45 @@ const triggerDataExtraction = async (servicesToRun) => {
 						return null;
 					})()}
 					<br />
-					<span className="text-xs text-gray-500">{tx.account?.name}</span>
+					<span className="text-xs text-gray-500">
+						{isPredicted ? (tx.accountName || "Various accounts") : (tx.account?.name)}
+					</span>
 				</div>
 
 				<div className="order-3 sm:order-none">
-					<SearchSelect
-						options={flattened.map(c => ({ id: c.id, name: c.name }))}
-						value={tx.category?.id || ""}
-						onChange={(val) => {
-							saveTx(
-								{
-									...tx,
-									categoryId: val,
-									accountId: tx.account?.id,
-									parentId: tx.parent?.id,
-								},
-								"put",
-								`/transactions/${tx.id}`
-							);
-						}}
-						placeholder="Category"
-					/>
+					{isPredicted ? (
+						<span className="text-xs text-gray-600">
+							{tx.categoryName}
+						</span>
+					) : (
+						<SearchSelect
+							options={flattened.map(c => ({ id: c.id, name: c.name }))}
+							value={tx.category?.id || ""}
+							onChange={(val) => {
+								saveTx(
+									{
+										...tx,
+										categoryId: val,
+										accountId: tx.account?.id,
+										parentId: tx.parent?.id,
+									},
+									"put",
+									`/transactions/${tx.id}`
+								);
+							}}
+							placeholder="Category"
+						/>
+					)}
 				</div>
 
 				<div className="hidden sm:block text-xs sm:text-sm text-gray-500 self-start sm:self-center order-4 sm:order-none">
-					{dayjs(tx.date).format("ddd, DD MMM YY HH:mm")}
+					{isPredicted 
+						? `Predicted for ${tx.predictionMonth}`
+						: dayjs(tx.date).format("ddd, DD MMM YY HH:mm")}
 				</div>
 
 				<div className="hidden sm:flex flex-wrap gap-2 text-xs sm:text-sm justify-start sm:justify-end order-5 sm:order-none">
-					{!isChild && (
+					{!isPredicted && !isChild && (
 						<button
 							className="text-purple-600 hover:underline"
 							onClick={() =>
@@ -644,7 +860,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 							Split
 						</button>
 					)}
-					{!isChild && (!tx.children || tx.children.length === 0) && (
+					{!isPredicted && !isChild && (!tx.children || tx.children.length === 0) && (
 						<button
 							className="text-teal-600 hover:underline"
 							onClick={() =>
@@ -660,88 +876,94 @@ const triggerDataExtraction = async (servicesToRun) => {
 							Transfer
 						</button>
 					)}
-					<button
-						className="text-red-600 hover:underline"
-						onClick={() => deleteTx(tx.id)}
-						title="Delete this transaction permanently (cannot be undone)"
-					>
-						Delete
-					</button>
-					<button
-						className="text-blue-600 hover:underline"
-						onClick={() =>
-							setEditTx({
-								...tx,
-								accountId: tx.account?.id,
-								categoryId: tx.category?.id,
-								currency: tx.currency || 'INR',
-								labels: tx.labels || [],
-							})
-						}
-						title="Edit transaction details (amount, description, category, etc.)"
-					>
-						Update
-					</button>
+					{!isPredicted && (
+						<>
+							<button
+								className="text-red-600 hover:underline"
+								onClick={() => deleteTx(tx.id)}
+								title="Delete this transaction permanently (cannot be undone)"
+							>
+								Delete
+							</button>
+							<button
+								className="text-blue-600 hover:underline"
+								onClick={() =>
+									setEditTx({
+										...tx,
+										accountId: tx.account?.id,
+										categoryId: tx.category?.id,
+										currency: tx.currency || 'INR',
+										labels: tx.labels || [],
+									})
+								}
+								title="Edit transaction details (amount, description, category, etc.)"
+							>
+								Update
+							</button>
+						</>
+					)}
 				</div>
 
 				{/* Mobile footer: date + actions */}
-				<div className="sm:hidden flex items-center justify-between mt-2 text-xs">
-					<div className="text-gray-500">{dayjs(tx.date).format("ddd, DD MMM YY HH:mm")}</div>
-					<div className="flex gap-3">
-						{!isChild && (
+				{!isPredicted && (
+					<div className="sm:hidden flex items-center justify-between mt-2 text-xs">
+						<div className="text-gray-500">{dayjs(tx.date).format("ddd, DD MMM YY HH:mm")}</div>
+						<div className="flex gap-3">
+							{!isChild && (
+								<button
+									className="text-purple-600"
+									onClick={() =>
+										setSplitTx({
+											...tx,
+											parentId: tx.id,
+											accountId: tx.account?.id,
+										})
+									}
+									title="Split this transaction into multiple parts with different categories"
+								>
+									Split
+								</button>
+							)}
+							{!isChild && (!tx.children || tx.children.length === 0) && (
+								<button
+									className="text-teal-600"
+									onClick={() =>
+										setTransferTx({
+											...tx,
+											accountId: tx.account?.id,
+											destinationAccountId: "",
+											explanation: tx.explanation || "",
+										})
+									}
+									title="Mark this as a transfer between accounts (creates linked transactions)"
+								>
+									Transfer
+								</button>
+							)}
+							<button 
+								className="text-red-600" 
+								onClick={() => deleteTx(tx.id)}
+								title="Delete this transaction permanently (cannot be undone)"
+							>
+								Delete
+							</button>
 							<button
-								className="text-purple-600"
+								className="text-blue-600"
 								onClick={() =>
-									setSplitTx({
+									setEditTx({
 										...tx,
-										parentId: tx.id,
 										accountId: tx.account?.id,
+										categoryId: tx.category?.id,
+										currency: tx.currency || 'INR',
 									})
 								}
-								title="Split this transaction into multiple parts with different categories"
+								title="Edit transaction details (amount, description, category, etc.)"
 							>
-								Split
+								Update
 							</button>
-						)}
-						{!isChild && (!tx.children || tx.children.length === 0) && (
-							<button
-								className="text-teal-600"
-								onClick={() =>
-									setTransferTx({
-										...tx,
-										accountId: tx.account?.id,
-										destinationAccountId: "",
-										explanation: tx.explanation || "",
-									})
-								}
-								title="Mark this as a transfer between accounts (creates linked transactions)"
-							>
-								Transfer
-							</button>
-						)}
-						<button 
-							className="text-red-600" 
-							onClick={() => deleteTx(tx.id)}
-							title="Delete this transaction permanently (cannot be undone)"
-						>
-							Delete
-						</button>
-						<button
-							className="text-blue-600"
-							onClick={() =>
-								setEditTx({
-									...tx,
-									accountId: tx.account?.id,
-									categoryId: tx.category?.id,
-									currency: tx.currency || 'INR',
-								})
-							}
-							title="Edit transaction details (amount, description, category, etc.)"
-						>
-							Update
-						</button>
+						</div>
 					</div>
-				</div>
+				)}
 			</div>
 		);
 	};
@@ -1140,7 +1362,7 @@ function TransactionPageButtons({
                     />
                     </div>
                     {/* Second row: Account, Category, and Label */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-center">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center">
                         <SearchSelect
                             options={[{ id: '', name: 'All Accounts' }, ...accounts.map(a => ({ id: a.id, name: a.name }))]}
                             value={filterAccount}
@@ -1159,6 +1381,21 @@ function TransactionPageButtons({
                             onChange={(val) => { setFilterLabel(val); updateUrlParams({ labelId: val }); }}
                             placeholder="Label"
                         />
+						{/* Show Predicted Transactions Toggle */}
+						{filterMode === 'month' && (
+							<div className="flex items-center">
+								<input
+									type="checkbox"
+									checked={showPredicted}
+									onChange={(e) => setShowPredicted(e.target.checked)}
+									className="mr-2"
+									id="show-predicted"
+								/>
+								<label htmlFor="show-predicted" className="text-sm text-gray-700 cursor-pointer whitespace-nowrap">
+									Show Predicted
+								</label>
+							</div>
+						)}
                     </div>
                 </div>
 
@@ -1466,6 +1703,26 @@ function TransactionPageButtons({
 
 			{renderPagination()}
 
+			{/* Predicted Transactions Section */}
+			{showPredicted && predictedTransactions.length > 0 && (
+				<div className="my-4">
+					<h3 className="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
+						<span>📊 Predicted Transactions for {filterMonth}</span>
+						<span className="text-sm font-normal text-gray-600">
+							({predictedTransactions.length} prediction{predictedTransactions.length !== 1 ? 's' : ''})
+						</span>
+					</h3>
+					{predictedTransactions.map((pred, idx) => renderRow(pred, false, idx, true))}
+				</div>
+			)}
+
+			{/* Actual Transactions */}
+			{showPredicted && predictedTransactions.length > 0 && (
+				<h3 className="text-lg font-semibold text-gray-800 my-4">
+					Actual Transactions
+				</h3>
+			)}
+
 			{/* Rows */}
 			{transactions.flatMap((tx, idx) => [
 				renderRow(tx, false, idx),
@@ -1629,11 +1886,14 @@ function TransactionPageButtons({
 					}`}>
 						<h2 className="text-base sm:text-lg font-semibold mb-3">{modalContent.title}</h2>
 						<div className="text-xs sm:text-sm text-gray-700 mb-3 max-h-[70vh] sm:max-h-[75vh] overflow-y-auto overflow-x-hidden">
-							{modalContent.content}
+							{modalContent.content || (linkedTxns ? createPredictionDetailsModal(linkedTxns) : null)}
 						</div>
 						<div className="flex justify-end">
 						<button
-							onClick={() => setModalContent(null)}
+							onClick={() => {
+								setModalContent(null);
+								setLinkedTxns(null);
+							}}
 								className="text-blue-600 hover:underline text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
 						>
 							Close
