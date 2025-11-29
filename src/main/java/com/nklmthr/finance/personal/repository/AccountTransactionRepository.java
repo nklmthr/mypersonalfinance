@@ -162,19 +162,25 @@ public interface AccountTransactionRepository
 	Optional<AccountTransaction> findByAppUserAndLinkedTransferId(AppUser appUser, String linkedTransferId);
 
 	/**
-	 * Find average amount by category and date range for prediction calculations
-	 * Returns: [avgAmount, transactionType, count]
+	 * Find total sum by category and date range for prediction calculations
+	 * Calculates net sum considering DEBIT as positive and CREDIT as negative
+	 * Returns: [totalSum, transactionType, count]
+	 * Note: transactionType will be DEBIT if net is positive, CREDIT if net is negative
 	 */
 	@Query("""
-		SELECT AVG(t.amount), t.type, COUNT(t)
+		SELECT 
+		    SUM(CASE WHEN t.type = 'DEBIT' THEN t.amount ELSE -t.amount END),
+		    CASE WHEN SUM(CASE WHEN t.type = 'DEBIT' THEN t.amount ELSE -t.amount END) >= 0 
+		         THEN 'DEBIT' 
+		         ELSE 'CREDIT' 
+		    END,
+		    COUNT(t)
 		FROM AccountTransaction t
 		WHERE t.appUser = :appUser
 		  AND t.category = :category
 		  AND t.date >= :startDate
 		  AND t.date <= :endDate
 		  AND t.parent IS NULL
-		GROUP BY t.type
-		ORDER BY COUNT(t) DESC
 	""")
 	List<Object[]> findAverageAmountByCategoryAndDateRange(
 		@Param("appUser") AppUser appUser,
@@ -196,5 +202,22 @@ public interface AccountTransactionRepository
 			@Param("category") Category category,
 			@Param("startDate") LocalDateTime startDate,
 			@Param("endDate") LocalDateTime endDate);
+
+	/**
+	 * Find all transactions for a user, category, date range, and transaction type
+	 * (for prediction historical mapping with type filter)
+	 */
+	@Query("SELECT t FROM AccountTransaction t WHERE t.appUser = :appUser " +
+	       "AND t.category = :category " +
+	       "AND t.date >= :startDate AND t.date <= :endDate " +
+	       "AND t.type = :type " +
+	       "AND t.parent IS NULL " +
+	       "ORDER BY t.date DESC")
+	List<AccountTransaction> findByAppUserAndCategoryAndDateBetweenAndType(
+			@Param("appUser") AppUser appUser,
+			@Param("category") Category category,
+			@Param("startDate") LocalDateTime startDate,
+			@Param("endDate") LocalDateTime endDate,
+			@Param("type") TransactionType type);
 
 }

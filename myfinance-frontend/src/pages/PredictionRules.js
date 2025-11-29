@@ -92,7 +92,7 @@ export default function PredictionRules() {
 		setLoading(true);
 		NProgress.start();
 		try {
-			await api.post(`/prediction-rules/${id}/regenerate?monthsAhead=12`);
+			await api.post(`/prediction-rules/${id}/regenerate?monthsAhead=1`);
 			showModal("Predictions regenerated successfully!");
 		} catch (err) {
 			console.error("Failed to regenerate predictions:", err);
@@ -107,7 +107,7 @@ export default function PredictionRules() {
 		setLoading(true);
 		NProgress.start();
 		try {
-			await api.post("/prediction-rules/generate-all?monthsAhead=12");
+			await api.post("/prediction-rules/generate-all?monthsAhead=1");
 			showModal("Predictions generated for all enabled rules!");
 		} catch (err) {
 			console.error("Failed to generate predictions:", err);

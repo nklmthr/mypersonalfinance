@@ -24,6 +24,10 @@ public interface PredictionActualTxnMappingRepository extends JpaRepository<Pred
 	})
 	List<PredictionActualTxnMapping> findByPredictedTransaction(PredictedTransaction predictedTransaction);
 	
+	List<PredictionActualTxnMapping> findByActualTransaction(com.nklmthr.finance.personal.model.AccountTransaction actualTransaction);
+	
 	void deleteByPredictedTransaction(PredictedTransaction predictedTransaction);
+	
+	void deleteByActualTransaction(com.nklmthr.finance.personal.model.AccountTransaction actualTransaction);
 }
 

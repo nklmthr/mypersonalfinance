@@ -651,12 +651,22 @@ public class AccountTransactionService {
 			}
 			accountTransactionRepository.save(parent);
 		}
-		if (accountTransactionRepository.findByParentAndAppUser(existingTransaction.getId(), appUser).size() > 0) {
-			throw new IllegalArgumentException(
-					"Cannot delete transaction with children. Please delete children first.");
-		}
-		accountTransactionRepository.deleteByAppUserAndId(appUser, id);
+	if (accountTransactionRepository.findByParentAndAppUser(existingTransaction.getId(), appUser).size() > 0) {
+		throw new IllegalArgumentException(
+				"Cannot delete transaction with children. Please delete children first.");
 	}
+	
+	// Remove prediction adjustments if this transaction was applied to any predictions
+	try {
+		predictionService.removePredictionAdjustmentForTransaction(existingTransaction);
+	} catch (Exception e) {
+		// Log but don't fail the delete if prediction adjustment removal fails
+		logger.warn("Failed to remove prediction adjustment for transaction {}: {}", 
+			existingTransaction.getId(), e.getMessage());
+	}
+	
+	accountTransactionRepository.deleteByAppUserAndId(appUser, id);
+}
 
 	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction, AppUser appUser) {

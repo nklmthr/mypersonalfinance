@@ -87,8 +87,27 @@ public class PredictionService {
 	public void deleteRule(String id) {
 		Optional<PredictionRule> ruleOpt = predictionRuleRepository.findById(id);
 		if (ruleOpt.isPresent()) {
-			predictedTransactionRepository.deleteByPredictionRule(ruleOpt.get());
+			PredictionRule rule = ruleOpt.get();
+			
+			// Get all predicted transactions for this rule
+			List<PredictedTransaction> predictions = predictedTransactionRepository.findByPredictionRule(rule);
+			
+			// Delete mappings for each predicted transaction first
+			for (PredictedTransaction prediction : predictions) {
+				// Delete historical mappings
+				historicalMappingRepository.deleteByPredictedTransaction(prediction);
+				// Delete actual mappings
+				actualMappingRepository.deleteByPredictedTransaction(prediction);
+			}
+			
+			// Now delete predicted transactions
+			predictedTransactionRepository.deleteByPredictionRule(rule);
+			
+			// Finally delete the rule
 			predictionRuleRepository.deleteById(id);
+			
+			log.info("Deleted prediction rule {} and {} associated predictions with their mappings", 
+				id, predictions.size());
 		}
 	}
 
@@ -135,13 +154,19 @@ public class PredictionService {
 			String monthString = targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
 			
 			// Delete existing prediction and its mappings if any
-			predictedTransactionRepository.findByPredictionRuleAndPredictionMonth(rule, monthString)
-				.ifPresent(existingPrediction -> {
-					// Delete mappings first (cascade should handle this, but being explicit)
-					historicalMappingRepository.deleteByPredictedTransaction(existingPrediction);
-					actualMappingRepository.deleteByPredictedTransaction(existingPrediction);
-					predictedTransactionRepository.delete(existingPrediction);
-				});
+			Optional<PredictedTransaction> existingPredictionOpt = 
+				predictedTransactionRepository.findByPredictionRuleAndPredictionMonth(rule, monthString);
+			
+			if (existingPredictionOpt.isPresent()) {
+				PredictedTransaction existingPrediction = existingPredictionOpt.get();
+				// Delete mappings first (cascade should handle this, but being explicit)
+				historicalMappingRepository.deleteByPredictedTransaction(existingPrediction);
+				actualMappingRepository.deleteByPredictedTransaction(existingPrediction);
+				predictedTransactionRepository.delete(existingPrediction);
+				// Force flush to ensure deletion is committed before inserting new prediction
+				predictedTransactionRepository.flush();
+				log.debug("Deleted existing prediction for rule {} and month {}", ruleId, monthString);
+			}
 			
 			// Calculate and create new prediction
 			PredictedTransaction prediction = calculatePrediction(rule.getAppUser(), rule, targetMonth);
@@ -166,7 +191,7 @@ public class PredictionService {
 		LocalDateTime startDate = startMonth.atDay(1).atStartOfDay();
 		LocalDateTime endDate = targetMonth.minusMonths(1).atEndOfMonth().atTime(23, 59, 59);
 		
-		// Get historical transactions for this category
+		// Get historical transactions sum for this category
 		List<Object[]> results = accountTransactionRepository
 			.findAverageAmountByCategoryAndDateRange(user, category, startDate, endDate);
 		
@@ -179,34 +204,36 @@ public class PredictionService {
 		Object[] result = results.get(0);
 		
 		// Convert to BigDecimal - handle both Double and BigDecimal from database
-		BigDecimal avgAmount;
+		BigDecimal totalSum;
 		if (result[0] instanceof Double) {
-			avgAmount = BigDecimal.valueOf((Double) result[0]);
+			totalSum = BigDecimal.valueOf((Double) result[0]);
 		} else if (result[0] instanceof BigDecimal) {
-			avgAmount = (BigDecimal) result[0];
+			totalSum = (BigDecimal) result[0];
 		} else if (result[0] == null) {
 			return null;
 		} else {
 			// Fallback: try to parse as string
-			avgAmount = new BigDecimal(result[0].toString());
+			totalSum = new BigDecimal(result[0].toString());
 		}
 		
-		TransactionType txType = (TransactionType) result[1];
+		// Get transaction type - result[1] is a String from the CASE statement
+		String txTypeString = (String) result[1];
+		TransactionType txType = TransactionType.valueOf(txTypeString);
 		Long count = (Long) result[2];
 		
-		if (avgAmount == null || avgAmount.compareTo(BigDecimal.ZERO) == 0) {
+		if (totalSum == null || totalSum.compareTo(BigDecimal.ZERO) == 0) {
 			return null;
 		}
 		
-		// Round to 2 decimal places
-		avgAmount = avgAmount.setScale(2, RoundingMode.HALF_UP);
+		// Use absolute value for prediction (always show as positive amount)
+		totalSum = totalSum.abs().setScale(2, RoundingMode.HALF_UP);
 		
 		// Build description
 		String description = String.format("Predicted %s for %s", 
 			category.getName(), 
 			targetMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")));
 		
-		String explanation = String.format("Based on average of %d transaction(s) from past %d month(s)", 
+		String explanation = String.format("Based on total sum of %d transaction(s) from past %d month(s)", 
 			count, lookbackMonths);
 		
 		// Create predicted transaction
@@ -214,8 +241,8 @@ public class PredictionService {
 			.appUser(user)
 			.predictionRule(rule)
 			.category(category)
-			.predictedAmount(avgAmount)
-			.remainingAmount(avgAmount)  // Initially, remaining equals predicted
+			.predictedAmount(totalSum)
+			.remainingAmount(totalSum)  // Initially, remaining equals predicted
 			.actualSpent(BigDecimal.ZERO)  // No spending yet
 			.transactionType(txType)
 			.predictionMonth(targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM")))
@@ -235,6 +262,7 @@ public class PredictionService {
 	
 	/**
 	 * Create mappings between a predicted transaction and the historical transactions used for calculation
+	 * Includes ALL transactions (both DEBIT and CREDIT) since they all contribute to the net average
 	 */
 	@Transactional
 	public void createHistoricalMappings(PredictedTransaction prediction, PredictionRule rule, YearMonth targetMonth) {
@@ -248,6 +276,7 @@ public class PredictionService {
 		LocalDateTime endDate = targetMonth.minusMonths(1).atEndOfMonth().atTime(23, 59, 59);
 		
 		// Get all historical transactions for this category in the lookback period
+		// Include both DEBIT and CREDIT since both are used in net average calculation
 		List<AccountTransaction> historicalTxns = accountTransactionRepository
 			.findByAppUserAndCategoryAndDateBetween(user, category, startDate, endDate);
 		
@@ -260,7 +289,7 @@ public class PredictionService {
 			historicalMappingRepository.save(mapping);
 		}
 		
-		log.debug("Created {} historical transaction mappings for prediction {}", 
+		log.debug("Created {} historical transaction mappings for prediction {} (includes all transaction types)", 
 			historicalTxns.size(), prediction.getId());
 	}
 
@@ -340,6 +369,104 @@ public class PredictionService {
 		return predictionRuleRepository.findByAppUserAndCategory(user, category);
 	}
 	
+	/**
+	 * Remove transaction from prediction when deleting the transaction
+	 * This reverses the adjustment made when the transaction was created
+	 */
+	@Transactional
+	public void removePredictionAdjustmentForTransaction(AccountTransaction transaction) {
+		// Find if this transaction is mapped to any prediction
+		List<PredictionActualTxnMapping> mappings = actualMappingRepository
+			.findByActualTransaction(transaction);
+		
+		if (mappings.isEmpty()) {
+			log.debug("No prediction mappings found for transaction {}", transaction.getId());
+			return;
+		}
+		
+		for (PredictionActualTxnMapping mapping : mappings) {
+			PredictedTransaction prediction = mapping.getPredictedTransaction();
+			BigDecimal txAmount = mapping.getAmountApplied();
+			
+			// Reverse the adjustment
+			BigDecimal newActualSpent = prediction.getActualSpent().subtract(txAmount);
+			prediction.setActualSpent(newActualSpent);
+			
+			BigDecimal newRemaining = prediction.getPredictedAmount().subtract(newActualSpent);
+			prediction.setRemainingAmount(newRemaining);
+			
+			predictedTransactionRepository.save(prediction);
+			
+			log.info("Reversed prediction adjustment for category {} in {}: removed ₹{}, new remaining: ₹{}", 
+				prediction.getCategory().getName(), 
+				prediction.getPredictionMonth(),
+				txAmount,
+				newRemaining);
+		}
+		
+		// Delete the mappings
+		actualMappingRepository.deleteByActualTransaction(transaction);
+	}
+
+	/**
+	 * Recalculate all predictions for a specific month by reapplying actual transactions
+	 * Useful for fixing predictions after data imports or bulk updates
+	 */
+	@Transactional
+	public void recalculatePredictionsForMonth(String month) {
+		AppUser user = appUserService.getCurrentUser();
+		
+		// Get all predictions for this month
+		List<PredictedTransaction> predictions = predictedTransactionRepository
+			.findByAppUserAndPredictionMonthAndVisibleTrue(user, month);
+		
+		if (predictions.isEmpty()) {
+			log.info("No predictions found for month {}", month);
+			return;
+		}
+		
+		for (PredictedTransaction prediction : predictions) {
+			// Reset actualSpent and remainingAmount
+			prediction.setActualSpent(BigDecimal.ZERO);
+			prediction.setRemainingAmount(prediction.getPredictedAmount());
+			
+			// Delete existing actual transaction mappings
+			actualMappingRepository.deleteByPredictedTransaction(prediction);
+			
+			// Get all actual transactions for this category and month
+			YearMonth targetMonth = YearMonth.parse(month);
+			LocalDateTime startDate = targetMonth.atDay(1).atStartOfDay();
+			LocalDateTime endDate = targetMonth.atEndOfMonth().atTime(23, 59, 59);
+			
+			List<AccountTransaction> actualTxns = accountTransactionRepository
+				.findByAppUserAndCategoryAndDateBetween(user, prediction.getCategory(), startDate, endDate);
+			
+			// Filter by transaction type to match prediction
+			List<AccountTransaction> matchingTxns = actualTxns.stream()
+				.filter(txn -> txn.getType() == prediction.getTransactionType())
+				.toList();
+			
+			// Apply each transaction
+			for (AccountTransaction txn : matchingTxns) {
+				BigDecimal txAmount = txn.getAmount();
+				prediction.setActualSpent(prediction.getActualSpent().add(txAmount));
+				prediction.setRemainingAmount(prediction.getPredictedAmount().subtract(prediction.getActualSpent()));
+				
+				// Create mapping
+				PredictionActualTxnMapping mapping = PredictionActualTxnMapping.builder()
+					.predictedTransaction(prediction)
+					.actualTransaction(txn)
+					.amountApplied(txAmount)
+					.build();
+				actualMappingRepository.save(mapping);
+			}
+			
+			predictedTransactionRepository.save(prediction);
+			log.info("Recalculated prediction for category {} in month {}: {} transactions applied, remaining: {}",
+				prediction.getCategory().getName(), month, matchingTxns.size(), prediction.getRemainingAmount());
+		}
+	}
+
 	/**
 	 * Generate predictions for the next N months based on enabled rules
 	 */

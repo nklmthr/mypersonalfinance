@@ -83,12 +83,12 @@ public class PredictionRuleController {
 				.specificMonth(dto.getSpecificMonth())
 				.build();
 
-			PredictionRule savedRule = predictionService.saveRule(rule);
+		PredictionRule savedRule = predictionService.saveRule(rule);
 
-			// Generate predictions for the next 12 months
-			predictionService.regeneratePredictionsForRule(savedRule.getId(), 12);
+		// Generate predictions for the next month
+		predictionService.regeneratePredictionsForRule(savedRule.getId(), 1);
 
-			return ResponseEntity.ok(predictionRuleMapper.toDTO(savedRule));
+		return ResponseEntity.ok(predictionRuleMapper.toDTO(savedRule));
 		} catch (Exception e) {
 			log.error("Failed to create prediction rule", e);
 			return ResponseEntity.badRequest().body("Failed to create prediction rule: " + e.getMessage());
@@ -113,14 +113,14 @@ public class PredictionRuleController {
 			rule.setLookbackMonths(dto.getLookbackMonths());
 			rule.setSpecificMonth(dto.getSpecificMonth());
 
-			PredictionRule savedRule = predictionService.saveRule(rule);
+		PredictionRule savedRule = predictionService.saveRule(rule);
 
-			// Regenerate predictions if the rule is enabled
-			if (savedRule.isEnabled()) {
-				predictionService.regeneratePredictionsForRule(savedRule.getId(), 12);
-			}
+		// Regenerate predictions if the rule is enabled
+		if (savedRule.isEnabled()) {
+			predictionService.regeneratePredictionsForRule(savedRule.getId(), 1);
+		}
 
-			return ResponseEntity.ok(predictionRuleMapper.toDTO(savedRule));
+		return ResponseEntity.ok(predictionRuleMapper.toDTO(savedRule));
 		} catch (Exception e) {
 			log.error("Failed to update prediction rule", e);
 			return ResponseEntity.badRequest().body("Failed to update prediction rule: " + e.getMessage());
@@ -150,7 +150,7 @@ public class PredictionRuleController {
 	@PostMapping("/{id}/regenerate")
 	public ResponseEntity<?> regeneratePredictions(
 		@PathVariable String id,
-		@RequestParam(defaultValue = "12") int monthsAhead
+		@RequestParam(defaultValue = "1") int monthsAhead
 	) {
 		try {
 			PredictionRule rule = predictionService.getRuleById(id)
@@ -169,7 +169,7 @@ public class PredictionRuleController {
 	 */
 	@PostMapping("/generate-all")
 	public ResponseEntity<?> generateAllPredictions(
-		@RequestParam(defaultValue = "12") int monthsAhead
+		@RequestParam(defaultValue = "1") int monthsAhead
 	) {
 		try {
 			predictionService.generatePredictions(monthsAhead);
@@ -177,6 +177,22 @@ public class PredictionRuleController {
 		} catch (Exception e) {
 			log.error("Failed to generate predictions", e);
 			return ResponseEntity.badRequest().body("Failed to generate predictions: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Recalculate predictions for a specific month by reapplying actual transactions
+	 */
+	@PostMapping("/recalculate")
+	public ResponseEntity<?> recalculatePredictions(
+		@RequestParam String month
+	) {
+		try {
+			predictionService.recalculatePredictionsForMonth(month);
+			return ResponseEntity.ok().body("Predictions recalculated successfully for month " + month);
+		} catch (Exception e) {
+			log.error("Failed to recalculate predictions for month {}", month, e);
+			return ResponseEntity.badRequest().body("Failed to recalculate predictions: " + e.getMessage());
 		}
 	}
 }
