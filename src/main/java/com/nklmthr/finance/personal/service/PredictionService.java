@@ -175,6 +175,15 @@ public class PredictionService {
 				PredictedTransaction savedPrediction = predictedTransactionRepository.save(prediction);
 				// Then create historical mappings
 				createHistoricalMappings(savedPrediction, rule, targetMonth);
+				
+				// Automatically recalculate actual transactions for this month
+				try {
+					recalculatePredictionsForMonth(monthString);
+					log.info("Auto-recalculated actual transactions for prediction month {}", monthString);
+				} catch (Exception e) {
+					log.warn("Failed to auto-recalculate actual transactions for month {}: {}", 
+						monthString, e.getMessage());
+				}
 			}
 		}
 	}
@@ -225,15 +234,19 @@ public class PredictionService {
 			return null;
 		}
 		
-		// Use absolute value for prediction (always show as positive amount)
-		totalSum = totalSum.abs().setScale(2, RoundingMode.HALF_UP);
+		// Calculate monthly average by dividing total sum by lookback months
+		BigDecimal monthlyAverage = totalSum.divide(
+			BigDecimal.valueOf(lookbackMonths), 
+			2, 
+			RoundingMode.HALF_UP
+		).abs();
 		
 		// Build description
 		String description = String.format("Predicted %s for %s", 
 			category.getName(), 
 			targetMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")));
 		
-		String explanation = String.format("Based on total sum of %d transaction(s) from past %d month(s)", 
+		String explanation = String.format("Based on monthly average of %d transaction(s) from past %d month(s)", 
 			count, lookbackMonths);
 		
 		// Create predicted transaction
@@ -241,8 +254,8 @@ public class PredictionService {
 			.appUser(user)
 			.predictionRule(rule)
 			.category(category)
-			.predictedAmount(totalSum)
-			.remainingAmount(totalSum)  // Initially, remaining equals predicted
+			.predictedAmount(monthlyAverage)
+			.remainingAmount(monthlyAverage)  // Initially, remaining equals predicted
 			.actualSpent(BigDecimal.ZERO)  // No spending yet
 			.transactionType(txType)
 			.predictionMonth(targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM")))
