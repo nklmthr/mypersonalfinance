@@ -462,10 +462,8 @@ class AccountTransactionServiceTest {
         foodCat2.setAppUser(currentUser);
         when(categoryService.getCategoryById("cat")).thenReturn(foodCat2);
 
-        AccountTransaction mapped = new AccountTransaction();
-        when(accountTransactionMapper.toEntity(any(AccountTransactionDTO.class))).thenReturn(mapped);
-        when(accountTransactionRepository.save(mapped)).thenReturn(mapped);
-        when(accountTransactionMapper.toDTO(mapped)).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
 
         AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null);
 
@@ -475,7 +473,7 @@ class AccountTransactionServiceTest {
         // oldType=DEBIT refunds 50, then CREDIT adds 20 => 1070
         assertThat(acc.getBalance()).isEqualByComparingTo("1070");
         verify(accountRepository, times(1)).save(acc); // Verify account is saved
-        verify(accountTransactionRepository, times(1)).save(mapped);
+        verify(accountTransactionRepository, times(1)).save(any(AccountTransaction.class));
     }
 
     @Test
@@ -495,10 +493,8 @@ class AccountTransactionServiceTest {
         foodCat3.setAppUser(currentUser);
         when(categoryService.getCategoryById("cat")).thenReturn(foodCat3);
 
-        AccountTransaction mapped = new AccountTransaction();
-        when(accountTransactionMapper.toEntity(any(AccountTransactionDTO.class))).thenReturn(mapped);
-        when(accountTransactionRepository.save(mapped)).thenReturn(mapped);
-        when(accountTransactionMapper.toDTO(mapped)).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
 
         AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null);
 
@@ -529,10 +525,8 @@ class AccountTransactionServiceTest {
         foodCat4.setAppUser(currentUser);
         when(categoryService.getCategoryById("cat")).thenReturn(foodCat4);
 
-        AccountTransaction mapped = new AccountTransaction();
-        when(accountTransactionMapper.toEntity(any(AccountTransactionDTO.class))).thenReturn(mapped);
-        when(accountTransactionRepository.save(mapped)).thenReturn(mapped);
-        when(accountTransactionMapper.toDTO(mapped)).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
 
         AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null);
 
@@ -610,10 +604,8 @@ class AccountTransactionServiceTest {
         newCat.setAppUser(currentUser);
         when(categoryService.getCategoryById("newcat")).thenReturn(newCat);
 
-        AccountTransaction mapped = new AccountTransaction();
-        when(accountTransactionMapper.toEntity(any(AccountTransactionDTO.class))).thenReturn(mapped);
-        when(accountTransactionRepository.save(mapped)).thenReturn(mapped);
-        when(accountTransactionMapper.toDTO(mapped)).thenReturn(
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(
             new AccountTransactionDTO("p1", LocalDateTime.now(), BigDecimal.ZERO, "Updated description", 
                 null, null, null, TransactionType.DEBIT, 
                 new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
@@ -649,7 +641,7 @@ class AccountTransactionServiceTest {
 
         assertThat(result).isPresent();
         assertThat(result.get().description()).isEqualTo("Updated description");
-        verify(accountTransactionRepository, times(1)).save(mapped);
+        verify(accountTransactionRepository, times(1)).save(any(AccountTransaction.class));
     }
 
     @Test
@@ -915,9 +907,6 @@ class AccountTransactionServiceTest {
         when(categoryService.getCategoryById("transfer")).thenReturn(transferCat);
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(i -> i.getArgument(0));
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(updateDTO);
-        
-        AccountTransaction mappedEntity = new AccountTransaction();
-        when(accountTransactionMapper.toEntity(updateDTO)).thenReturn(mappedEntity);
 
         // Execute update
         Optional<AccountTransactionDTO> result = service.updateTransaction("debit1", updateDTO);
@@ -1023,8 +1012,6 @@ class AccountTransactionServiceTest {
         when(categoryService.getCategoryById("transfer")).thenReturn(transferCat);
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(i -> i.getArgument(0));
         
-        AccountTransaction mappedEntity = new AccountTransaction();
-        when(accountTransactionMapper.toEntity(updateDTO)).thenReturn(mappedEntity);
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(updateDTO);
 
         // Execute update
@@ -1129,8 +1116,6 @@ class AccountTransactionServiceTest {
         when(categoryService.getCategoryById("transfer")).thenReturn(transferCat);
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(i -> i.getArgument(0));
         
-        AccountTransaction mappedEntity = new AccountTransaction();
-        when(accountTransactionMapper.toEntity(updateDTO)).thenReturn(mappedEntity);
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(updateDTO);
 
         // Execute update
@@ -1863,7 +1848,6 @@ class AccountTransactionServiceTest {
         mappedEntity.setAppUser(currentUser);
         mappedEntity.setLabels(List.of(newLabel1, newLabel2), currentUser);
 
-        when(accountTransactionMapper.toEntity(update)).thenReturn(mappedEntity);
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(invocation -> {
             AccountTransaction tx = invocation.getArgument(0);
             return tx;
