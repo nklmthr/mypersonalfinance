@@ -15,6 +15,11 @@ export default function PredictionRules() {
 	const [loading, setLoading] = useState(false);
 	const [editRule, setEditRule] = useState(null);
 	const [deleteConfirmation, setDeleteConfirmation] = useState(null);
+	
+	// Initialize with current month and year
+	const now = new Date();
+	const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
+	const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
 	NProgress.configure({ showSpinner: false });
 
@@ -92,8 +97,10 @@ export default function PredictionRules() {
 		setLoading(true);
 		NProgress.start();
 		try {
-			await api.post(`/prediction-rules/${id}/regenerate?monthsAhead=1`);
-			showModal("Predictions regenerated successfully!");
+			// Format: yyyy-MM
+			const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+			await api.post(`/prediction-rules/${id}/regenerate?targetMonth=${targetMonth}`);
+			showModal(`Predictions regenerated for ${getMonthName(selectedMonth)} ${selectedYear}!`);
 		} catch (err) {
 			console.error("Failed to regenerate predictions:", err);
 			// Error is already handled by api.js interceptor (shows modal)
@@ -107,8 +114,10 @@ export default function PredictionRules() {
 		setLoading(true);
 		NProgress.start();
 		try {
-			await api.post("/prediction-rules/generate-all?monthsAhead=1");
-			showModal("Predictions generated for all enabled rules!");
+			// Format: yyyy-MM
+			const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+			await api.post(`/prediction-rules/generate-all?targetMonth=${targetMonth}`);
+			showModal(`Predictions generated for ${getMonthName(selectedMonth)} ${selectedYear}!`);
 		} catch (err) {
 			console.error("Failed to generate predictions:", err);
 			// Error is already handled by api.js interceptor (shows modal)
@@ -128,7 +137,36 @@ export default function PredictionRules() {
 		<div className="space-y-4">
 			<div className="flex items-center justify-between">
 				<h1 className="text-2xl font-bold text-gray-800">Prediction Rules</h1>
-				<div className="flex gap-2">
+				<div className="flex gap-2 items-center">
+					{/* Month/Year Selection */}
+					<div className="flex gap-2 items-center bg-gray-50 px-3 py-2 rounded border border-gray-200">
+						<label className="text-sm font-medium text-gray-700">Generate for:</label>
+						<select
+							value={selectedMonth}
+							onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+							className="border border-gray-300 px-2 py-1 rounded text-sm"
+						>
+							{[...Array(12)].map((_, i) => (
+								<option key={i + 1} value={i + 1}>
+									{getMonthName(i + 1)}
+								</option>
+							))}
+						</select>
+						<select
+							value={selectedYear}
+							onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+							className="border border-gray-300 px-2 py-1 rounded text-sm"
+						>
+							{[...Array(5)].map((_, i) => {
+								const year = new Date().getFullYear() + i - 1;
+								return (
+									<option key={year} value={year}>
+										{year}
+									</option>
+								);
+							})}
+						</select>
+					</div>
 					<button
 						onClick={generateAllPredictions}
 						className="bg-purple-600 text-white px-4 py-2 rounded text-sm shadow hover:bg-purple-700"
@@ -180,7 +218,7 @@ export default function PredictionRules() {
 								<button
 									onClick={() => regeneratePredictions(rule.id)}
 									className="text-purple-600 hover:underline"
-									title="Regenerate predictions for next 12 months"
+									title="Regenerate predictions for current month"
 								>
 									Regenerate
 								</button>

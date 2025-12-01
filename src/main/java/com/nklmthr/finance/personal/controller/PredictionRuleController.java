@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.dto.PredictionRuleDTO;
 import com.nklmthr.finance.personal.mapper.PredictionRuleMapper;
-import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.PredictionRule;
 import com.nklmthr.finance.personal.repository.CategoryRepository;
@@ -133,7 +131,7 @@ public class PredictionRuleController {
 	@DeleteMapping("/{id}")
 	public ResponseEntity<?> deleteRule(@PathVariable String id) {
 		try {
-			PredictionRule rule = predictionService.getRuleById(id)
+			predictionService.getRuleById(id)
 				.orElseThrow(() -> new IllegalArgumentException("Prediction rule not found"));
 
 			predictionService.deleteRule(id);
@@ -150,13 +148,13 @@ public class PredictionRuleController {
 	@PostMapping("/{id}/regenerate")
 	public ResponseEntity<?> regeneratePredictions(
 		@PathVariable String id,
-		@RequestParam(defaultValue = "1") int monthsAhead
+		@RequestParam(required = false) String targetMonth
 	) {
 		try {
-			PredictionRule rule = predictionService.getRuleById(id)
+			predictionService.getRuleById(id)
 				.orElseThrow(() -> new IllegalArgumentException("Prediction rule not found"));
 
-			predictionService.regeneratePredictionsForRule(id, monthsAhead);
+			predictionService.regeneratePredictionsForRuleByMonth(id, targetMonth);
 			return ResponseEntity.ok().body("Predictions regenerated successfully");
 		} catch (Exception e) {
 			log.error("Failed to regenerate predictions", e);
@@ -169,10 +167,10 @@ public class PredictionRuleController {
 	 */
 	@PostMapping("/generate-all")
 	public ResponseEntity<?> generateAllPredictions(
-		@RequestParam(defaultValue = "1") int monthsAhead
+		@RequestParam(required = false) String targetMonth
 	) {
 		try {
-			predictionService.generatePredictions(monthsAhead);
+			predictionService.generatePredictionsByMonth(targetMonth);
 			return ResponseEntity.ok().body("Predictions generated successfully for all enabled rules");
 		} catch (Exception e) {
 			log.error("Failed to generate predictions", e);

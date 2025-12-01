@@ -5,7 +5,6 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -140,7 +139,8 @@ public class PredictionService {
 		PredictionRule rule = ruleOpt.get();
 		YearMonth currentMonth = YearMonth.now();
 
-		for (int i = 1; i <= monthsAhead; i++) {
+		// Start from i=0 to allow generating predictions for the current month
+		for (int i = 0; i <= monthsAhead; i++) {
 			YearMonth targetMonth = currentMonth.plusMonths(i);
 			
 			// Skip if this is a yearly prediction and current month doesn't match
@@ -490,7 +490,8 @@ public class PredictionService {
 		YearMonth currentMonth = YearMonth.now();
 
 		for (PredictionRule rule : enabledRules) {
-			for (int i = 1; i <= monthsAhead; i++) {
+			// Start from i=0 to allow generating predictions for the current month
+			for (int i = 0; i <= monthsAhead; i++) {
 				YearMonth targetMonth = currentMonth.plusMonths(i);
 				
 				// Skip if this is a yearly prediction and current month doesn't match
@@ -508,6 +509,121 @@ public class PredictionService {
 					// Then create historical mappings
 					createHistoricalMappings(savedPrediction, rule, targetMonth);
 				}
+			}
+		}
+	}
+	
+	/**
+	 * Regenerate predictions for a specific rule for a specific target month
+	 * @param ruleId The prediction rule ID
+	 * @param targetMonthStr The target month in yyyy-MM format (e.g., "2025-12")
+	 */
+	@Transactional
+	public void regeneratePredictionsForRuleByMonth(String ruleId, String targetMonthStr) {
+		Optional<PredictionRule> ruleOpt = predictionRuleRepository.findById(ruleId);
+		if (ruleOpt.isEmpty()) {
+			return;
+		}
+		
+		PredictionRule rule = ruleOpt.get();
+		YearMonth targetMonth;
+		
+		// Parse target month or use current month if not provided
+		if (targetMonthStr != null && !targetMonthStr.isEmpty()) {
+			targetMonth = YearMonth.parse(targetMonthStr, DateTimeFormatter.ofPattern("yyyy-MM"));
+		} else {
+			targetMonth = YearMonth.now();
+		}
+		
+		// Skip if this is a yearly prediction and target month doesn't match the specific month
+		if (rule.getPredictionType() == PredictionType.YEARLY) {
+			if (rule.getSpecificMonth() == null || 
+			    rule.getSpecificMonth() != targetMonth.getMonthValue()) {
+				log.warn("Cannot generate yearly prediction for rule {} - target month {} doesn't match specific month {}", 
+					ruleId, targetMonth.getMonthValue(), rule.getSpecificMonth());
+				return;
+			}
+		}
+		
+		String monthString = targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+		
+		// Delete existing prediction and its mappings if any
+		Optional<PredictedTransaction> existingPredictionOpt = 
+			predictedTransactionRepository.findByPredictionRuleAndPredictionMonth(rule, monthString);
+		
+		if (existingPredictionOpt.isPresent()) {
+			PredictedTransaction existingPrediction = existingPredictionOpt.get();
+			// Delete mappings first (cascade should handle this, but being explicit)
+			historicalMappingRepository.deleteByPredictedTransaction(existingPrediction);
+			actualMappingRepository.deleteByPredictedTransaction(existingPrediction);
+			predictedTransactionRepository.delete(existingPrediction);
+			// Force flush to ensure deletion is committed before inserting new prediction
+			predictedTransactionRepository.flush();
+			log.debug("Deleted existing prediction for rule {} and month {}", ruleId, monthString);
+		}
+		
+		// Calculate and create new prediction
+		PredictedTransaction prediction = calculatePrediction(rule.getAppUser(), rule, targetMonth);
+		if (prediction != null) {
+			// Save prediction first
+			PredictedTransaction savedPrediction = predictedTransactionRepository.save(prediction);
+			// Then create historical mappings
+			createHistoricalMappings(savedPrediction, rule, targetMonth);
+			
+			// Automatically recalculate actual transactions for this month
+			try {
+				recalculatePredictionsForMonth(monthString);
+				log.info("Auto-recalculated actual transactions for prediction month {}", monthString);
+			} catch (Exception e) {
+				log.warn("Failed to auto-recalculate actual transactions for month {}: {}", 
+					monthString, e.getMessage());
+			}
+		}
+	}
+	
+	/**
+	 * Generate predictions for all enabled rules for a specific target month
+	 * @param targetMonthStr The target month in yyyy-MM format (e.g., "2025-12")
+	 */
+	@Transactional
+	public void generatePredictionsByMonth(String targetMonthStr) {
+		AppUser user = appUserService.getCurrentUser();
+		List<PredictionRule> enabledRules = getEnabledRulesForUser(user);
+		YearMonth targetMonth;
+		
+		// Parse target month or use current month if not provided
+		if (targetMonthStr != null && !targetMonthStr.isEmpty()) {
+			targetMonth = YearMonth.parse(targetMonthStr, DateTimeFormatter.ofPattern("yyyy-MM"));
+		} else {
+			targetMonth = YearMonth.now();
+		}
+		
+		for (PredictionRule rule : enabledRules) {
+			// Skip if this is a yearly prediction and target month doesn't match the specific month
+			if (rule.getPredictionType() == PredictionType.YEARLY) {
+				if (rule.getSpecificMonth() == null || 
+				    rule.getSpecificMonth() != targetMonth.getMonthValue()) {
+					continue;
+				}
+			}
+			
+			String monthString = targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
+			
+			// Check if prediction already exists
+			Optional<PredictedTransaction> existingPredictionOpt = 
+				predictedTransactionRepository.findByPredictionRuleAndPredictionMonth(rule, monthString);
+			
+			if (existingPredictionOpt.isPresent()) {
+				log.debug("Prediction already exists for rule {} and month {}, skipping", rule.getId(), monthString);
+				continue;
+			}
+			
+			PredictedTransaction prediction = calculatePrediction(user, rule, targetMonth);
+			if (prediction != null) {
+				// Save prediction first
+				PredictedTransaction savedPrediction = predictedTransactionRepository.save(prediction);
+				// Then create historical mappings
+				createHistoricalMappings(savedPrediction, rule, targetMonth);
 			}
 		}
 	}
