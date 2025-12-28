@@ -46,7 +46,7 @@ public class ExtractionConfigRegistry {
 				"has been debited with INR",
 				"Notification from Axis Bank"
 			),
-			"alerts@axisbank.com",
+			"alerts@axis.bank.in",
 			null, // auto-detect transaction type (DEBIT or CREDIT)
 			true	 // skip declined transactions
 		));
