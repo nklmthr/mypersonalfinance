@@ -11,15 +11,15 @@ import com.nklmthr.finance.personal.enums.TransactionType;
 public class ExtractionConfig {
 	private String name;
 	private List<String> emailSubjects;
-	private String sender;
+	private List<String> senders;
 	private TransactionType fixedTransactionType; // null means auto-detect
 	private boolean skipDeclinedTransactions;
 
-	public ExtractionConfig(String name, List<String> emailSubjects, String sender, 
+	public ExtractionConfig(String name, List<String> emailSubjects, List<String> senders, 
 	                        TransactionType fixedTransactionType, boolean skipDeclinedTransactions) {
 		this.name = name;
 		this.emailSubjects = emailSubjects;
-		this.sender = sender;
+		this.senders = senders;
 		this.fixedTransactionType = fixedTransactionType;
 		this.skipDeclinedTransactions = skipDeclinedTransactions;
 	}
@@ -32,8 +32,8 @@ public class ExtractionConfig {
 		return emailSubjects;
 	}
 
-	public String getSender() {
-		return sender;
+	public List<String> getSenders() {
+		return senders;
 	}
 
 	public TransactionType getFixedTransactionType() {
@@ -48,4 +48,3 @@ public class ExtractionConfig {
 		return fixedTransactionType != null;
 	}
 }
-

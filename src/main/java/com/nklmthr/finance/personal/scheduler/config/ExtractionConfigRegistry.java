@@ -29,7 +29,7 @@ public class ExtractionConfigRegistry {
 				"Transaction alert on Axis Bank Credit Card no. XX7002",
 				"Axis Bank Credit Card Transaction Alert"
 			),
-			"alerts@axis.bank.in",
+			List.of("alerts@axis.bank.in","alerts@axisbank.com"),
 			null, // auto-detect transaction type
 			true  // skip declined transactions
 		));
@@ -46,7 +46,7 @@ public class ExtractionConfigRegistry {
 				"has been debited with INR",
 				"Notification from Axis Bank"
 			),
-			"alerts@axis.bank.in",
+			List.of("alerts@axis.bank.in","alerts@axisbank.com"),
 			null, // auto-detect transaction type (DEBIT or CREDIT)
 			true	 // skip declined transactions
 		));
@@ -55,7 +55,7 @@ public class ExtractionConfigRegistry {
 		configs.add(new ExtractionConfig(
 			"CSBCC",
 			List.of("Payment update on your CSB One credit card"),
-			"no-reply@getonecard.app",
+			List.of("no-reply@getonecard.app"),
 			null, // auto-detect transaction type
 			true  // skip declined transactions
 		));
@@ -64,7 +64,7 @@ public class ExtractionConfigRegistry {
 		configs.add(new ExtractionConfig(
 			"YesBankCC",
 			List.of("YES BANK - Transaction Alert"),
-			"alerts@yesbank.in",
+			List.of("alerts@yesbank.in"),
 			null, // auto-detect transaction type
 			true  // skip declined transactions
 		));
@@ -73,7 +73,7 @@ public class ExtractionConfigRegistry {
 		configs.add(new ExtractionConfig(
 			"ICICICC",
 			List.of("Transaction alert for your ICICI Bank Credit Card"),
-			"credit_cards@icicibank.com",
+			List.of("credit_cards@icicibank.com"),
 			null, // auto-detect transaction type
 			true  // skip declined transactions
 		));
@@ -82,7 +82,7 @@ public class ExtractionConfigRegistry {
 		configs.add(new ExtractionConfig(
 			"SBICC",
 			List.of("Transaction Alert from SBI Card"),
-			"onlinesbicard@sbicard.com",
+			List.of("onlinesbicard@sbicard.com"),
 			null, // auto-detect transaction type
 			true  // skip declined transactions
 		));
@@ -91,7 +91,7 @@ public class ExtractionConfigRegistry {
 		configs.add(new ExtractionConfig(
 			"AmazonPayMonthlyReward",
 			List.of("Your monthly reward points for using Amazon Pay ICICI Bank credit card added to your Amazon Pay balance"),
-			"no-reply@amazonpay.in",
+			List.of("no-reply@amazonpay.in"),
 			TransactionType.CREDIT, // always credit
 			false
 		));
@@ -103,7 +103,7 @@ public class ExtractionConfigRegistry {
 				"Update on refund processed for your order",
 				"Refund for your Amazon Pay transaction"
 			),
-			"no-reply@amazonpay.in",
+			List.of("no-reply@amazonpay.in"),
 			TransactionType.CREDIT, // refunds are credits
 			false
 		));
@@ -113,4 +113,3 @@ public class ExtractionConfigRegistry {
 		return configs;
 	}
 }
-

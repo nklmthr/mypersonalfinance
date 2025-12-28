@@ -397,15 +397,18 @@ public class ConfigurableDataExtractionService {
 		LocalDate today = LocalDate.now();
 		LocalDate lookbackDate = today.minusDays(gmailLookbackDays);
 
+		// Create a query for each combination of subject and sender
 		for (String subject : config.getEmailSubjects()) {
-			String gmailQuery = String.format("subject:(%s) from:(%s) after:%s before:%s",
-				subject,
-				config.getSender(),
-				formatDate(lookbackDate),
-				formatDate(today.plusDays(1))
-			);
-			queries.add(gmailQuery);
-			logger.debug("Gmail API query: {}", gmailQuery);
+			for (String sender : config.getSenders()) {
+				String gmailQuery = String.format("subject:(%s) from:(%s) after:%s before:%s",
+					subject,
+					sender,
+					formatDate(lookbackDate),
+					formatDate(today.plusDays(1))
+				);
+				queries.add(gmailQuery);
+				logger.debug("Gmail API query: {}", gmailQuery);
+			}
 		}
 		return queries;
 	}
@@ -517,4 +520,3 @@ public class ConfigurableDataExtractionService {
 		}
 	}
 }
-
