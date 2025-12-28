@@ -29,7 +29,7 @@ public class ExtractionConfigRegistry {
 				"Transaction alert on Axis Bank Credit Card no. XX7002",
 				"Axis Bank Credit Card Transaction Alert"
 			),
-			"alerts@axisbank.com",
+			"alerts@axis.bank.in",
 			null, // auto-detect transaction type
 			true  // skip declined transactions
 		));
@@ -48,7 +48,7 @@ public class ExtractionConfigRegistry {
 			),
 			"alerts@axisbank.com",
 			null, // auto-detect transaction type (DEBIT or CREDIT)
-			false
+			true	 // skip declined transactions
 		));
 
 		// CSB Bank Credit Card
