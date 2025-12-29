@@ -109,7 +109,7 @@ public class ConfigurableDataExtractionService {
 
 	public void run() {
 		try {
-			String requestId = UUID.randomUUID().toString();
+ 			String requestId = UUID.randomUUID().toString();
 			MDC.put("requestId", requestId);
 			logger.info("Start: ConfigurableDataExtractionService");
 
@@ -224,9 +224,10 @@ public class ConfigurableDataExtractionService {
 			return;
 		}
 
-		// Handle content-specific filtering (e.g., Axis Savings filters)
-		if (shouldSkipBasedOnContent(emailContent, config)) {
-			logger.debug("Skipping message based on content filters for {}", config.getName());
+		// IMPORTANT: Check for declined transactions FIRST before any processing
+		// This should be done BEFORE creating the transaction object
+		if (config.isSkipDeclinedTransactions() && shouldSkipBasedOnContent(emailContent, config)) {
+			logger.info("Skipping declined/failed transaction for {} based on content filters", config.getName());
 			return;
 		}
 
@@ -302,11 +303,14 @@ public class ConfigurableDataExtractionService {
 	private boolean shouldSkipBasedOnContent(String emailContent, ExtractionConfig config) {
 		String lowerContent = emailContent.toLowerCase();
 
-		// Always skip declined transactions
+		// Skip declined transactions - check for various decline patterns
 		if (lowerContent.contains("has been declined") ||
+		    lowerContent.contains("declined as") ||  // e.g., "declined as amt exceeds limit"
+		    lowerContent.contains("declined due to") ||
 		    lowerContent.contains("incorrect pin") ||
 		    lowerContent.contains("transaction declined") ||
-		    lowerContent.contains("transaction failed")) {
+		    lowerContent.contains("transaction failed") ||
+		    lowerContent.contains("txn") && lowerContent.contains("declined")) {  // e.g., "Txn...declined"
 			logger.info("Skipping declined/failed transaction for {}", config.getName());
 			return true;
 		}
