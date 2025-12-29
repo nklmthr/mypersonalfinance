@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mapstruct.factory.Mappers;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.List;
 
@@ -23,24 +23,11 @@ import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.Label;
 
+@ExtendWith(SpringExtension.class)
 class AccountTransactionMapperTest {
 
+    @Autowired
     private AccountTransactionMapper mapper;
-
-    @BeforeEach
-    void wireDependencies() {
-        // Initialize mapper instance
-        mapper = Mappers.getMapper(AccountTransactionMapper.class);
-        
-        // Inject required mappers since componentModel is spring
-        AccountMapper accountMapper = Mappers.getMapper(AccountMapper.class);
-        // Wire nested mappers used by AccountMapper
-        ReflectionTestUtils.setField(accountMapper, "accountTypeMapper", Mappers.getMapper(AccountTypeMapper.class));
-        ReflectionTestUtils.setField(accountMapper, "institutionMapper", Mappers.getMapper(InstitutionMapper.class));
-        ReflectionTestUtils.setField(mapper, "accountMapper", accountMapper);
-        ReflectionTestUtils.setField(mapper, "categoryMapper", Mappers.getMapper(CategoryMapper.class));
-        ReflectionTestUtils.setField(mapper, "labelMapper", Mappers.getMapper(LabelMapper.class));
-    }
 
     @Test
     void toDTO_mapsParentAndNested() {
@@ -184,5 +171,3 @@ class AccountTransactionMapperTest {
         assertThat(dto.labels()).isEmpty();
     }
 }
-
-

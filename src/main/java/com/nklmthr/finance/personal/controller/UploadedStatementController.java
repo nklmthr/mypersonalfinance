@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,40 +57,32 @@ public class UploadedStatementController {
 		}
 	}
 
-//	@DeleteMapping("/{id}")
-//	public ResponseEntity<?> deleteStatement(@PathVariable String id) {
-//		logger.info("Attempting to delete statement with id: {}", id);
-//
-//		try {
-//			// Step 1: Delete associated transactions
-//			statementService.deleteTransactions(id);
-//			logger.info("Deleted transactions for statement id: {}", id);
-//
-//			// Step 2: Delete the statement itself
-//			statementService.delete(id);
-//			logger.info("Deleted statement with id: {}", id);
-//
-//			return ResponseEntity.noContent().build();
-//
-//		} catch (Exception e) {
-//			logger.error("Failed to delete statement or its transactions for id: {}", id, e);
-//			return ResponseEntity.internalServerError()
-//					.body("Failed to delete statement or transactions: " + e.getMessage());
-//		}
-//	}
-//
-//	@DeleteMapping("/{id}/transactions")
-//	public ResponseEntity<?> deleteTransactions(@PathVariable String id) {
-//		logger.info("Attempting to delete transactions for statement id: {}", id);
-//
-//		try {
-//			statementService.deleteTransactions(id);
-//			logger.info("Successfully deleted transactions for statement id: {}", id);
-//			return ResponseEntity.ok("Transactions deleted successfully");
-//		} catch (Exception e) {
-//			logger.error("Error deleting transactions for statement id: {}", id, e);
-//			return ResponseEntity.internalServerError().body("Failed to delete transactions: " + e.getMessage());
-//		}
-//	}
+	@PostMapping("/{id}/unlink")
+	public ResponseEntity<?> unlinkTransactions(@PathVariable String id) {
+		logger.info("Attempting to unlink transactions for statement id: {}", id);
+		
+		try {
+			statementService.unlinkTransactions(id);
+			logger.info("Successfully unlinked transactions for statement id: {}", id);
+			return ResponseEntity.ok("Transactions unlinked successfully");
+		} catch (Exception e) {
+			logger.error("Error unlinking transactions for statement id: {}", id, e);
+			return ResponseEntity.internalServerError().body("Failed to unlink transactions: " + e.getMessage());
+		}
+	}
+	
+	@DeleteMapping("/{id}")
+	public ResponseEntity<?> deleteStatement(@PathVariable String id) {
+		logger.info("Attempting to delete statement id: {}", id);
+		
+		try {
+			statementService.delete(id);
+			logger.info("Successfully deleted statement id: {}", id);
+			return ResponseEntity.noContent().build();
+		} catch (Exception e) {
+			logger.error("Error deleting statement id: {}", id, e);
+			return ResponseEntity.internalServerError().body("Failed to delete statement: " + e.getMessage());
+		}
+	}
 
 }

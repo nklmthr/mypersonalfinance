@@ -47,6 +47,10 @@ public class UploadedStatement {
 	@Lob
 	@Column(columnDefinition = "TEXT")
 	private String content;
+	
+	@Lob
+	@Column(columnDefinition = "MEDIUMBLOB")
+	private byte[] binaryContent;
 
 	@ManyToOne
 	@JoinColumn(name = "account_id")

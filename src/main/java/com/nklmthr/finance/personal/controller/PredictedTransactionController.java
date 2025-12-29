@@ -6,7 +6,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,7 +16,6 @@ import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
 import com.nklmthr.finance.personal.dto.PredictedTransactionDTO;
 import com.nklmthr.finance.personal.mapper.AccountTransactionMapper;
 import com.nklmthr.finance.personal.mapper.PredictedTransactionMapper;
-import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.PredictedTransaction;
 import com.nklmthr.finance.personal.model.PredictionActualTxnMapping;
 import com.nklmthr.finance.personal.model.PredictionHistoricalTxnMapping;

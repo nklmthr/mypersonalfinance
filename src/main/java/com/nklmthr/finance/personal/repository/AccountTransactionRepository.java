@@ -94,6 +94,8 @@ public interface AccountTransactionRepository
 	List<AccountTransaction> findByAppUserAndUploadedStatement(AppUser appUser, UploadedStatement statement);
 
 	void deleteAllByAppUserAndIdIn(AppUser appUser, List<String> list);
+	
+	void deleteAllByAppUserAndUploadedStatement(AppUser appUser, UploadedStatement statement);
 
 	@EntityGraph(attributePaths = {
             "category", "category.parent",

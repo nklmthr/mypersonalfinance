@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import api from "../auth/api";
 import dayjs from "dayjs";
 import { toast } from "react-toastify";
+import { useErrorModal } from "../auth/ErrorModalContext";
 
 export default function StatementUploadPage() {
+  const { showModal } = useErrorModal();
   const [statements, setStatements] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
@@ -39,20 +41,6 @@ export default function StatementUploadPage() {
     fetchAccounts();
   }, []);
 
-  const handleDeleteStatement = async (id) => {
-    if (!window.confirm("Delete this uploaded statement (not just transactions)?")) return;
-    try {
-      setLoading(true);
-      await api.delete(`/uploaded-statements/${id}`);
-      toast.success("Statement deleted");
-      fetchStatements();
-    } catch (err) {
-      toast.error("Delete failed");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
   
   const handleUpload = async () => {
     if (!file || !selectedAccountId) {
@@ -93,20 +81,52 @@ export default function StatementUploadPage() {
     }
   };
 
-  const handleDeleteTransactions = async (id) => {
-    if (!window.confirm("Delete all transactions from this file?")) return;
-    try {
-      setLoading(true);
-      await api.delete(`/uploaded-statements/${id}/transactions`);
-      toast.success("Transactions deleted");
-      fetchStatements();
-    } catch (err) {
-      toast.error("Delete failed");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  const handleUnlink = async (id) => {
+    showModal(
+      "Are you sure you want to unlink all transactions from this statement? This will delete all associated transactions and reverse account balances.",
+      async () => {
+        // User confirmed
+        try {
+          setLoading(true);
+          await api.post(`/uploaded-statements/${id}/unlink`);
+          toast.success("Transactions unlinked successfully");
+          fetchStatements();
+        } catch (err) {
+          toast.error("Failed to unlink transactions");
+          console.error(err);
+        } finally {
+          setLoading(false);
+        }
+      },
+      () => {
+        // User cancelled - do nothing
+      }
+    );
   };
+
+  const handleDelete = async (id) => {
+    showModal(
+      "Are you sure you want to delete this statement? This action cannot be undone.",
+      async () => {
+        // User confirmed
+        try {
+          setLoading(true);
+          await api.delete(`/uploaded-statements/${id}`);
+          toast.success("Statement deleted successfully");
+          fetchStatements();
+        } catch (err) {
+          toast.error("Failed to delete statement");
+          console.error(err);
+        } finally {
+          setLoading(false);
+        }
+      },
+      () => {
+        // User cancelled - do nothing
+      }
+    );
+  };
+
 
   const filteredStatements = statements.filter((s) => {
     return (!statusFilter || s.status === statusFilter) &&
@@ -189,31 +209,36 @@ export default function StatementUploadPage() {
                 <td className="px-4 py-2">{s.account?.name || "—"}</td>
                 <td className="px-4 py-2">{dayjs(s.uploadedAt).format("DD MMM YYYY, HH:mm")}</td>
                 <td className="px-4 py-2">{s.status}</td>
-                <td className="px-4 py-2 text-center space-x-2">
-                  {s.status === "UPLOADED" && (
-                    <button
-                      className="text-blue-600 hover:underline"
-                      onClick={() => handleProcess(s.id)}
-                    >
-                      Process
-                    </button>
-                  )}
-                  {s.status === "PROCESSED" && (
-                    <button
-                      className="text-red-600 hover:underline"
-                      onClick={() => handleDeleteTransactions(s.id)}
-                    >
-                      Remove Txns
-                    </button>
-                  )} |
-				  {["UPLOADED", "PROCESSED"].includes(s.status) && (
-				    <button
-				      className="text-red-500 hover:underline"
-				      onClick={() => handleDeleteStatement(s.id)}
-				    >
-				      Delete Stmt
-				    </button>
-				  )}
+                <td className="px-4 py-2 text-center">
+                  <div className="flex flex-col sm:flex-row gap-2 justify-center items-center">
+                    {s.status === "UPLOADED" && (
+                      <>
+                        <button
+                          className="text-blue-600 hover:underline font-medium"
+                          onClick={() => handleProcess(s.id)}
+                        >
+                          Process
+                        </button>
+                        <button
+                          className="text-red-600 hover:underline font-medium"
+                          onClick={() => handleDelete(s.id)}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                    {s.status === "PROCESSED" && (
+                      <>
+                        <span className="text-green-600 font-medium">✓ Processed</span>
+                        <button
+                          className="text-red-600 hover:underline font-medium"
+                          onClick={() => handleUnlink(s.id)}
+                        >
+                          Unlink
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 
 import org.hibernate.annotations.UuidGenerator;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -39,5 +41,6 @@ public class AccountType {
 	private BigDecimal accountTypeBalance;
 
 	@ManyToOne(optional = false)
+	@JsonIgnore
 	private AppUser appUser;
 }
