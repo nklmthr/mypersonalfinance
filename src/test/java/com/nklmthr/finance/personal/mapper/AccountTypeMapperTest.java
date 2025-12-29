@@ -4,19 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.mapstruct.factory.Mappers;
 
 import com.nklmthr.finance.personal.dto.AccountTypeDTO;
 import com.nklmthr.finance.personal.model.AccountType;
 
-@ExtendWith(SpringExtension.class)
 class AccountTypeMapperTest {
 
-    @Autowired
     private AccountTypeMapper mapper;
+
+    @BeforeEach
+    void setUp() {
+        mapper = Mappers.getMapper(AccountTypeMapper.class);
+    }
 
     @Test
     void mapsEntityToDto() {

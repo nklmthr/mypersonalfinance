@@ -6,9 +6,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.List;
 
@@ -23,7 +22,14 @@ import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.Label;
 
-@ExtendWith(SpringExtension.class)
+@SpringBootTest(classes = {
+    AccountTransactionMapperImpl.class,
+    AccountMapperImpl.class,
+    CategoryMapperImpl.class,
+    LabelMapperImpl.class,
+    AccountTypeMapperImpl.class,
+    InstitutionMapperImpl.class
+})
 class AccountTransactionMapperTest {
 
     @Autowired
