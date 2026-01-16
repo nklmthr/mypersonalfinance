@@ -266,6 +266,8 @@ export default function OverviewPage() {
 		if (allBalanceSheetData.length === 0) return;
 
 		const now = new Date();
+		// Create a cutoff date for the start of the current month to exclude it
+		const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 		let filteredData = [];
 
 		switch (balanceTimePeriod) {
@@ -288,6 +290,10 @@ export default function OverviewPage() {
 				filteredData = allBalanceSheetData.slice(-6);
 		}
 
+		
+		// Filter out any data from the current month or future
+		filteredData = filteredData.filter(item => item.date < currentMonthStart);
+
 		setBalanceSheetData(filteredData);
 	}, [balanceTimePeriod, allBalanceSheetData]);
 
@@ -296,7 +302,8 @@ export default function OverviewPage() {
 		if (!allCategoryData.categories || allCategoryData.categories.length === 0) return;
 
 		let monthsToShow = [];
-		const now = dayjs();
+		// Start from previous month to exclude incomplete current month
+		const now = dayjs().subtract(1, 'month');
 
 		switch (categoryTimePeriod) {
 			case '6months':
