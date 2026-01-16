@@ -153,10 +153,6 @@ public class AccountTransactionService {
 		Account toAccount = accountRepository.findByAppUserAndId(appUser, request.getDestinationAccountId()).get();
 		toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
 		
-		Account fromAccount = debit.getAccount();
-		fromAccount.setBalance(fromAccount.getBalance().subtract(debit.getAmount()));
-		
-		accountRepository.save(fromAccount);
 		accountRepository.save(toAccount);
 		
 		// Create the credit transaction (destination)
