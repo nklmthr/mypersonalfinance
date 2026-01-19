@@ -86,14 +86,18 @@ public class SBIStatentParserXLS extends StatementParser {
 			
 			// Column B (index 1): Description
 			Cell descCell = row.getCell(1);
-			String description = descCell != null ? getCellValueAsString(descCell).trim() : "";
+			String fullDescription = descCell != null ? getCellValueAsString(descCell).trim() : "";
+			
+			// Extract merchant name for UPI transactions
+			String description = extractMerchantName(fullDescription);
+			String explanation = fullDescription;
 			
 			// Column D (index 3): Debit
 			Cell debitCell = row.getCell(3);
 			String debitStr = debitCell != null ? getCellValueAsString(debitCell).replace(",", "").trim() : "";
 			
-			// Column F (index 5): Credit
-			Cell creditCell = row.getCell(5);
+			// Column E (index 4): Credit
+			Cell creditCell = row.getCell(4);
 			String creditStr = creditCell != null ? getCellValueAsString(creditCell).replace(",", "").trim() : "";
 			
 			// Determine amount and transaction type
@@ -117,7 +121,7 @@ public class SBIStatentParserXLS extends StatementParser {
 			tx.setAmount(amount);
 			tx.setType(isCredit ? TransactionType.CREDIT : TransactionType.DEBIT);
 			tx.setDescription(description);
-			tx.setExplanation(null);
+			tx.setExplanation(explanation);
 			tx.setAccount(statement.getAccount());
 			tx.setUploadedStatement(statement);
 			
@@ -127,6 +131,63 @@ public class SBIStatentParserXLS extends StatementParser {
 			logger.error("Error parsing row {}", row.getRowNum(), e);
 			return null;
 		}
+	}
+
+	/**
+	 * Extracts the merchant/counterparty name from UPI transaction descriptions.
+	 * For UPI transactions like "DEP TFR UPI/CR/638345844673/NAVEEN K/ICIC/bal lal.nav/UPI 0097737162096...",
+	 * extracts "NAVEEN K/ICIC/bal lal.nav".
+	 * 
+	 * @param fullDescription The full transaction description
+	 * @return The extracted merchant name, or the original description if not a UPI transaction
+	 */
+	private String extractMerchantName(String fullDescription) {
+		if (fullDescription == null || fullDescription.isEmpty()) {
+			return fullDescription;
+		}
+		
+		// Pattern for UPI transactions: UPI/CR/ or UPI/DR/ followed by transaction ID and merchant details
+		// Example: "DEP TFR   UPI/CR/638345844673/NAVEEN K/ICIC/bal lal.nav/UPI   0097737162096 AT 40351 DOMMASANDRA"
+		// We want to extract: "NAVEEN K/ICIC/bal lal.nav"
+		
+		int upiIndex = fullDescription.indexOf("UPI/");
+		if (upiIndex == -1) {
+			// Not a UPI transaction, return as is
+			return fullDescription;
+		}
+		
+		// Find the transaction ID end (after UPI/CR/ or UPI/DR/)
+		int afterUpiType = fullDescription.indexOf("/", upiIndex + 7); // Skip "UPI/CR/" or "UPI/DR/"
+		if (afterUpiType == -1) {
+			return fullDescription;
+		}
+		
+		// Find the next "/" after transaction ID
+		int merchantStart = fullDescription.indexOf("/", afterUpiType + 1);
+		if (merchantStart == -1) {
+			return fullDescription;
+		}
+		merchantStart++; // Move past the "/"
+		
+		// Find where merchant details end (marked by "/UPI" or end of string)
+		int merchantEnd = fullDescription.indexOf("/UPI", merchantStart);
+		if (merchantEnd == -1) {
+			// Try to find other patterns like " AT " which indicates location info
+			merchantEnd = fullDescription.indexOf(" AT ", merchantStart);
+			if (merchantEnd == -1) {
+				merchantEnd = fullDescription.length();
+			}
+		}
+		
+		// Extract and clean up the merchant name
+		String merchantName = fullDescription.substring(merchantStart, merchantEnd).trim();
+		
+		// If merchant name is empty or too short, return original
+		if (merchantName.isEmpty() || merchantName.length() < 3) {
+			return fullDescription;
+		}
+		
+		return merchantName;
 	}
 
 	private LocalDateTime parseDate(String dateStr) {

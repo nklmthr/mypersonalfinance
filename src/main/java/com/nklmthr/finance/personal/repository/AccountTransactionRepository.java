@@ -222,4 +222,19 @@ public interface AccountTransactionRepository
 			@Param("endDate") LocalDateTime endDate,
 			@Param("type") TransactionType type);
 
-}
+	/**
+	 * Find transactions by account and date range (for statement upload duplicate detection)
+	 */
+	@EntityGraph(attributePaths = {
+            "category", "category.parent",
+            "account", "account.accountType", "account.institution"
+    })
+	@Query("SELECT t FROM AccountTransaction t WHERE t.account = :account " +
+	       "AND t.date >= :startDate AND t.date <= :endDate " +
+	       "ORDER BY t.date DESC")
+	List<AccountTransaction> findByAccountAndDateBetween(
+			@Param("account") com.nklmthr.finance.personal.model.Account account,
+			@Param("startDate") LocalDateTime startDate,
+			@Param("endDate") LocalDateTime endDate);
+	}
+

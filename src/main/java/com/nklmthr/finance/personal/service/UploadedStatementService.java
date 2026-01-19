@@ -157,12 +157,12 @@ public class UploadedStatementService {
 			tx.setAppUser(appUser); // Associate with current user
 			tx.setCategory(categoryService.getNonClassifiedCategory());
 			
-			// Check for duplicates using date, description, amount, and type
-			// The isTransactionAlreadyPresent method will check if a transaction with the same
-			// date (within 60 seconds), amount, description, type, and account already exists
-			if (accountTransactionService.isTransactionAlreadyPresent(tx, appUser)) {
-				logger.info("Skipping duplicate transaction: date={}, amount={}, description={}", 
-						tx.getDate(), tx.getAmount(), tx.getDescription());
+			// Check for duplicates using statement-specific duplicate detection
+			// This checks based on account, explanation (full UPI reference), amount, type, and date
+			if (accountTransactionService.isStatementTransactionDuplicate(tx, appUser)) {
+				logger.info("Skipping duplicate transaction: date={}, amount={}, explanation={}", 
+						tx.getDate(), tx.getAmount(), 
+						tx.getExplanation() != null ? tx.getExplanation().substring(0, Math.min(50, tx.getExplanation().length())) : "null");
 				duplicateCount++;
 			} else {
 				accountTransactionService.save(tx, appUser);

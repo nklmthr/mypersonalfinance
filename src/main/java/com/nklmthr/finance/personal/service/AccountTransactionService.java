@@ -664,6 +664,65 @@ public class AccountTransactionService {
 	accountTransactionRepository.deleteByAppUserAndId(appUser, id);
 }
 
+	/**
+	 * Check if a statement transaction already exists (for uploaded statement deduplication).
+	 * Uses explanation (contains full UPI reference), amount, type, account, and date.
+	 * 
+	 * @param newTransaction The transaction to check
+	 * @param appUser The current user
+	 * @return true if a duplicate exists
+	 */
+	@Transactional
+	public boolean isStatementTransactionDuplicate(AccountTransaction newTransaction, AppUser appUser) {
+		if (newTransaction == null || newTransaction.getAccount() == null) {
+			return false;
+		}
+		
+		// Get transactions for the same account within a time window
+		LocalDateTime startDate = newTransaction.getDate().minusSeconds(MATCH_TIME_WINDOW_SECONDS);
+		LocalDateTime endDate = newTransaction.getDate().plusSeconds(MATCH_TIME_WINDOW_SECONDS);
+		
+		List<AccountTransaction> candidateTransactions = accountTransactionRepository
+			.findByAccountAndDateBetween(
+				newTransaction.getAccount(),
+				startDate,
+				endDate
+			);
+		
+		if (candidateTransactions == null || candidateTransactions.isEmpty()) {
+			return false;
+		}
+		
+		// Check for exact match on key fields
+		for (AccountTransaction existing : candidateTransactions) {
+			boolean isAmountEqual = existing.getAmount() != null && newTransaction.getAmount() != null
+					&& existing.getAmount().compareTo(newTransaction.getAmount()) == 0;
+			
+			boolean isTypeEqual = existing.getType() != null && existing.getType().equals(newTransaction.getType());
+			
+			// Use explanation for matching (contains full UPI reference)
+			String existingExplanation = normalizeDescription(existing.getExplanation());
+			String newExplanation = normalizeDescription(newTransaction.getExplanation());
+			boolean isExplanationEqual = StringUtils.isNotBlank(existingExplanation) 
+					&& StringUtils.isNotBlank(newExplanation)
+					&& existingExplanation.equals(newExplanation);
+			
+			boolean isAccountEqual = StringUtils.equals(
+					existing.getAccount().getId(), 
+					newTransaction.getAccount().getId()
+			);
+			
+			if (isAmountEqual && isTypeEqual && isExplanationEqual && isAccountEqual) {
+				logger.info("Found duplicate statement transaction: existing ID={}, date={}, amount={}, explanation={}", 
+						existing.getId(), existing.getDate(), existing.getAmount(), 
+						existing.getExplanation() != null ? existing.getExplanation().substring(0, Math.min(50, existing.getExplanation().length())) : "null");
+				return true;
+			}
+		}
+		
+		return false;
+	}
+
 	@Transactional
 	public boolean isTransactionAlreadyPresent(AccountTransaction newTransaction, AppUser appUser) {
 		return findDuplicate(newTransaction, appUser)
