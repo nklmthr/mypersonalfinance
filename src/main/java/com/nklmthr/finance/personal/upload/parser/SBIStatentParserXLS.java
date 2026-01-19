@@ -84,20 +84,12 @@ public class SBIStatentParserXLS extends StatementParser {
 				return null;
 			}
 			
-			// Column C (index 2): Description
-			Cell descCell = row.getCell(2);
-			String descPart = descCell != null ? getCellValueAsString(descCell).trim() : "";
+			// Column B (index 1): Description
+			Cell descCell = row.getCell(1);
+			String description = descCell != null ? getCellValueAsString(descCell).trim() : "";
 			
-			// Column D (index 3): Ref No./Cheque No.
-			Cell refNoCell = row.getCell(3);
-			String refNoPart = refNoCell != null ? getCellValueAsString(refNoCell).trim() : "";
-			
-			// Concatenate Description and Ref No. for the full transaction description
-			// This ensures UPI transaction IDs and unique identifiers are included
-			String description = buildDescription(descPart, refNoPart);
-			
-			// Column E (index 4): Debit
-			Cell debitCell = row.getCell(4);
+			// Column D (index 3): Debit
+			Cell debitCell = row.getCell(3);
 			String debitStr = debitCell != null ? getCellValueAsString(debitCell).replace(",", "").trim() : "";
 			
 			// Column F (index 5): Credit
@@ -125,7 +117,7 @@ public class SBIStatentParserXLS extends StatementParser {
 			tx.setAmount(amount);
 			tx.setType(isCredit ? TransactionType.CREDIT : TransactionType.DEBIT);
 			tx.setDescription(description);
-			tx.setExplanation(null); // Set explanation to null as it's now part of description
+			tx.setExplanation(null);
 			tx.setAccount(statement.getAccount());
 			tx.setUploadedStatement(statement);
 			
@@ -135,31 +127,6 @@ public class SBIStatentParserXLS extends StatementParser {
 			logger.error("Error parsing row {}", row.getRowNum(), e);
 			return null;
 		}
-	}
-	
-	/**
-	 * Builds the transaction description by concatenating Description and Ref No./Cheque No.
-	 * This ensures unique identifiers like UPI transaction IDs are included for deduplication.
-	 * 
-	 * @param descPart Description from Column C
-	 * @param refNoPart Ref No./Cheque No. from Column D
-	 * @return Concatenated description
-	 */
-	private String buildDescription(String descPart, String refNoPart) {
-		StringBuilder description = new StringBuilder();
-		
-		if (descPart != null && !descPart.isEmpty()) {
-			description.append(descPart);
-		}
-		
-		if (refNoPart != null && !refNoPart.isEmpty()) {
-			if (description.length() > 0) {
-				description.append(" - ");
-			}
-			description.append(refNoPart);
-		}
-		
-		return description.toString();
 	}
 
 	private LocalDateTime parseDate(String dateStr) {
