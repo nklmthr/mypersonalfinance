@@ -88,6 +88,9 @@ public class SBIStatentParserXLS extends StatementParser {
 			Cell descCell = row.getCell(1);
 			String fullDescription = descCell != null ? getCellValueAsString(descCell).trim() : "";
 			
+			// Remove newlines and extra whitespace
+			fullDescription = fullDescription.replaceAll("\\r\\n|\\r|\\n", " ").replaceAll("\\s+", " ").trim();
+			
 			// Extract merchant name for UPI transactions
 			String description = extractMerchantName(fullDescription);
 			String explanation = fullDescription;
