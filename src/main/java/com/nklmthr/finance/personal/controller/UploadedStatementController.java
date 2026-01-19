@@ -28,9 +28,10 @@ public class UploadedStatementController {
 	// Upload CSV File
 	@PostMapping("/upload")
 	public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file,
-			@RequestParam("accountId") String accountId) {
+			@RequestParam("accountId") String accountId,
+			@RequestParam(value = "password", required = false) String password) {
 		try {
-			UploadedStatement statement = statementService.upload(file, accountId);
+			UploadedStatement statement = statementService.upload(file, accountId, password);
 			return ResponseEntity.ok(statement);
 		} catch (Exception e) {
 			logger.error("Error uploading statement file: {}", file.getOriginalFilename(), e);

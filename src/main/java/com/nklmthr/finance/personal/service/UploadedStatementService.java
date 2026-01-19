@@ -48,7 +48,7 @@ public class UploadedStatementService {
 	private com.nklmthr.finance.personal.repository.AccountTransactionRepository accountTransactionRepository;
 
 	@Transactional
-	public UploadedStatement upload(MultipartFile file, String accountId) throws Exception {
+	public UploadedStatement upload(MultipartFile file, String accountId, String password) throws Exception {
 		AppUser appUser = appUserService.getCurrentUser(); // Ensure user context
 		Account account = accountRepository.findByAppUserAndId(appUser, accountId).get();
 		if (account == null) {
@@ -70,6 +70,7 @@ public class UploadedStatementService {
 		statement.setAccount(account);
 		statement.setUploadedAt(LocalDateTime.now());
 		statement.setStatus(Status.UPLOADED);
+		statement.setPassword(password);
 		
 		// Check file extension to determine if it's binary (Excel) or text (CSV)
 		if (filename != null && (filename.toLowerCase().endsWith(".xls") || filename.toLowerCase().endsWith(".xlsx"))) {

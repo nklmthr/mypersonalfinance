@@ -13,6 +13,7 @@ export default function StatementUploadPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState(null);
+  const [password, setPassword] = useState("");
 
   const fetchStatements = async () => {
     setLoading(true);
@@ -51,12 +52,16 @@ export default function StatementUploadPage() {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("accountId", selectedAccountId);
+    if (password) {
+      formData.append("password", password);
+    }
 
     try {
       setLoading(true);
       await api.post("/uploaded-statements/upload", formData);
       toast.success("Upload successful");
       setFile(null);
+      setPassword("");
       setSelectedAccountId("");
       fetchStatements();
     } catch (err) {
@@ -144,6 +149,13 @@ export default function StatementUploadPage() {
         <input
           type="file"
           onChange={(e) => setFile(e.target.files[0])}
+          className="border p-2 rounded w-full sm:w-auto"
+        />
+        <input
+          type="password"
+          placeholder="Password (optional)"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           className="border p-2 rounded w-full sm:w-auto"
         />
         <select

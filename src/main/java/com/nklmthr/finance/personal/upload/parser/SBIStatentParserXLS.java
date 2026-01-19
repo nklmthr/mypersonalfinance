@@ -10,8 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.hssf.usermodel.HSSFWorkbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
@@ -19,14 +17,14 @@ import com.nklmthr.finance.personal.model.UploadedStatement;
 
 public class SBIStatentParserXLS extends StatementParser {
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SBIStatentParserXLS.class);
-	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MMM-yy");
+	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 	private static final int DATA_START_ROW_INDEX = 21; // Row 22 (0-indexed) is where data starts
 
 	@Override
 	public List<AccountTransaction> parse(InputStream inputStream, UploadedStatement statement) {
 		List<AccountTransaction> transactions = new ArrayList<>();
 		
-		try (Workbook workbook = createWorkbook(inputStream)) {
+		try (Workbook workbook = createWorkbook(inputStream, statement.getPassword())) {
 			Sheet sheet = workbook.getSheetAt(0); // Get first sheet
 			
 			// Start reading from row 22 (index 21) onwards
@@ -34,6 +32,12 @@ public class SBIStatentParserXLS extends StatementParser {
 				Row row = sheet.getRow(rowIndex);
 				if (row == null) {
 					continue;
+				}
+				
+				// Check if we've reached the summary/footer section and stop processing
+				if (isFooterRow(row)) {
+					logger.info("Reached statement footer/summary section at row {}, stopping transaction parsing", rowIndex);
+					break;
 				}
 				
 				AccountTransaction tx = parseRow(row, statement);
@@ -52,18 +56,16 @@ public class SBIStatentParserXLS extends StatementParser {
 		return transactions;
 	}
 
-	private Workbook createWorkbook(InputStream inputStream) throws IOException {
+	private Workbook createWorkbook(InputStream inputStream, String password) throws IOException {
 		try {
-			// Try XLSX format first
-			return new XSSFWorkbook(inputStream);
-		} catch (Exception e) {
-			// If XLSX fails, try XLS format
-			try {
-				return new HSSFWorkbook(inputStream);
-			} catch (Exception ex) {
-				logger.error("Failed to create workbook from input stream", ex);
-				throw new IOException("Unable to read Excel file. File may be corrupted or in unsupported format.", ex);
+			if (password != null && !password.isBlank()) {
+				return WorkbookFactory.create(inputStream, password);
+			} else {
+				return WorkbookFactory.create(inputStream);
 			}
+		} catch (Exception e) {
+			logger.error("Failed to create workbook from input stream", e);
+			throw new IOException("Unable to read Excel file. File may be corrupted, encrypted or in unsupported format.", e);
 		}
 	}
 
@@ -217,6 +219,30 @@ public class SBIStatentParserXLS extends StatementParser {
 			default:
 				return "";
 		}
+	}
+	
+	/**
+	 * Checks if a row is part of the statement footer/summary section.
+	 * Footer rows typically contain summary information like "Statement Summary",
+	 * "Brought Forward", disclaimer text, etc.
+	 * 
+	 * @param row The row to check
+	 * @return true if this is a footer/summary row, false otherwise
+	 */
+	private boolean isFooterRow(Row row) {
+		// Check the first column (Date column) for footer indicators
+		Cell firstCell = row.getCell(0);
+		if (firstCell == null) {
+			return false;
+		}
+		
+		String cellValue = getCellValueAsString(firstCell).trim().toLowerCase();
+		
+		// Common footer row indicators in SBI statements
+		return cellValue.contains("statement summary") ||
+		       cellValue.contains("brought forward") ||
+		       cellValue.contains("please do not share") ||
+		       cellValue.contains("this is a computer generated");
 	}
 
 	@Override

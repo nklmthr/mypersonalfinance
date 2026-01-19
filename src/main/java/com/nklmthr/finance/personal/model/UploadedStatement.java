@@ -44,6 +44,9 @@ public class UploadedStatement {
 	@Enumerated(EnumType.STRING)
 	private Status status;
 
+	@Column(length = 255)
+	private String password;
+
 	@Lob
 	@Column(columnDefinition = "TEXT")
 	private String content;
