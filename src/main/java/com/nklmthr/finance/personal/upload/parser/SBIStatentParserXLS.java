@@ -18,7 +18,7 @@ import com.nklmthr.finance.personal.model.UploadedStatement;
 public class SBIStatentParserXLS extends StatementParser {
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SBIStatentParserXLS.class);
 	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-	private static final int DATA_START_ROW_INDEX = 21; // Row 22 (0-indexed) is where data starts
+	private static final int DATA_START_ROW_INDEX = 18; // Row 19 (0-indexed) is where data starts
 
 	@Override
 	public List<AccountTransaction> parse(InputStream inputStream, UploadedStatement statement) {
@@ -27,7 +27,7 @@ public class SBIStatentParserXLS extends StatementParser {
 		try (Workbook workbook = createWorkbook(inputStream, statement.getPassword())) {
 			Sheet sheet = workbook.getSheetAt(0); // Get first sheet
 			
-			// Start reading from row 22 (index 21) onwards
+			// Start reading from row 19 (index 18) onwards
 			for (int rowIndex = DATA_START_ROW_INDEX; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
 				Row row = sheet.getRow(rowIndex);
 				if (row == null) {
