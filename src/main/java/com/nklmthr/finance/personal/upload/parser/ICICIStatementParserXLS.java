@@ -15,10 +15,10 @@ import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.UploadedStatement;
 
-public class SBIStatentParserXLS extends StatementParser {
-	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SBIStatentParserXLS.class);
+public class ICICIStatementParserXLS extends StatementParser {
+	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ICICIStatementParserXLS.class);
 	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-	private static final int DATA_START_ROW_INDEX = 18; // Row 19 (0-indexed) is where data starts
+	private static final int DATA_START_ROW_INDEX = 13; // Row 14 (0-indexed) is where data starts
 
 	@Override
 	public List<AccountTransaction> parse(InputStream inputStream, UploadedStatement statement) {
@@ -27,16 +27,16 @@ public class SBIStatentParserXLS extends StatementParser {
 		try (Workbook workbook = createWorkbook(inputStream, statement.getPassword())) {
 			Sheet sheet = workbook.getSheetAt(0); // Get first sheet
 			
-			// Start reading from row 19 (index 18) onwards
+			// Start reading from row 14 (index 13) onwards
 			for (int rowIndex = DATA_START_ROW_INDEX; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
 				Row row = sheet.getRow(rowIndex);
 				if (row == null) {
 					continue;
 				}
 				
-				// Check if we've reached the summary/footer section and stop processing
+				// Check if we've reached the footer section and stop processing
 				if (isFooterRow(row)) {
-					logger.info("Reached statement footer/summary section at row {}, stopping transaction parsing", rowIndex);
+					logger.info("Reached statement footer section at row {}, stopping transaction parsing", rowIndex);
 					break;
 				}
 				
@@ -71,8 +71,8 @@ public class SBIStatentParserXLS extends StatementParser {
 
 	private AccountTransaction parseRow(Row row, UploadedStatement statement) {
 		try {
-			// Column A (index 0): Txn Date
-			Cell txnDateCell = row.getCell(0);
+			// Column D (index 3): Transaction Date
+			Cell txnDateCell = row.getCell(3);
 			if (txnDateCell == null || getCellValueAsString(txnDateCell).isBlank()) {
 				return null; // Skip empty rows
 			}
@@ -84,33 +84,33 @@ public class SBIStatentParserXLS extends StatementParser {
 				return null;
 			}
 			
-			// Column B (index 1): Description
-			Cell descCell = row.getCell(1);
+			// Column F (index 5): Transaction Remarks/Description
+			Cell descCell = row.getCell(5);
 			String fullDescription = descCell != null ? getCellValueAsString(descCell).trim() : "";
 			
 			// Remove newlines and extra whitespace
 			fullDescription = fullDescription.replaceAll("\\r\\n|\\r|\\n", " ").replaceAll("\\s+", " ").trim();
 			
-			// Extract merchant name for UPI transactions
-			String description = extractMerchantName(fullDescription);
+			// For ICICI, use full description as both description and explanation
+			String description = fullDescription;
 			String explanation = fullDescription;
 			
-			// Column D (index 3): Debit
-			Cell debitCell = row.getCell(3);
+			// Column G (index 6): Withdrawal Amount (Debit)
+			Cell debitCell = row.getCell(6);
 			String debitStr = debitCell != null ? getCellValueAsString(debitCell).replace(",", "").trim() : "";
 			
-			// Column E (index 4): Credit
-			Cell creditCell = row.getCell(4);
+			// Column H (index 7): Deposit Amount (Credit)
+			Cell creditCell = row.getCell(7);
 			String creditStr = creditCell != null ? getCellValueAsString(creditCell).replace(",", "").trim() : "";
 			
 			// Determine amount and transaction type
 			BigDecimal amount;
 			boolean isCredit;
 			
-			if (!debitStr.isEmpty() && !debitStr.equals("-")) {
+			if (!debitStr.isEmpty() && !debitStr.equals("-") && !debitStr.equals("0.00")) {
 				amount = new BigDecimal(debitStr);
 				isCredit = false;
-			} else if (!creditStr.isEmpty() && !creditStr.equals("-")) {
+			} else if (!creditStr.isEmpty() && !creditStr.equals("-") && !creditStr.equals("0.00")) {
 				amount = new BigDecimal(creditStr);
 				isCredit = true;
 			} else {
@@ -134,60 +134,6 @@ public class SBIStatentParserXLS extends StatementParser {
 			logger.error("Error parsing row {}", row.getRowNum(), e);
 			return null;
 		}
-	}
-
-	/**
-	 * Extracts the merchant/counterparty name from UPI transaction descriptions.
-	 * For UPI transactions like "WDL TFR UPI/DR/601644317405/MOTI RAM/UTIB/735 8814407/UPI 0097694162092 AT 40351 DOMMASANDRA",
-	 * extracts "MOTI RAM/UTIB/735 8814407/UPI 0097694162092".
-	 * 
-	 * @param fullDescription The full transaction description
-	 * @return The extracted merchant name, or the original description if not a UPI transaction
-	 */
-	private String extractMerchantName(String fullDescription) {
-		if (fullDescription == null || fullDescription.isEmpty()) {
-			return fullDescription;
-		}
-		
-		// Pattern for UPI transactions: UPI/CR/ or UPI/DR/ followed by transaction ID and merchant details
-		// Example: "WDL TFR UPI/DR/601644317405/MOTI RAM/UTIB/735 8814407/UPI 0097694162092 AT 40351 DOMMASANDRA"
-		// We want to extract: "MOTI RAM/UTIB/735 8814407/UPI 0097694162092"
-		
-		int upiIndex = fullDescription.indexOf("UPI/");
-		if (upiIndex == -1) {
-			// Not a UPI transaction, return as is
-			return fullDescription;
-		}
-		
-		// Find the transaction ID end (after UPI/CR/ or UPI/DR/)
-		int afterUpiType = fullDescription.indexOf("/", upiIndex + 7); // Skip "UPI/CR/" or "UPI/DR/"
-		if (afterUpiType == -1) {
-			return fullDescription;
-		}
-		
-		// Find the next "/" after transaction ID
-		int merchantStart = fullDescription.indexOf("/", afterUpiType + 1);
-		if (merchantStart == -1) {
-			return fullDescription;
-		}
-		merchantStart++; // Move past the "/"
-		
-		// Find where merchant details end - look for " AT " which indicates location info
-		int merchantEnd = fullDescription.indexOf(" AT ", merchantStart);
-		if (merchantEnd == -1) {
-			// If no " AT " found, use the entire remaining string
-			merchantEnd = fullDescription.length();
-		}
-		
-		// Extract and clean up the merchant name
-		String merchantName = fullDescription.substring(merchantStart, merchantEnd).trim();
-		
-		// If merchant name is empty or too short, return original
-		if (merchantName.isEmpty() || merchantName.length() < 3) {
-			return fullDescription;
-		}
-		
-		return merchantName;
 	}
 
 	private LocalDateTime parseDate(String dateStr) {
@@ -250,27 +196,25 @@ public class SBIStatentParserXLS extends StatementParser {
 	}
 	
 	/**
-	 * Checks if a row is part of the statement footer/summary section.
-	 * Footer rows typically contain summary information like "Statement Summary",
-	 * "Brought Forward", disclaimer text, etc.
+	 * Checks if a row is part of the statement footer/legends section.
+	 * Footer rows start with "Legends Used in Account Statement".
 	 * 
 	 * @param row The row to check
-	 * @return true if this is a footer/summary row, false otherwise
+	 * @return true if this is a footer row, false otherwise
 	 */
 	private boolean isFooterRow(Row row) {
-		// Check the first column (Date column) for footer indicators
-		Cell firstCell = row.getCell(0);
-		if (firstCell == null) {
-			return false;
+		// Check multiple columns for footer indicators
+		for (int colIndex = 0; colIndex < 10; colIndex++) {
+			Cell cell = row.getCell(colIndex);
+			if (cell != null) {
+				String cellValue = getCellValueAsString(cell).trim().toLowerCase();
+				if (cellValue.contains("legends used in account statement") ||
+				    cellValue.contains("legend")) {
+					return true;
+				}
+			}
 		}
-		
-		String cellValue = getCellValueAsString(firstCell).trim().toLowerCase();
-		
-		// Common footer row indicators in SBI statements
-		return cellValue.contains("statement summary") ||
-		       cellValue.contains("brought forward") ||
-		       cellValue.contains("please do not share") ||
-		       cellValue.contains("this is a computer generated");
+		return false;
 	}
 
 	@Override

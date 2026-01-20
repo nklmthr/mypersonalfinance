@@ -20,6 +20,7 @@ import com.nklmthr.finance.personal.model.UploadedStatement;
 import com.nklmthr.finance.personal.model.UploadedStatement.Status;
 import com.nklmthr.finance.personal.repository.AccountRepository;
 import com.nklmthr.finance.personal.repository.UploadedStatementRepository;
+import com.nklmthr.finance.personal.upload.parser.ICICIStatementParserXLS;
 import com.nklmthr.finance.personal.upload.parser.SBIStatentParserXLS;
 import com.nklmthr.finance.personal.upload.parser.StatementParser;
 
@@ -127,8 +128,11 @@ public class UploadedStatementService {
 		String accountName = statement.getAccount().getName().toLowerCase();
 		logger.info("Determining parser for account: {}", accountName);
 		if (accountName.contains("sbi")) {
-			logger.info("Using SBICsvParser for account: {}", accountName);
+			logger.info("Using SBIStatentParserXLS for account: {}", accountName);
 			parser = new SBIStatentParserXLS();
+		} else if (accountName.contains("icici")) {
+			logger.info("Using ICICIStatementParserXLS for account: {}", accountName);
+			parser = new ICICIStatementParserXLS();
 		} else {
 			logger.error("No parser implemented for account: {}", accountName);
 			throw new UnsupportedOperationException("No parser implemented for account: " + accountName);
