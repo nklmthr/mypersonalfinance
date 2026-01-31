@@ -45,7 +45,22 @@ export default function BalanceSheetPage() {
 					(a, b) => new Date("01 " + b) - new Date("01 " + a)
 				);
 
-				setMonths(sortedMonths);
+				// Filter out months that have no meaningful data
+				// A month is considered empty if it has no classification data AND summary is 0, undefined, or null
+				const filteredMonths = sortedMonths.filter((month) => {
+					// Check if any classification has a value for this month
+					const hasClassificationData = Object.values(classificationMap).some(
+						(balances) => balances[month] !== undefined && balances[month] !== null
+					);
+					// Check if summary has a non-zero value for this month
+					const hasMeaningfulSummary = monthSummaries[month] !== undefined && 
+						monthSummaries[month] !== null && 
+						monthSummaries[month] !== 0;
+					
+					return hasClassificationData || hasMeaningfulSummary;
+				});
+
+				setMonths(filteredMonths);
 				setRowsByClassification(classificationMap);
 				setSummaryByMonth(monthSummaries);
 			})
