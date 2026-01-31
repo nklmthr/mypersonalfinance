@@ -3,6 +3,8 @@ package com.nklmthr.finance.personal.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,6 +30,21 @@ public interface UploadedStatementRepository extends JpaRepository<UploadedState
 			s.uploadedAt DESC
 	""")
 	List<UploadedStatement> findAllByAppUser(@Param("appUser") AppUser appUser);
+
+	// Paginated version
+	@Query("""
+		SELECT s FROM UploadedStatement s 
+		WHERE s.appUser = :appUser 
+		ORDER BY 
+			CASE s.status 
+				WHEN 'UPLOADED' THEN 1 
+				WHEN 'FAILED' THEN 2 
+				WHEN 'PROCESSED' THEN 3 
+				ELSE 4 
+			END,
+			s.uploadedAt DESC
+	""")
+	Page<UploadedStatement> findAllByAppUser(@Param("appUser") AppUser appUser, Pageable pageable);
 
 	// Find a specific statement for a user by ID
 	Optional<UploadedStatement> findByAppUserAndId(AppUser appUser, String id);

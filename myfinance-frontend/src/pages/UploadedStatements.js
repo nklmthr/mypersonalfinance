@@ -14,12 +14,21 @@ export default function StatementUploadPage() {
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState(null);
   const [password, setPassword] = useState("");
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const itemsPerPage = 10;
 
-  const fetchStatements = async () => {
+  const fetchStatements = async (page = 0) => {
     setLoading(true);
     try {
-      const res = await api.get("/uploaded-statements");
-      setStatements(res.data);
+      const res = await api.get("/uploaded-statements", {
+        params: { page, size: itemsPerPage }
+      });
+      setStatements(res.data.content);
+      setTotalPages(res.data.totalPages);
+      setTotalElements(res.data.totalElements);
+      setCurrentPage(res.data.number);
     } catch (err) {
       toast.error("Failed to fetch statements");
       console.error(err);
@@ -38,9 +47,14 @@ export default function StatementUploadPage() {
   };
 
   useEffect(() => {
-    fetchStatements();
+    fetchStatements(0);
     fetchAccounts();
   }, []);
+
+  // Fetch when page changes
+  useEffect(() => {
+    fetchStatements(currentPage);
+  }, [currentPage]);
 
   
   const handleUpload = async () => {
@@ -63,7 +77,7 @@ export default function StatementUploadPage() {
       setFile(null);
       setPassword("");
       setSelectedAccountId("");
-      fetchStatements();
+      fetchStatements(0);
     } catch (err) {
       toast.error("Upload failed");
       console.error(err);
@@ -77,7 +91,7 @@ export default function StatementUploadPage() {
       setLoading(true);
       await api.post(`/uploaded-statements/${id}/process`);
       toast.success("Processing complete");
-      fetchStatements();
+      fetchStatements(currentPage);
     } catch (err) {
       toast.error("Processing failed");
       console.error(err);
@@ -95,7 +109,7 @@ export default function StatementUploadPage() {
           setLoading(true);
           await api.post(`/uploaded-statements/${id}/unlink`);
           toast.success("Transactions unlinked successfully");
-          fetchStatements();
+          fetchStatements(currentPage);
         } catch (err) {
           toast.error("Failed to unlink transactions");
           console.error(err);
@@ -118,7 +132,7 @@ export default function StatementUploadPage() {
           setLoading(true);
           await api.delete(`/uploaded-statements/${id}`);
           toast.success("Statement deleted successfully");
-          fetchStatements();
+          fetchStatements(currentPage);
         } catch (err) {
           toast.error("Failed to delete statement");
           console.error(err);
@@ -137,6 +151,12 @@ export default function StatementUploadPage() {
     return (!statusFilter || s.status === statusFilter) &&
            (!accountFilter || s.account?.id === accountFilter);
   });
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 0 && newPage < totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -256,6 +276,49 @@ export default function StatementUploadPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination Controls - Always Visible */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white border rounded shadow-sm">
+        <div className="text-sm text-gray-700">
+          {totalElements === 0 
+            ? "No statements found" 
+            : `Showing ${currentPage * itemsPerPage + 1} to ${Math.min((currentPage + 1) * itemsPerPage, totalElements)} of ${totalElements} statements`
+          }
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePageChange(0)}
+            disabled={currentPage === 0 || totalPages <= 1}
+            className="px-3 py-1 rounded border hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            First
+          </button>
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 0 || totalPages <= 1}
+            className="px-3 py-1 rounded border hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <span className="px-3 py-1 text-sm">
+            Page {totalPages === 0 ? 0 : currentPage + 1} of {totalPages}
+          </span>
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages - 1 || totalPages <= 1}
+            className="px-3 py-1 rounded border hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+          <button
+            onClick={() => handlePageChange(totalPages - 1)}
+            disabled={currentPage >= totalPages - 1 || totalPages <= 1}
+            className="px-3 py-1 rounded border hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Last
+          </button>
+        </div>
       </div>
 
       {/* Loading Spinner */}

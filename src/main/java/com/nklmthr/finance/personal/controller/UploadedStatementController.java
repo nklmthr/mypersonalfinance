@@ -5,6 +5,9 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,11 +42,14 @@ public class UploadedStatementController {
 		}
 	}
 
-	// List uploaded statements
+	// List uploaded statements with pagination
 	@GetMapping
-	public List<UploadedStatement> listStatements() {
-		logger.info("Listing all uploaded statements");
-		return statementService.listStatements();
+	public Page<UploadedStatement> listStatements(
+			@RequestParam(defaultValue = "0") int page,
+			@RequestParam(defaultValue = "10") int size) {
+		logger.info("Listing uploaded statements with pagination: page={}, size={}", page, size);
+		Pageable pageable = PageRequest.of(page, size);
+		return statementService.listStatements(pageable);
 	}
 
 	@PostMapping("/{id}/process")

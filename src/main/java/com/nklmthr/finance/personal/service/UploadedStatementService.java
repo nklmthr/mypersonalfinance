@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -110,6 +112,13 @@ public class UploadedStatementService {
 		AppUser appUser = appUserService.getCurrentUser();
 		logger.info("Listing all uploaded statements for user: {}", appUser.getUsername());
 		return uploadedStatementRepository.findAllByAppUser(appUser);
+	}
+
+	public Page<UploadedStatement> listStatements(Pageable pageable) {
+		AppUser appUser = appUserService.getCurrentUser();
+		logger.info("Listing uploaded statements for user: {} with pagination: page={}, size={}", 
+				appUser.getUsername(), pageable.getPageNumber(), pageable.getPageSize());
+		return uploadedStatementRepository.findAllByAppUser(appUser, pageable);
 	}
 
 	@Transactional
