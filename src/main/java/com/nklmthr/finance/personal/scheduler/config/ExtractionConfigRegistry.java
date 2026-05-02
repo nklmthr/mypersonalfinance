@@ -73,7 +73,7 @@ public class ExtractionConfigRegistry {
 		configs.add(new ExtractionConfig(
 			"ICICICC",
 			List.of("Transaction alert for your ICICI Bank Credit Card"),
-			List.of("credit_cards@icicibank.com"),
+			List.of("credit_cards@icicibank.com", "credit_cards@icici.bank.in"),
 			null, // auto-detect transaction type
 			true  // skip declined transactions
 		));
