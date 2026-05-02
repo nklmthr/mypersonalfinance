@@ -100,11 +100,11 @@ export default function BalanceSheetPage() {
 		} catch (error) {
 			if (error.response && error.response.status === 409) {
 				alert("❗ Snapshot already exists in the last 2 weeks.");
-			} else if (err.response?.status === 401) {
+			} else if (error.response?.status === 401) {
 				localStorage.removeItem("authToken");
 				navigate("/");   // 👈 force redirect to login
 			} else {
-				console.error("Failed to fetch user profile:", err);
+				console.error("Failed to fetch user profile:", error);
 			}
 		} finally {
 			setLoading(false);

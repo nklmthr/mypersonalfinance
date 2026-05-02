@@ -97,7 +97,7 @@ export default function CategorySpendSummary() {
 			.catch((err) => {
 				if (err.response?.status === 401) {
 					localStorage.removeItem("authToken");
-					navigate("/");
+					navigate("/login");
 				} else {
 					console.error("Failed to fetch user profile:", err);
 				}

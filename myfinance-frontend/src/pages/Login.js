@@ -12,15 +12,9 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      console.log("Attempting login with", { username, password });
-
-      await api.post("/auth/login", { username, password }); // <-- uses api instance
-
-	  const response = await api.post("/auth/login", { username, password });
-	  const token = response.data.token; 
-	  localStorage.setItem("authToken", token);
-	  console.log("Login success, token saved");
-	  navigate("/");
+      const response = await api.post("/auth/login", { username, password });
+      localStorage.setItem("authToken", response.data.token);
+      navigate("/");
     } catch (error) {
       alert("Invalid username or password");
     } finally {

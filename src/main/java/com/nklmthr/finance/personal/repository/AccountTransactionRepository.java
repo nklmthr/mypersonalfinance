@@ -63,19 +63,22 @@ public interface AccountTransactionRepository
 
 	@EntityGraph(attributePaths = {
             "category", "category.parent",
-            "account", "account.accountType", "account.institution"
+            "account", "account.accountType", "account.institution",
+            "transactionLabels", "transactionLabels.label"
     })
 	Page<AccountTransaction> findAll(Specification<AccountTransaction> spec, Pageable pageable);
 
 	@EntityGraph(attributePaths = {
             "category", "category.parent",
-            "account", "account.accountType", "account.institution"
+            "account", "account.accountType", "account.institution",
+            "transactionLabels", "transactionLabels.label"
     })
 	List<AccountTransaction> findAll(Specification<AccountTransaction> spec);
 
 	@EntityGraph(attributePaths = {
             "category", "category.parent",
-            "account", "account.accountType", "account.institution"
+            "account", "account.accountType", "account.institution",
+            "transactionLabels", "transactionLabels.label"
     })
 	List<AccountTransaction> findAll(Specification<AccountTransaction> spec, Sort sort);
 

@@ -1048,26 +1048,28 @@ function TransactionPageButtons({
 								});
 								if (filterCategory) params.append('categoryId', filterCategory);
 								if (filterLabel) params.append('labelId', filterLabel);
-								const res = await api.get(`/transactions/export?${params}`).catch((err) => {
+								try {
+									const res = await api.get(`/transactions/export?${params}`);
+									const flattenedRows = res.data.map((tx) => ({
+										Date: tx.date,
+										Description: tx.description,
+										Explanation: tx.explanation || '',
+										Amount: tx.amount,
+										Type: tx.type,
+										Account: tx.account?.name || '',
+										Category: tx.category?.name || '',
+									}));
+									const csv = Papa.unparse(flattenedRows);
+									const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+									saveAs(blob, 'transactions.csv');
+								} catch (err) {
 									if (err.response?.status === 401) {
 										localStorage.removeItem('authToken');
 										navigate('/');
 									} else {
-										console.error('Failed to fetch user profile:', err);
+										alert('Failed to export CSV. Please try again.');
 									}
-								});
-								const flattenedRows = res.data.map((tx) => ({
-									Date: tx.date,
-									Description: tx.description,
-									Explanation: tx.explanation || '',
-									Amount: tx.amount,
-									Type: tx.type,
-									Account: tx.account?.name || '',
-									Category: tx.category?.name || '',
-								}));
-								const csv = Papa.unparse(flattenedRows);
-								const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-								saveAs(blob, 'transactions.csv');
+								}
 							}}
 							className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
 						>
@@ -1084,29 +1086,31 @@ function TransactionPageButtons({
 								});
 								if (filterCategory) params.append('categoryId', filterCategory);
 								if (filterLabel) params.append('labelId', filterLabel);
-								const res = await api.get(`/transactions/export?${params}`).catch((err) => {
+								try {
+									const res = await api.get(`/transactions/export?${params}`);
+									const flattenedRows = res.data.map((tx) => ({
+										Date: tx.date,
+										Description: tx.description,
+										Explanation: tx.explanation || '',
+										Amount: tx.amount,
+										Type: tx.type,
+										Account: tx.account?.name || '',
+										Category: tx.category?.name || '',
+									}));
+									const worksheet = XLSX.utils.json_to_sheet(flattenedRows);
+									const workbook = XLSX.utils.book_new();
+									XLSX.utils.book_append_sheet(workbook, worksheet, 'Transactions');
+									const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+									const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+									saveAs(blob, 'transactions.xlsx');
+								} catch (err) {
 									if (err.response?.status === 401) {
 										localStorage.removeItem('authToken');
 										navigate('/');
 									} else {
-										console.error('Failed to fetch user profile:', err);
+										alert('Failed to export XLSX. Please try again.');
 									}
-								});
-								const flattenedRows = res.data.map((tx) => ({
-									Date: tx.date,
-									Description: tx.description,
-									Explanation: tx.explanation || '',
-									Amount: tx.amount,
-									Type: tx.type,
-									Account: tx.account?.name || '',
-									Category: tx.category?.name || '',
-								}));
-								const worksheet = XLSX.utils.json_to_sheet(flattenedRows);
-								const workbook = XLSX.utils.book_new();
-								XLSX.utils.book_append_sheet(workbook, worksheet, 'Transactions');
-								const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-								const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-								saveAs(blob, 'transactions.xlsx');
+								}
 							}}
 							className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
 						>
@@ -1123,15 +1127,8 @@ function TransactionPageButtons({
 								});
 								if (filterCategory) params.append('categoryId', filterCategory);
 								if (filterLabel) params.append('labelId', filterLabel);
-
-								const res = await api.get(`/transactions/export?${params}`).catch((err) => {
-									if (err.response?.status === 401) {
-										localStorage.removeItem('authToken');
-										navigate('/');
-									} else {
-										console.error('Failed to fetch user profile:', err);
-									}
-								});
+								try {
+								const res = await api.get(`/transactions/export?${params}`);
 								const { jsPDF } = await import('jspdf');
 								const flattenedRows = res.data.map((tx) => ({
 									Date: dayjs(tx.date).isValid() ? dayjs(tx.date).format('DD/MMM') : '',
@@ -1164,6 +1161,14 @@ function TransactionPageButtons({
 								});
 
 								doc.save('transactions.pdf');
+								} catch (err) {
+									if (err.response?.status === 401) {
+										localStorage.removeItem('authToken');
+										navigate('/');
+									} else {
+										alert('Failed to export PDF. Please try again.');
+									}
+								}
 							}}
 							className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
 						>
@@ -1786,6 +1791,7 @@ function TransactionPageButtons({
 					transaction={transferTx}
 					setTransaction={setTransferTx}
 					onCancel={() => setTransferTx(null)}
+					loading={loading}
 					onSubmit={async () => {
 						setLoading(true);
 						NProgress.start();

@@ -1,7 +1,6 @@
 package com.nklmthr.finance.personal.security;
 
 import java.security.Key;
-import java.util.Base64;
 import java.util.Date;
 
 import org.slf4j.Logger;
@@ -32,9 +31,7 @@ public class JwtUtil {
 
     private Key getSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secret);
-        Key key = Keys.hmacShaKeyFor(keyBytes);
-        logger.debug("Using JWT signing key: {}", Base64.getEncoder().encodeToString(key.getEncoded()));
-        return key;
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateToken(String username) {

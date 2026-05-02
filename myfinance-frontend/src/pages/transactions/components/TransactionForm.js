@@ -160,12 +160,10 @@ export default function TransactionForm({
 								setTransaction((t) => ({ ...t, date: parsedDate.format("YYYY-MM-DDTHH:mm:ss") }));
 								setDateInputValue(parsedDate.format("DD/MM/YYYY HH:mm"));
 							} else {
-								e.target.style.borderColor = "red";
-								setTimeout(() => { e.target.style.borderColor = ""; }, 2000);
+								setErrors((er) => ({ ...er, date: "Invalid date format" }));
 							}
 						} catch (error) {
-							e.target.style.borderColor = "red";
-							setTimeout(() => { e.target.style.borderColor = ""; }, 2000);
+							setErrors((er) => ({ ...er, date: "Invalid date format" }));
 						}
 					}}
 					className={`w-full border rounded px-3 py-2 ${errors.date ? 'border-red-500' : ''}`}

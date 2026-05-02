@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import SearchSelect from "./SearchSelect";
 
-export default function TransferForm({ transaction, setTransaction, onCancel, onSubmit, accounts }) {
+export default function TransferForm({ transaction, setTransaction, onCancel, onSubmit, accounts, loading }) {
 	useEffect(() => {
 		const handler = (e) => e.key === "Escape" && onCancel();
 		document.addEventListener("keydown", handler);
@@ -54,11 +54,11 @@ export default function TransferForm({ transaction, setTransaction, onCancel, on
 				</label>
 
 				<div className="flex justify-end space-x-2">
-					<button type="button" onClick={onCancel} className="px-4 py-1">
+					<button type="button" onClick={onCancel} disabled={loading} className="px-4 py-1">
 						Cancel
 					</button>
-					<button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded">
-						Transfer
+					<button type="submit" disabled={loading} className="bg-blue-600 text-white px-4 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+						{loading ? "Transferring..." : "Transfer"}
 					</button>
 				</div>
 			</form>

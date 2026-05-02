@@ -210,29 +210,34 @@ public class AccountTransactionService {
 
 		AccountTransaction parent = parentOpt.get();
 
-		// First, delete existing children and add their amounts back to parent
+		// Validate split amounts against parent amount BEFORE any mutations
 		List<AccountTransaction> existingChildren = accountTransactionRepository.findByAppUserAndParent(appUser, parent.getId());
+		BigDecimal restoredAmount = parent.getAmount();
 		for (AccountTransaction child : existingChildren) {
-			parent.setAmount(parent.getAmount().add(child.getAmount()));
-			child.setParent(null);
-			accountTransactionRepository.delete(child);
+			restoredAmount = restoredAmount.add(child.getAmount());
 		}
-		
-		// Set parent category to "Split Transaction"
-		parent.setCategory(categoryService.getSplitTrnsactionCategory());
-		
-		// Validate that the sum of new children equals the (restored) parent amount
+
 		BigDecimal totalSplitAmount = BigDecimal.ZERO;
 		for (AccountTransactionDTO st : splitTransactions) {
 			totalSplitAmount = totalSplitAmount.add(st.amount());
 		}
-		
-		if (totalSplitAmount.compareTo(parent.getAmount()) != 0) {
+
+		if (totalSplitAmount.compareTo(restoredAmount) != 0) {
 			return ResponseEntity.badRequest().body(
-				String.format("Split amounts total (%.2f) does not match parent amount (%.2f)", 
-					totalSplitAmount, parent.getAmount()));
+				String.format("Split amounts total (%.2f) does not match parent amount (%.2f)",
+					totalSplitAmount, restoredAmount));
 		}
-		
+
+		// All validation passed — now mutate
+		for (AccountTransaction child : existingChildren) {
+			child.setParent(null);
+			accountTransactionRepository.delete(child);
+		}
+
+		// Set parent amount to the validated total and assign split category
+		parent.setAmount(restoredAmount);
+		parent.setCategory(categoryService.getSplitTrnsactionCategory());
+
 		// Create new children and deduct their amounts from parent
 		for (AccountTransactionDTO st : splitTransactions) {
 			AccountTransaction child = new AccountTransaction();
@@ -247,10 +252,10 @@ public class AccountTransactionService {
 			child.setCurrency(parent.getCurrency());
 			child.setParent(parent.getId());
 			child.setAppUser(appUser);
-			
+
 			// Deduct child amount from parent
 			parent.setAmount(parent.getAmount().subtract(st.amount()));
-			
+
 			accountTransactionRepository.save(child);
 		}
 
