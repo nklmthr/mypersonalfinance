@@ -62,7 +62,7 @@ public class AccountFuzzyMatcher {
             );
 
             // Log score for each account for debugging
-            logger.info("Fuzzy score for '{}': {}", account.name(), score);
+            logger.debug("Fuzzy score for '{}': {}", account.name(), score);
 
             if (score > highestScore) {
                 highestScore = score;

@@ -92,7 +92,7 @@ public class ConfigurableDataExtractionService {
 	@Value("${openai.enabled:true}")
 	private boolean openAIEnabled;
 
-	@Autowired
+	@Autowired(required = false)
 	private OpenAIClient openAIClient;
 
 	private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();

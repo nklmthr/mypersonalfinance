@@ -15,6 +15,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.HttpClientErrorException;
@@ -30,6 +31,7 @@ import com.nklmthr.finance.personal.util.AccountFuzzyMatcher;
 import com.nklmthr.finance.personal.util.AccountFuzzyMatcher.MatchResult;
 
 @Service
+@ConditionalOnProperty(name = "openai.enabled", havingValue = "true")
 public class OpenAIClient {
 
     @Value("${openai.gpt-model-openAIHost}")
