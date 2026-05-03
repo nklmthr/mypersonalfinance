@@ -198,7 +198,12 @@ export default function PredictionRules() {
 							key={rule.id}
 							className="grid grid-cols-1 md:grid-cols-6 gap-4 py-3 px-4 rounded border border-gray-200 items-center text-sm bg-blue-50"
 						>
-							<div className="font-medium text-gray-800">{rule.categoryName}</div>
+							<div className="font-medium text-gray-800">
+								{rule.categoryName}
+								{rule.descendantCategoryCount > 0 && (
+									<span className="ml-1 text-xs text-gray-400">(+{rule.descendantCategoryCount} sub-categories)</span>
+								)}
+							</div>
 							<div className="text-gray-600">
 								{rule.predictionType === "MONTHLY" ? "Monthly" : `Yearly (${getMonthName(rule.specificMonth)})`}
 							</div>

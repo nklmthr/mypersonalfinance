@@ -19,6 +19,7 @@ import com.nklmthr.finance.personal.mapper.PredictionRuleMapper;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.PredictionRule;
 import com.nklmthr.finance.personal.repository.CategoryRepository;
+import com.nklmthr.finance.personal.service.CategoryService;
 import com.nklmthr.finance.personal.service.PredictionService;
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,13 @@ public class PredictionRuleController {
 	private final PredictionService predictionService;
 	private final PredictionRuleMapper predictionRuleMapper;
 	private final CategoryRepository categoryRepository;
+	private final CategoryService categoryService;
+
+	private PredictionRuleDTO enrichWithDescendantCount(PredictionRuleDTO dto) {
+		int count = categoryService.getAllDescendantCategoryIds(dto.getCategoryId()).size() - 1;
+		dto.setDescendantCategoryCount(count);
+		return dto;
+	}
 
 	/**
 	 * Get all prediction rules for the authenticated user
@@ -42,6 +50,7 @@ public class PredictionRuleController {
 		List<PredictionRule> rules = predictionService.getAllRulesForUser();
 		List<PredictionRuleDTO> dtos = rules.stream()
 			.map(predictionRuleMapper::toDTO)
+			.map(this::enrichWithDescendantCount)
 			.collect(Collectors.toList());
 		return ResponseEntity.ok(dtos);
 	}
@@ -53,6 +62,7 @@ public class PredictionRuleController {
 	public ResponseEntity<PredictionRuleDTO> getRuleById(@PathVariable String id) {
 		return predictionService.getRuleById(id)
 			.map(predictionRuleMapper::toDTO)
+			.map(this::enrichWithDescendantCount)
 			.map(ResponseEntity::ok)
 			.orElse(ResponseEntity.notFound().build());
 	}

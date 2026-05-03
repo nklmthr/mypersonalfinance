@@ -28,7 +28,7 @@ export default function Transactions() {
 	const { showModal } = useErrorModal();
 	const [transactions, setTransactions] = useState([]);
 	const [predictedTransactions, setPredictedTransactions] = useState([]);
-	const [showPredicted, setShowPredicted] = useState(false);
+	const [showPredicted, setShowPredicted] = useState(true);
 	const [linkedTxns, setLinkedTxns] = useState(null);
 	const [activeTab, setActiveTab] = useState('historical'); // For prediction details modal tabs
 	const [expandedParents, setExpandedParents] = useState({});

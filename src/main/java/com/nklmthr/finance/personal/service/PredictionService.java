@@ -5,8 +5,10 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +42,7 @@ public class PredictionService {
 	private final AppUserService appUserService;
 	private final PredictionHistoricalTxnMappingRepository historicalMappingRepository;
 	private final PredictionActualTxnMappingRepository actualMappingRepository;
+	private final CategoryService categoryService;
 
 	/**
 	 * Get all prediction rules for a user
@@ -200,9 +203,10 @@ public class PredictionService {
 		LocalDateTime startDate = startMonth.atDay(1).atStartOfDay();
 		LocalDateTime endDate = targetMonth.minusMonths(1).atEndOfMonth().atTime(23, 59, 59);
 		
-		// Get historical transactions sum for this category
+		// Get historical transactions sum across this category and all descendants
+		Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(user, category.getId());
 		List<Object[]> results = accountTransactionRepository
-			.findAverageAmountByCategoryAndDateRange(user, category, startDate, endDate);
+			.findAverageAmountByCategoryIdsAndDateRange(user, categoryIds, startDate, endDate);
 		
 		if (results.isEmpty() || results.get(0) == null) {
 			log.debug("No historical data found for category: {} in date range: {} to {}", 
@@ -246,8 +250,9 @@ public class PredictionService {
 			category.getName(), 
 			targetMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")));
 		
-		String explanation = String.format("Based on monthly average of %d transaction(s) from past %d month(s)", 
-			count, lookbackMonths);
+		String explanation = String.format(
+			"Based on monthly average of %d transaction(s) from past %d month(s) across %d category(ies)",
+			count, lookbackMonths, categoryIds.size());
 		
 		// Create predicted transaction
 		PredictedTransaction prediction = PredictedTransaction.builder()
@@ -288,10 +293,11 @@ public class PredictionService {
 		LocalDateTime startDate = startMonth.atDay(1).atStartOfDay();
 		LocalDateTime endDate = targetMonth.minusMonths(1).atEndOfMonth().atTime(23, 59, 59);
 		
-		// Get all historical transactions for this category in the lookback period
+		// Get all historical transactions across this category and all descendants
 		// Include both DEBIT and CREDIT since both are used in net average calculation
+		Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(user, category.getId());
 		List<AccountTransaction> historicalTxns = accountTransactionRepository
-			.findByAppUserAndCategoryAndDateBetween(user, category, startDate, endDate);
+			.findByAppUserAndCategoryIdsAndDateBetween(user, categoryIds, startDate, endDate);
 		
 		// Create mappings for each historical transaction
 		for (AccountTransaction historicalTxn : historicalTxns) {
@@ -317,53 +323,68 @@ public class PredictionService {
 		YearMonth txMonth = YearMonth.from(txDate);
 		String monthString = txMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
 		
-		// Find matching prediction for this category and month
-		List<PredictedTransaction> predictions = predictedTransactionRepository
+		// Collect ALL applicable predictions: exact category match + any ancestor-rule matches
+		// This ensures a transaction in "Vegetables" also reduces the "Grocery" parent prediction
+		List<PredictedTransaction> predictions = new ArrayList<>();
+		predictions.addAll(predictedTransactionRepository
 			.findByAppUserAndCategoryAndPredictionMonth(
-				actualTransaction.getAppUser(), 
-				actualTransaction.getCategory(), 
+				actualTransaction.getAppUser(),
+				actualTransaction.getCategory(),
 				monthString
-			);
-		
+			));
+
+		String parentId = actualTransaction.getCategory().getParent();
+		while (parentId != null) {
+			Category parentCategory = categoryService.getCategoryById(parentId);
+			if (parentCategory == null) break;
+			predictions.addAll(predictedTransactionRepository
+				.findByAppUserAndCategoryAndPredictionMonth(
+					actualTransaction.getAppUser(),
+					parentCategory,
+					monthString
+				));
+			parentId = parentCategory.getParent();
+		}
+
 		if (predictions.isEmpty()) {
-			log.debug("No prediction found for category {} in month {}", 
+			log.debug("No prediction found for category {} or its ancestors in month {}",
 				actualTransaction.getCategory().getName(), monthString);
 			return;
 		}
-		
-		PredictedTransaction prediction = predictions.get(0);
-		
-		// Only adjust for transactions of the same type (DEBIT/CREDIT)
-		if (!prediction.getTransactionType().equals(actualTransaction.getType())) {
-			return;
+
+		for (PredictedTransaction prediction : predictions) {
+			// Only adjust for transactions of the same type (DEBIT/CREDIT)
+			if (!prediction.getTransactionType().equals(actualTransaction.getType())) {
+				continue;
+			}
+
+			BigDecimal txAmount = actualTransaction.getAmount();
+
+			// Update actual spent
+			BigDecimal newActualSpent = prediction.getActualSpent().add(txAmount);
+			prediction.setActualSpent(newActualSpent);
+
+			// Update remaining amount
+			BigDecimal newRemaining = prediction.getPredictedAmount().subtract(newActualSpent);
+			prediction.setRemainingAmount(newRemaining);
+
+			predictedTransactionRepository.save(prediction);
+
+			// Create mapping to track this actual transaction
+			PredictionActualTxnMapping actualMapping = PredictionActualTxnMapping.builder()
+				.predictedTransaction(prediction)
+				.actualTransaction(actualTransaction)
+				.amountApplied(txAmount)
+				.build();
+			actualMappingRepository.save(actualMapping);
+
+			log.info("Adjusted prediction for category {} in {}: predicted={}, actual={}, remaining={}",
+				prediction.getCategory().getName(),
+				monthString,
+				prediction.getPredictedAmount(),
+				newActualSpent,
+				newRemaining);
 		}
-		
-		BigDecimal txAmount = actualTransaction.getAmount();
-		
-		// Update actual spent
-		BigDecimal newActualSpent = prediction.getActualSpent().add(txAmount);
-		prediction.setActualSpent(newActualSpent);
-		
-		// Update remaining amount
-		BigDecimal newRemaining = prediction.getPredictedAmount().subtract(newActualSpent);
-		prediction.setRemainingAmount(newRemaining);
-		
-		predictedTransactionRepository.save(prediction);
-		
-		// Create mapping to track this actual transaction
-		PredictionActualTxnMapping actualMapping = PredictionActualTxnMapping.builder()
-			.predictedTransaction(prediction)
-			.actualTransaction(actualTransaction)
-			.amountApplied(txAmount)
-			.build();
-		actualMappingRepository.save(actualMapping);
-		
-		log.info("Adjusted prediction for category {} in {}: predicted={}, actual={}, remaining={}", 
-			actualTransaction.getCategory().getName(), 
-			monthString,
-			prediction.getPredictedAmount(),
-			newActualSpent,
-			newRemaining);
 	}
 
 	/**
@@ -446,13 +467,14 @@ public class PredictionService {
 			// Delete existing actual transaction mappings
 			actualMappingRepository.deleteByPredictedTransaction(prediction);
 			
-			// Get all actual transactions for this category and month
+			// Get all actual transactions across this category and all descendants
 			YearMonth targetMonth = YearMonth.parse(month);
 			LocalDateTime startDate = targetMonth.atDay(1).atStartOfDay();
 			LocalDateTime endDate = targetMonth.atEndOfMonth().atTime(23, 59, 59);
-			
+			String ruleCategoryId = prediction.getPredictionRule().getCategory().getId();
+			Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(user, ruleCategoryId);
 			List<AccountTransaction> actualTxns = accountTransactionRepository
-				.findByAppUserAndCategoryAndDateBetween(user, prediction.getCategory(), startDate, endDate);
+				.findByAppUserAndCategoryIdsAndDateBetween(user, categoryIds, startDate, endDate);
 			
 			// Filter by transaction type to match prediction
 			List<AccountTransaction> matchingTxns = actualTxns.stream()

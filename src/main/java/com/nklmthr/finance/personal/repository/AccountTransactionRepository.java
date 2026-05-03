@@ -212,6 +212,47 @@ public interface AccountTransactionRepository
 			@Param("endDate") LocalDateTime endDate);
 
 	/**
+	 * Hierarchy-aware version: sum/count across a set of category IDs (parent + all descendants)
+	 * Returns: [totalSum, transactionType, count]
+	 */
+	@Query("""
+		SELECT
+		    SUM(CASE WHEN t.type = 'DEBIT' THEN t.amount ELSE -t.amount END),
+		    CASE WHEN SUM(CASE WHEN t.type = 'DEBIT' THEN t.amount ELSE -t.amount END) >= 0
+		         THEN 'DEBIT'
+		         ELSE 'CREDIT'
+		    END,
+		    COUNT(t)
+		FROM AccountTransaction t
+		WHERE t.appUser = :appUser
+		  AND t.category.id IN :categoryIds
+		  AND t.date >= :startDate
+		  AND t.date <= :endDate
+		  AND t.parent IS NULL
+	""")
+	List<Object[]> findAverageAmountByCategoryIdsAndDateRange(
+		@Param("appUser") AppUser appUser,
+		@Param("categoryIds") Set<String> categoryIds,
+		@Param("startDate") LocalDateTime startDate,
+		@Param("endDate") LocalDateTime endDate
+	);
+
+	/**
+	 * Hierarchy-aware version: fetch transactions across a set of category IDs (parent + all descendants)
+	 */
+	@Query("SELECT t FROM AccountTransaction t WHERE t.appUser = :appUser " +
+	       "AND t.category.id IN :categoryIds " +
+	       "AND t.date >= :startDate AND t.date <= :endDate " +
+	       "AND t.parent IS NULL " +
+	       "ORDER BY t.date DESC")
+	List<AccountTransaction> findByAppUserAndCategoryIdsAndDateBetween(
+		@Param("appUser") AppUser appUser,
+		@Param("categoryIds") Set<String> categoryIds,
+		@Param("startDate") LocalDateTime startDate,
+		@Param("endDate") LocalDateTime endDate
+	);
+
+	/**
 	 * Find all transactions for a user, category, date range, and transaction type
 	 * (for prediction historical mapping with type filter)
 	 */

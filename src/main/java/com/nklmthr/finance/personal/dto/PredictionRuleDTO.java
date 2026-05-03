@@ -19,5 +19,6 @@ public class PredictionRuleDTO {
 	private boolean enabled;
 	private int lookbackMonths;
 	private Integer specificMonth;
+	private int descendantCategoryCount;
 }
 
