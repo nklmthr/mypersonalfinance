@@ -63,8 +63,7 @@ public interface AccountTransactionRepository
 
 	@EntityGraph(attributePaths = {
             "category", "category.parent",
-            "account", "account.accountType", "account.institution",
-            "transactionLabels", "transactionLabels.label"
+            "account", "account.accountType", "account.institution"
     })
 	Page<AccountTransaction> findAll(Specification<AccountTransaction> spec, Pageable pageable);
 
@@ -97,8 +96,12 @@ public interface AccountTransactionRepository
 	List<AccountTransaction> findByAppUserAndUploadedStatement(AppUser appUser, UploadedStatement statement);
 
 	void deleteAllByAppUserAndIdIn(AppUser appUser, List<String> list);
-	
+
 	void deleteAllByAppUserAndUploadedStatement(AppUser appUser, UploadedStatement statement);
+
+	@EntityGraph(attributePaths = { "transactionLabels", "transactionLabels.label" })
+	@Query("SELECT t FROM AccountTransaction t WHERE t.id IN :ids")
+	List<AccountTransaction> findWithLabelsByIdIn(@Param("ids") List<String> ids);
 
 	@EntityGraph(attributePaths = {
             "category", "category.parent",

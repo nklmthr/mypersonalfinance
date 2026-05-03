@@ -19,7 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -27,6 +26,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
+import com.nklmthr.finance.personal.dto.TransactionPageDTO;
 import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.mapper.AccountMapper;
@@ -907,48 +907,59 @@ public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month
 		return accountTransactionMapper.toDTOList(list);
 	}
 
-public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, String month, String date, String startDate, String endDate,
+public TransactionPageDTO getFilteredTransactions(Pageable pageable, String month, String date, String startDate, String endDate,
             String accountId, String type, String search, String categoryId, String labelId) {
 		logger.info("Fetching transactions for month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}",
 				month, date, startDate, endDate, accountId, type, search, categoryId, labelId);
-    Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
+        Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
                 ? buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, categoryId, labelId, false)
                 : buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, null, labelId, true);
-		
+
 		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
 		logger.info("Total transactions found: {}", page.getTotalElements());
-		
-		// FIX N+1 QUERY: Batch fetch all children for this page in a single query
-		List<String> parentIds = page.getContent().stream()
+
+		List<String> pageIds = page.getContent().stream()
 			.map(AccountTransaction::getId)
 			.toList();
-		
+
+		// Batch-fetch children
 		Map<String, List<AccountTransactionDTO>> childrenByParent = new HashMap<>();
-		if (!parentIds.isEmpty()) {
+		if (!pageIds.isEmpty()) {
 			AppUser currentUser = appUserService.getCurrentUser();
 			List<AccountTransaction> allChildren = accountTransactionRepository
-				.findByAppUserAndParentIn(currentUser, parentIds);
-			
-			// Group children by parent ID
+				.findByAppUserAndParentIn(currentUser, pageIds);
 			for (AccountTransaction child : allChildren) {
 				childrenByParent
 					.computeIfAbsent(child.getParent(), k -> new ArrayList<>())
 					.add(accountTransactionMapper.toDTO(child));
 			}
 		}
-		
+
+		// Batch-fetch labels — separate query avoids HHH90003004 in-memory pagination
+		Map<String, List<AccountTransaction>> labelsByTxId = new HashMap<>();
+		if (!pageIds.isEmpty()) {
+			List<AccountTransaction> withLabels = accountTransactionRepository.findWithLabelsByIdIn(pageIds);
+			for (AccountTransaction tx : withLabels) {
+				labelsByTxId.put(tx.getId(), List.of(tx));
+			}
+		}
+
 		List<AccountTransactionDTO> formatted = page.getContent().stream()
 			    .map(tx -> {
 			        List<AccountTransactionDTO> children = childrenByParent.getOrDefault(tx.getId(), List.of());
+					List<AccountTransaction> labelSource = labelsByTxId.get(tx.getId());
+					List<com.nklmthr.finance.personal.dto.LabelDTO> labels = labelSource != null && !labelSource.isEmpty()
+						? labelMapper.toDTOList(labelSource.get(0).getLabels())
+						: List.of();
 
 		        return new AccountTransactionDTO(
 		            tx.getId(),
 		            tx.getDate(),
 		            tx.getAmount(),
 		            tx.getDescription(),
-		            null, // shortDescription handled inside record
+		            null,
 		            tx.getExplanation(),
-		            null, // shortExplanation handled inside record
+		            null,
 		            tx.getType(),
 		            accountMapper.toDTO(tx.getAccount()),
 		            categoryMapper.toDTO(tx.getCategory()),
@@ -962,11 +973,14 @@ public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, St
 		            tx.getCurrency(),
 		            accountMapper.toDTO(tx.getGptAccount()),
 		            tx.getGptCurrency(),
-		            tx.getLabels() != null ? labelMapper.toDTOList(tx.getLabels()) : List.of()
+		            labels
 		        );
 			    })
 			    .toList();
-		return new PageImpl<>(formatted, pageable, page.getTotalElements());
+
+		BigDecimal currentTotal = calculateTotalWithSpec(spec).setScale(2, RoundingMode.HALF_UP);
+		return new TransactionPageDTO(formatted, page.getTotalPages(), page.getTotalElements(),
+				page.getNumber(), page.getSize(), currentTotal);
 	}
 
 
@@ -1019,7 +1033,7 @@ public BigDecimal getCurrentTotal(String month, String date, String startDate, S
     }
 
 // --- Backward-compatible overloads (without 'date' and 'labelId') for existing tests/integrations ---
-public Page<AccountTransactionDTO> getFilteredTransactions(Pageable pageable, String month, String accountId,
+public TransactionPageDTO getFilteredTransactions(Pageable pageable, String month, String accountId,
         String type, String search, String categoryId) {
     return getFilteredTransactions(pageable, month, null, null, null, accountId, type, search, categoryId, null);
 }

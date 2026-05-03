@@ -1,13 +1,11 @@
 package com.nklmthr.finance.personal.controller;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
+import com.nklmthr.finance.personal.dto.TransactionPageDTO;
 import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
 
@@ -38,7 +37,7 @@ public class AccountTransactionController {
 	private static final Logger logger = LoggerFactory.getLogger(AccountTransactionController.class);
 
 	@GetMapping
-	public Page<AccountTransactionDTO> getTransactions(@RequestParam(defaultValue = "0") int page,
+	public TransactionPageDTO getTransactions(@RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size, @RequestParam(required = false) String month,
             @RequestParam(required = false) String date,
 			@RequestParam(required = false) String startDate, @RequestParam(required = false) String endDate,
@@ -50,39 +49,24 @@ public class AccountTransactionController {
 		logger.debug(
                 "Fetching transactions - page: {}, size: {}, month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, categoryId: {}, labelId: {}, search: {}, sortBy: {}, sortDir: {}",
                 page, size, month, date, startDate, endDate, accountId, type, categoryId, labelId, search, sortBy, sortDir);
-		
-		// Validate sortBy parameter - if not provided, use default date descending
+
 		Sort sort;
 		if (sortBy != null && !sortBy.isEmpty()) {
 			if ("amount".equalsIgnoreCase(sortBy)) {
-				sort = "asc".equalsIgnoreCase(sortDir) 
-					? Sort.by("amount").ascending() 
+				sort = "asc".equalsIgnoreCase(sortDir)
+					? Sort.by("amount").ascending()
 					: Sort.by("amount").descending();
 			} else {
-				// Default to date sorting
-				sort = "asc".equalsIgnoreCase(sortDir) 
-					? Sort.by("date").ascending() 
+				sort = "asc".equalsIgnoreCase(sortDir)
+					? Sort.by("date").ascending()
 					: Sort.by("date").descending();
 			}
 		} else {
-			// No sort specified - use default date descending
 			sort = Sort.by("date").descending();
 		}
-		
+
 		return transactionService.getFilteredTransactions(PageRequest.of(page, size, sort),
                 month, date, startDate, endDate, accountId, type, search, categoryId, labelId);
-	}
-
-    @GetMapping("/currentTotal")
-    public BigDecimal getCurrentTotal(@RequestParam(required = false) String month,
-            @RequestParam(required = false) String date,
-			@RequestParam(required = false) String startDate, @RequestParam(required = false) String endDate,
-			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
-			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String labelId,
-			@RequestParam(required = false) String search) {
-        logger.debug("Calculating current total - month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, categoryId: {}, labelId: {}, search: {}",
-                month, date, startDate, endDate, accountId, type, categoryId, labelId, search);
-        return transactionService.getCurrentTotal(month, date, startDate, endDate, accountId, type, search, categoryId, labelId);
 	}
 
     @GetMapping("/export")

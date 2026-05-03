@@ -16,26 +16,25 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
+import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nklmthr.finance.personal.dto.AccountDTO;
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
 import com.nklmthr.finance.personal.dto.CategoryDTO;
+import com.nklmthr.finance.personal.dto.TransactionPageDTO;
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
 import com.nklmthr.finance.personal.security.SecurityConfig;
@@ -62,17 +61,10 @@ class AccountTransactionControllerTest {
 
     @Test
     void list_returnsPaged() throws Exception {
-        Page<AccountTransactionDTO> page = new PageImpl<>(List.of());
+        TransactionPageDTO page = new TransactionPageDTO(List.of(), 0, 0, 0, 10, BigDecimal.ZERO);
         when(service.getFilteredTransactions(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any()))
             .thenReturn(page);
         mvc.perform(get("/api/transactions"))
-            .andExpect(status().isOk());
-    }
-
-    @Test
-    void currentTotal_returnsNumber() throws Exception {
-        when(service.getCurrentTotal(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any())).thenReturn(new BigDecimal("10"));
-        mvc.perform(get("/api/transactions/currentTotal"))
             .andExpect(status().isOk());
     }
 

@@ -127,16 +127,24 @@ const [filterMode, setFilterMode] = useState(
 
 	NProgress.configure({ showSpinner: false });
 
-// Load available data extraction services and select all by default
+// Load reference data once on mount — these don't change with filters
 useEffect(() => {
     (async () => {
         try {
-            const res = await api.get('/data-extraction/configurations');
-            const list = res.data?.configurations || [];
+            const [accRes, catRes, labelsRes, configRes] = await Promise.all([
+                api.get('/accounts'),
+                api.get('/categories'),
+                api.get('/labels'),
+                api.get('/data-extraction/configurations'),
+            ]);
+            setAccounts(accRes.data);
+            setCategories(catRes.data);
+            setLabels(labelsRes.data);
+            const list = configRes.data?.configurations || [];
             setAvailableServices(list);
             setSelectedServices(list);
         } catch (err) {
-            console.error('Failed to load extraction services:', err);
+            console.error('Failed to load reference data:', err);
         }
     })();
 }, []);
@@ -183,10 +191,6 @@ useEffect(() => {
 
 			const promises = [
 				api.get(`/transactions?${params.toString()}`),
-				api.get(`/accounts`),
-				api.get(`/categories`),
-				api.get(`/labels`),
-				api.get(`/transactions/currentTotal?${params.toString()}`),
 			];
 
 			// Fetch predicted transactions if enabled and viewing a month
@@ -195,16 +199,13 @@ useEffect(() => {
 			}
 
 			const results = await Promise.all(promises);
-			const [txRes, accRes, catRes, labelsRes, currentTotalRes, predictedRes] = results;
+			const [txRes, predictedRes] = results;
 
 			setTransactions(txRes.data.content);
 			setTotalPages(txRes.data.totalPages);
-			setAccounts(accRes.data);
-			setCategories(catRes.data);
-			setLabels(labelsRes.data);
 			setTotalCount(txRes.data.totalElements);
-			setCurrentTotal(currentTotalRes.data);
-			
+			setCurrentTotal(txRes.data.currentTotal);
+
 			// Set predicted transactions if fetched
 			if (predictedRes) {
 				setPredictedTransactions(predictedRes.data || []);
