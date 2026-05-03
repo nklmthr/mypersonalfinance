@@ -293,6 +293,37 @@ export default function Accounts() {
 				</button>
 			</div>
 
+			{/* Balance summary by account type */}
+			{(() => {
+				const allAccounts = accounts;
+				const byType = {};
+				allAccounts.forEach((acc) => {
+					const typeName = acc.accountType?.name || "Unknown";
+					byType[typeName] = (byType[typeName] || 0) + (acc.balance || 0);
+				});
+				const grandTotal = allAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+				const entries = Object.entries(byType);
+				if (entries.length === 0) return null;
+				return (
+					<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+						{entries.map(([typeName, total]) => (
+							<div key={typeName} className="bg-white border border-gray-200 rounded-lg px-4 py-3 shadow-sm">
+								<div className="text-xs text-gray-500 mb-1">{typeName}</div>
+								<div className="text-base font-semibold text-gray-800">
+									₹{total.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+								</div>
+							</div>
+						))}
+						<div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 shadow-sm">
+							<div className="text-xs text-blue-600 mb-1 font-medium">Total</div>
+							<div className="text-base font-semibold text-blue-800">
+								₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+							</div>
+						</div>
+					</div>
+				);
+			})()}
+
 			<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
 				<div>
 					<label className="block text-sm font-medium mb-1">Account Type</label>
