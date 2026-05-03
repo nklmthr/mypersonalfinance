@@ -446,7 +446,7 @@ public class PredictionService {
 	 * Recalculate all predictions for a specific month by reapplying actual transactions
 	 * Useful for fixing predictions after data imports or bulk updates
 	 */
-	@Transactional
+	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
 	public void recalculatePredictionsForMonth(String month) {
 		AppUser user = appUserService.getCurrentUser();
 		
@@ -464,9 +464,10 @@ public class PredictionService {
 			prediction.setActualSpent(BigDecimal.ZERO);
 			prediction.setRemainingAmount(prediction.getPredictedAmount());
 			
-			// Delete existing actual transaction mappings
+			// Delete existing actual transaction mappings and flush so re-inserts don't hit duplicate key
 			actualMappingRepository.deleteByPredictedTransaction(prediction);
-			
+			actualMappingRepository.flush();
+
 			// Get all actual transactions across this category and all descendants
 			YearMonth targetMonth = YearMonth.parse(month);
 			LocalDateTime startDate = targetMonth.atDay(1).atStartOfDay();
