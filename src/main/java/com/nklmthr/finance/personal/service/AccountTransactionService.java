@@ -234,6 +234,16 @@ public class AccountTransactionService {
 			accountTransactionRepository.delete(child);
 		}
 
+		// Reverse any prediction contribution the parent transaction had before we
+		// re-categorise it to SPLIT, otherwise the prediction running totals will be
+		// stale (parent will no longer match the rule's category).
+		try {
+			predictionService.removePredictionAdjustmentForTransaction(parent);
+		} catch (Exception e) {
+			logger.warn("Failed to remove prediction adjustment for split parent {}: {}",
+				parent.getId(), e.getMessage());
+		}
+
 		// Set parent amount to the validated total and assign split category
 		parent.setAmount(restoredAmount);
 		parent.setCategory(categoryService.getSplitTrnsactionCategory());
@@ -452,6 +462,11 @@ public class AccountTransactionService {
 			}
 
 			AccountTransaction saved = accountTransactionRepository.save(existingTx);
+
+			// Recompute prediction running totals so edits to amount/category/date
+			// flow through to the matching predicted transaction. Idempotent.
+			applyPredictionAdjustment(saved);
+
 			return accountTransactionMapper.toDTO(saved);
 		});
 	}
@@ -495,7 +510,28 @@ public class AccountTransactionService {
 		transaction.setAppUser(appUser);
 		accountRepository.save(account);
 		AccountTransaction saved = accountTransactionRepository.save(transaction);
+
+		// Keep prediction running totals in sync for any persistence path that lands here
+		// (auto email/SMS imports, uploaded statements, split children, DTO saves, ...).
+		// The call is idempotent so it's safe even when invoked again from outer flows.
+		applyPredictionAdjustment(saved);
+
 		return accountTransactionMapper.toDTO(saved);
+	}
+
+	/**
+	 * Run prediction adjustment for a freshly saved/updated transaction without
+	 * letting prediction failures break the underlying transaction save.
+	 */
+	private void applyPredictionAdjustment(AccountTransaction entity) {
+		if (entity == null || entity.getCategory() == null) {
+			return;
+		}
+		try {
+			predictionService.adjustPredictionForActualTransaction(entity);
+		} catch (Exception e) {
+			logger.warn("Failed to adjust prediction for transaction {}: {}", entity.getId(), e.getMessage());
+		}
 	}
 
 	@Transactional
@@ -562,19 +598,8 @@ public class AccountTransactionService {
 		}
 		// Process labels
 		processLabels(entity, transaction, appUser);
-		AccountTransactionDTO result = save(entity, appUser);
-		
-		// Adjust predictions if this transaction has a category
-		if (entity.getCategory() != null) {
-			try {
-				predictionService.adjustPredictionForActualTransaction(entity);
-			} catch (Exception e) {
-				// Log but don't fail the transaction if prediction adjustment fails
-				logger.warn("Failed to adjust prediction for transaction {}: {}", entity.getId(), e.getMessage());
-			}
-		}
-		
-		return result;
+		// Bare save() handles prediction adjustment centrally (idempotent).
+		return save(entity, appUser);
 	}
 
 	@Transactional

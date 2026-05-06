@@ -313,11 +313,19 @@ public class PredictionService {
 	}
 
 	/**
-	 * Adjust predicted transaction when an actual transaction is added
-	 * Reduces remainingAmount and increases actualSpent
+	 * Adjust predicted transaction when an actual transaction is added or updated.
+	 * Reduces remainingAmount and increases actualSpent.
+	 *
+	 * Idempotent: any prior adjustment recorded for this transaction (e.g. from a
+	 * previous save with a different category/amount) is reversed first so we never
+	 * double-count when this method is invoked from create, update, split, or import flows.
 	 */
 	@Transactional
 	public void adjustPredictionForActualTransaction(AccountTransaction actualTransaction) {
+		// Reverse any existing adjustment for this transaction first so the method is
+		// safe to call from update flows (e.g. user changed category or amount).
+		removePredictionAdjustmentForTransaction(actualTransaction);
+
 		// Get the transaction's year-month
 		LocalDateTime txDate = actualTransaction.getDate();
 		YearMonth txMonth = YearMonth.from(txDate);
