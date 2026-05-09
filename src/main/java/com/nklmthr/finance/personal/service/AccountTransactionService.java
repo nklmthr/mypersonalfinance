@@ -266,7 +266,13 @@ public class AccountTransactionService {
 			// Deduct child amount from parent
 			parent.setAmount(parent.getAmount().subtract(st.amount()));
 
-			accountTransactionRepository.save(child);
+			AccountTransaction savedChild = accountTransactionRepository.save(child);
+
+			// Keep prediction running totals in sync. The parent's prior contribution was
+			// already reversed above (its category now becomes SPLIT), so we need each
+			// child to feed back into the prediction of its own category (or any ancestor
+			// like Grocery) the same way a regular leaf transaction would.
+			applyPredictionAdjustment(savedChild);
 		}
 
 		// Parent amount should now be zero

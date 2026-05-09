@@ -188,7 +188,9 @@ public interface AccountTransactionRepository
 		  AND t.category = :category
 		  AND t.date >= :startDate
 		  AND t.date <= :endDate
-		  AND t.parent IS NULL
+		  AND NOT EXISTS (
+		      SELECT 1 FROM AccountTransaction c WHERE c.parent = t.id
+		  )
 	""")
 	List<Object[]> findAverageAmountByCategoryAndDateRange(
 		@Param("appUser") AppUser appUser,
@@ -228,7 +230,9 @@ public interface AccountTransactionRepository
 		  AND t.category.id IN :categoryIds
 		  AND t.date >= :startDate
 		  AND t.date <= :endDate
-		  AND t.parent IS NULL
+		  AND NOT EXISTS (
+		      SELECT 1 FROM AccountTransaction c WHERE c.parent = t.id
+		  )
 	""")
 	List<Object[]> findAverageAmountByCategoryIdsAndDateRange(
 		@Param("appUser") AppUser appUser,
@@ -238,12 +242,17 @@ public interface AccountTransactionRepository
 	);
 
 	/**
-	 * Hierarchy-aware version: fetch transactions across a set of category IDs (parent + all descendants)
+	 * Hierarchy-aware version: fetch transactions across a set of category IDs (parent + all descendants).
+	 *
+	 * Uses leaf-transaction semantics (excludes split parents that have children) so that split
+	 * children categorised under a descendant of the rule's category are picked up. Relying on
+	 * {@code parent IS NULL} would silently drop them because the split parent's category is
+	 * switched to {@code SPLIT}, which is not in the descendant set.
 	 */
 	@Query("SELECT t FROM AccountTransaction t WHERE t.appUser = :appUser " +
 	       "AND t.category.id IN :categoryIds " +
 	       "AND t.date >= :startDate AND t.date <= :endDate " +
-	       "AND t.parent IS NULL " +
+	       "AND NOT EXISTS (SELECT 1 FROM AccountTransaction c WHERE c.parent = t.id) " +
 	       "ORDER BY t.date DESC")
 	List<AccountTransaction> findByAppUserAndCategoryIdsAndDateBetween(
 		@Param("appUser") AppUser appUser,
