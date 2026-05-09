@@ -319,8 +319,13 @@ public class PredictionService {
 	 * Idempotent: any prior adjustment recorded for this transaction (e.g. from a
 	 * previous save with a different category/amount) is reversed first so we never
 	 * double-count when this method is invoked from create, update, split, or import flows.
+	 *
+	 * {@code noRollbackFor = Exception.class} ensures any failure inside prediction
+	 * bookkeeping cannot mark the caller's transaction as rollback-only. The caller
+	 * ({@code AccountTransactionService.applyPredictionAdjustment}) already swallows
+	 * exceptions so the underlying transaction save stays committed.
 	 */
-	@Transactional
+	@Transactional(noRollbackFor = Exception.class)
 	public void adjustPredictionForActualTransaction(AccountTransaction actualTransaction) {
 		// Reverse any existing adjustment for this transaction first so the method is
 		// safe to call from update flows (e.g. user changed category or amount).
@@ -332,22 +337,26 @@ public class PredictionService {
 		String monthString = txMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
 		
 		// Collect ALL applicable predictions: exact category match + any ancestor-rule matches
-		// This ensures a transaction in "Vegetables" also reduces the "Grocery" parent prediction
+		// This ensures a transaction in "Vegetables" also reduces the "Grocery" parent prediction.
+		// Use the transaction's own appUser instead of pulling from the security context so that
+		// scheduled flows (email/SMS extraction, etc.) which run without an HTTP auth context
+		// can still walk the category ancestor chain.
+		AppUser appUser = actualTransaction.getAppUser();
 		List<PredictedTransaction> predictions = new ArrayList<>();
 		predictions.addAll(predictedTransactionRepository
 			.findByAppUserAndCategoryAndPredictionMonth(
-				actualTransaction.getAppUser(),
+				appUser,
 				actualTransaction.getCategory(),
 				monthString
 			));
 
 		String parentId = actualTransaction.getCategory().getParent();
 		while (parentId != null) {
-			Category parentCategory = categoryService.getCategoryById(parentId);
+			Category parentCategory = categoryService.getCategoryById(appUser, parentId);
 			if (parentCategory == null) break;
 			predictions.addAll(predictedTransactionRepository
 				.findByAppUserAndCategoryAndPredictionMonth(
-					actualTransaction.getAppUser(),
+					appUser,
 					parentCategory,
 					monthString
 				));
