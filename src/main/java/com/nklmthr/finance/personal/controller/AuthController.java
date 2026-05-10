@@ -16,14 +16,17 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
-import com.nklmthr.finance.personal.dto.SignupRequest;
 import com.nklmthr.finance.personal.dto.AuthRequest;
 import com.nklmthr.finance.personal.dto.AuthResponse;
+import com.nklmthr.finance.personal.dto.ChangePasswordRequest;
+import com.nklmthr.finance.personal.dto.SignupRequest;
+import com.nklmthr.finance.personal.dto.UpdateEmailRequest;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.security.JwtUtil;
 import com.nklmthr.finance.personal.security.SecurityConfig;
@@ -137,6 +140,44 @@ public class AuthController {
 		String roleString = user.getRole();
 		String[] roles = roleString != null && !roleString.isEmpty() ? roleString.split("\\,") : new String[] { "USER" };
 		return Map.of("username", user.getUsername(), "email", user.getEmail(), "roles", roles);
+	}
+
+	@PutMapping("/user/email")
+	public ResponseEntity<?> updateEmail(@Valid @RequestBody UpdateEmailRequest request) {
+		AppUser user = appUserService.getCurrentUser();
+		logger.info("Updating email for user: {}", user.getUsername());
+		String newEmail = request.getEmail().trim();
+
+		if (newEmail.equalsIgnoreCase(user.getEmail())) {
+			return ResponseEntity.ok(Map.of("message", "Email unchanged", "email", user.getEmail()));
+		}
+
+		user.setEmail(newEmail);
+		appUserService.save(user);
+		logger.info("Email updated for user: {}", user.getUsername());
+		return ResponseEntity.ok(Map.of("message", "Email updated", "email", user.getEmail()));
+	}
+
+	@PostMapping("/user/change-password")
+	public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+		AppUser user = appUserService.getCurrentUser();
+		logger.info("Password change attempt for user: {}, new password pattern: {}",
+				user.getUsername(), getPasswordPatternSummary(request.getNewPassword()));
+
+		if (!securityConfig.passwordEncoder().matches(request.getCurrentPassword(), user.getPassword())) {
+			logger.warn("Password change rejected for user {}: current password did not match", user.getUsername());
+			return ResponseEntity.badRequest().body(Map.of("error", "Current password is incorrect"));
+		}
+
+		if (securityConfig.passwordEncoder().matches(request.getNewPassword(), user.getPassword())) {
+			return ResponseEntity.badRequest()
+					.body(Map.of("error", "New password must be different from the current password"));
+		}
+
+		user.setPassword(securityConfig.passwordEncoder().encode(request.getNewPassword()));
+		appUserService.save(user);
+		logger.info("Password changed successfully for user: {}", user.getUsername());
+		return ResponseEntity.ok(Map.of("message", "Password updated successfully"));
 	}
 
 	private String getPasswordPatternSummary(String password) {

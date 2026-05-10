@@ -9,6 +9,7 @@ import org.springframework.data.jpa.domain.Specification;
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.model.Attachment;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -93,5 +94,15 @@ public class AccountTransactionSpecifications {
 
 	public static Specification<AccountTransaction> belongsToUser(AppUser appUser) {
 		return (root, query, cb) -> cb.equal(root.get("appUser"), appUser);
+	}
+
+	public static Specification<AccountTransaction> hasAttachments() {
+		return (root, query, cb) -> {
+			var subquery = query.subquery(Long.class);
+			var attRoot = subquery.from(Attachment.class);
+			subquery.select(cb.count(attRoot));
+			subquery.where(cb.equal(attRoot.get("accountTransaction").get("id"), root.get("id")));
+			return cb.greaterThan(subquery, 0L);
+		};
 	}
 }

@@ -45,10 +45,11 @@ public class AccountTransactionController {
 			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String labelId,
 			@RequestParam(required = false) String search,
 			@RequestParam(required = false) String sortBy,
-			@RequestParam(required = false) String sortDir) {
+			@RequestParam(required = false) String sortDir,
+			@RequestParam(required = false) Boolean hasAttachments) {
 		logger.debug(
-                "Fetching transactions - page: {}, size: {}, month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, categoryId: {}, labelId: {}, search: {}, sortBy: {}, sortDir: {}",
-                page, size, month, date, startDate, endDate, accountId, type, categoryId, labelId, search, sortBy, sortDir);
+                "Fetching transactions - page: {}, size: {}, month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, categoryId: {}, labelId: {}, search: {}, sortBy: {}, sortDir: {}, hasAttachments: {}",
+                page, size, month, date, startDate, endDate, accountId, type, categoryId, labelId, search, sortBy, sortDir, hasAttachments);
 
 		Sort sort;
 		if (sortBy != null && !sortBy.isEmpty()) {
@@ -66,7 +67,7 @@ public class AccountTransactionController {
 		}
 
 		return transactionService.getFilteredTransactions(PageRequest.of(page, size, sort),
-                month, date, startDate, endDate, accountId, type, search, categoryId, labelId);
+                month, date, startDate, endDate, accountId, type, search, categoryId, labelId, hasAttachments);
 	}
 
     @GetMapping("/export")
@@ -75,10 +76,11 @@ public class AccountTransactionController {
 			@RequestParam(required = false) String startDate, @RequestParam(required = false) String endDate,
 			@RequestParam(required = false) String accountId, @RequestParam(required = false) String type,
 			@RequestParam(required = false) String categoryId, @RequestParam(required = false) String labelId,
-			@RequestParam(required = false) String search) {
-        logger.debug("Exporting transactions - month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, categoryId: {}, labelId: {}, search: {}",
-                month, date, startDate, endDate, accountId, type, categoryId, labelId, search);
-        return transactionService.getFilteredTransactionsForExport(month, date, startDate, endDate, accountId, type, categoryId, labelId, search);
+			@RequestParam(required = false) String search,
+			@RequestParam(required = false) Boolean hasAttachments) {
+        logger.debug("Exporting transactions - month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, categoryId: {}, labelId: {}, search: {}, hasAttachments: {}",
+                month, date, startDate, endDate, accountId, type, categoryId, labelId, search, hasAttachments);
+        return transactionService.getFilteredTransactionsForExport(month, date, startDate, endDate, accountId, type, categoryId, labelId, search, hasAttachments);
 	}
 
 	@GetMapping("/{id}")

@@ -876,7 +876,8 @@ public class AccountTransactionService {
 	}
 
 private Specification<AccountTransaction> buildTransactionSpec(String month, String date, String startDate, String endDate,
-            String accountId, String type, String search, String categoryId, String labelId, boolean rootOnly) {
+            String accountId, String type, String search, String categoryId, String labelId, boolean rootOnly,
+            Boolean hasAttachments) {
 
 		AppUser appUser = appUserService.getCurrentUser();
 		Specification<AccountTransaction> spec = Specification.where(null);
@@ -900,6 +901,9 @@ private Specification<AccountTransaction> buildTransactionSpec(String month, Str
 		}
 		if (StringUtils.isNotBlank(type) && !"ALL".equalsIgnoreCase(type)) {
 			spec = spec.and(AccountTransactionSpecifications.hasTransactionType(TransactionType.valueOf(type)));
+		}
+		if (Boolean.TRUE.equals(hasAttachments)) {
+			spec = spec.and(AccountTransactionSpecifications.hasAttachments());
 		}
     // Date range filtering - priority order: date range > specific date > month
     if (StringUtils.isNotBlank(startDate) && StringUtils.isNotBlank(endDate)) {
@@ -925,13 +929,13 @@ private Specification<AccountTransaction> buildTransactionSpec(String month, Str
 	
 	@Transactional
 public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month, String date, String startDate, String endDate,
-            String accountId, String type, String categoryId, String labelId, String search) {
+            String accountId, String type, String categoryId, String labelId, String search, Boolean hasAttachments) {
 		logger.info(
-				"Fetching transactions for export for month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}",
-				month, date, startDate, endDate, accountId, type, search, categoryId, labelId);
+				"Fetching transactions for export for month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}, hasAttachments: {}",
+				month, date, startDate, endDate, accountId, type, search, categoryId, labelId, hasAttachments);
     Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
-                ? buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, categoryId, labelId, false)
-                : buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, null, labelId, true);
+                ? buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, categoryId, labelId, false, hasAttachments)
+                : buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, null, labelId, true, hasAttachments);
 		List<AccountTransaction> list = accountTransactionRepository.findAll(spec,
 				Sort.by(Sort.Direction.DESC, "date"));
 		logger.info("Total transactions found for export: {}", list.size());
@@ -939,12 +943,12 @@ public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month
 	}
 
 public TransactionPageDTO getFilteredTransactions(Pageable pageable, String month, String date, String startDate, String endDate,
-            String accountId, String type, String search, String categoryId, String labelId) {
-		logger.info("Fetching transactions for month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}",
-				month, date, startDate, endDate, accountId, type, search, categoryId, labelId);
+            String accountId, String type, String search, String categoryId, String labelId, Boolean hasAttachments) {
+		logger.info("Fetching transactions for month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}, hasAttachments: {}",
+				month, date, startDate, endDate, accountId, type, search, categoryId, labelId, hasAttachments);
         Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
-                ? buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, categoryId, labelId, false)
-                : buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, null, labelId, true);
+                ? buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, categoryId, labelId, false, hasAttachments)
+                : buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, null, labelId, true, hasAttachments);
 
 		Page<AccountTransaction> page = accountTransactionRepository.findAll(spec, pageable);
 		logger.info("Total transactions found: {}", page.getTotalElements());
@@ -1015,13 +1019,13 @@ public TransactionPageDTO getFilteredTransactions(Pageable pageable, String mont
 	}
 
 
-public BigDecimal getCurrentTotal(String month, String date, String startDate, String endDate, String accountId, String type, String search, String categoryId, String labelId) {
-        logger.info("Calculating current total for month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}",
-                month, date, startDate, endDate, accountId, type, search, categoryId, labelId);
+public BigDecimal getCurrentTotal(String month, String date, String startDate, String endDate, String accountId, String type, String search, String categoryId, String labelId, Boolean hasAttachments) {
+        logger.info("Calculating current total for month: {}, date: {}, startDate: {}, endDate: {}, accountId: {}, type: {}, search: {}, categoryId: {}, labelId: {}, hasAttachments: {}",
+                month, date, startDate, endDate, accountId, type, search, categoryId, labelId, hasAttachments);
         
         Specification<AccountTransaction> spec = StringUtils.isNotBlank(categoryId)
-                ? buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, categoryId, labelId, false)
-                : buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, null, labelId, true);
+                ? buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, categoryId, labelId, false, hasAttachments)
+                : buildTransactionSpec(month, date, startDate, endDate, accountId, type, search, null, labelId, true, hasAttachments);
         
         // Calculate total using database-level aggregation
         BigDecimal total = calculateTotalWithSpec(spec);
@@ -1066,15 +1070,15 @@ public BigDecimal getCurrentTotal(String month, String date, String startDate, S
 // --- Backward-compatible overloads (without 'date' and 'labelId') for existing tests/integrations ---
 public TransactionPageDTO getFilteredTransactions(Pageable pageable, String month, String accountId,
         String type, String search, String categoryId) {
-    return getFilteredTransactions(pageable, month, null, null, null, accountId, type, search, categoryId, null);
+    return getFilteredTransactions(pageable, month, null, null, null, accountId, type, search, categoryId, null, null);
 }
 
 public BigDecimal getCurrentTotal(String month, String accountId, String type, String search, String categoryId) {
-    return getCurrentTotal(month, null, null, null, accountId, type, search, categoryId, null);
+    return getCurrentTotal(month, null, null, null, accountId, type, search, categoryId, null, null);
 }
 
 public List<AccountTransactionDTO> getFilteredTransactionsForExport(String month, String accountId, String type,
         String categoryId, String search) {
-    return getFilteredTransactionsForExport(month, null, null, null, accountId, type, categoryId, null, search);
+    return getFilteredTransactionsForExport(month, null, null, null, accountId, type, categoryId, null, search, null);
 }
 }

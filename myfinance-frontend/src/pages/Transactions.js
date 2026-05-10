@@ -18,9 +18,22 @@ import TransferForm from "./transactions/components/TransferForm";
 import TransactionSplit from "./transactions/components/TransactionSplit";
 import TransactionComparisonModal from "./transactions/components/TransactionComparisonModal";
 import TransactionDetailsModal from "./transactions/components/TransactionDetailsModal";
+import TransactionAttachments from "./transactions/components/TransactionAttachments";
 import LabelInput from "./transactions/components/LabelInput";
 import { buildTree, flattenCategories } from "./transactions/utils/utils";
+import { getCategoryColor } from "./transactions/utils/categoryColors";
 
+
+// Fixed-length truncation for displayed transaction descriptions/explanations.
+// Keeps every row visually uniform; full text is always available via the
+// title tooltip and the click-to-open details modal.
+const DESCRIPTION_DISPLAY_LIMIT = 32;
+const EXPLANATION_DISPLAY_LIMIT = 50;
+const truncateText = (text, limit) => {
+	if (!text) return "";
+	const str = String(text);
+	return str.length > limit ? str.slice(0, limit - 1).trimEnd() + "…" : str;
+};
 
 // ---- main ----
 export default function Transactions() {
@@ -39,6 +52,7 @@ export default function Transactions() {
 	const [splitTx, setSplitTx] = useState(null);
 	const [transferTx, setTransferTx] = useState(null);
 	const [labelEditTx, setLabelEditTx] = useState(null);
+	const [attachmentsTx, setAttachmentsTx] = useState(null);
 	const [loading, setLoading] = useState(false);
 	const [page, setPage] = useState(0);
 	const [totalPages, setTotalPages] = useState(0);
@@ -88,6 +102,9 @@ export default function Transactions() {
 	const [search, setSearch] = useState(
 	  searchParams.get("search") || ""
 	);
+	const [filterHasAttachments, setFilterHasAttachments] = useState(
+		searchParams.get("hasAttachments") === "true"
+	);
 	const debouncedSearch = useDebounce(search, 500);
 const [refreshing, setRefreshing] = useState(false);
 const [availableServices, setAvailableServices] = useState([]);
@@ -109,7 +126,9 @@ const [filterMode, setFilterMode] = useState(
 	useEffect(() => {
 		const handleEscKey = (e) => {
 			if (e.key === "Escape") {
-				if (labelEditTx) {
+				if (attachmentsTx) {
+					setAttachmentsTx(null);
+				} else if (labelEditTx) {
 					setLabelEditTx(null);
 				} else if (modalContent) {
 					setModalContent(null);
@@ -119,11 +138,11 @@ const [filterMode, setFilterMode] = useState(
 			}
 		};
 		
-		if (modalContent || deleteConfirmation || labelEditTx) {
+		if (modalContent || deleteConfirmation || labelEditTx || attachmentsTx) {
 			document.addEventListener("keydown", handleEscKey);
 			return () => document.removeEventListener("keydown", handleEscKey);
 		}
-	}, [modalContent, deleteConfirmation, labelEditTx]);
+	}, [modalContent, deleteConfirmation, labelEditTx, attachmentsTx]);
 
 	NProgress.configure({ showSpinner: false });
 
@@ -188,6 +207,9 @@ useEffect(() => {
 			if (filterLabel) {
 				params.append("labelId", filterLabel);
 			}
+			if (filterHasAttachments) {
+				params.append("hasAttachments", "true");
+			}
 
 			const promises = [
 				api.get(`/transactions?${params.toString()}`),
@@ -234,7 +256,7 @@ useEffect(() => {
 	useEffect(() => {
 		setCurrentTotal(0);
 		fetchData();
-    }, [page, pageSize, filterMode, filterMonth, filterDate, filterStartDate, filterEndDate, filterAccount, filterType, filterCategory, filterLabel, debouncedSearch, sortBy, sortDir, showPredicted]);
+    }, [page, pageSize, filterMode, filterMonth, filterDate, filterStartDate, filterEndDate, filterAccount, filterType, filterCategory, filterLabel, filterHasAttachments, debouncedSearch, sortBy, sortDir, showPredicted]);
 
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
@@ -414,12 +436,12 @@ const triggerDataExtraction = async (servicesToRun) => {
 		return <TransactionDetailsModal tx={tx} />;
 	};
 	
-	const fetchLinkedTransactions = async (predictionId) => {
+	const fetchLinkedTransactions = async (predictionId, initialTab = 'historical') => {
 		try {
 			NProgress.start();
 			const res = await api.get(`/predicted-transactions/${predictionId}/linked-transactions`);
 			setLinkedTxns(res.data);
-			setActiveTab('historical'); // Reset to historical tab
+			setActiveTab(initialTab);
 			setModalContent({
 				title: "🔗 Prediction Transaction Details",
 				content: null // Will be rendered dynamically in the modal
@@ -587,7 +609,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 		return (
 			<div
 				key={tx.id}
-				className={`grid grid-cols-1 sm:grid-cols-[24px_3fr_2fr_2fr_1fr_2fr] gap-2 py-2 px-3 rounded border items-center text-sm ${baseColor} border-gray-200`}
+				className={`grid w-full grid-cols-1 sm:grid-cols-[24px_minmax(0,3fr)_minmax(180px,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)] gap-2 py-2 px-3 rounded border items-center text-sm ${baseColor} border-gray-200`}
 			>
 				<div className="text-xs sm:col-span-1 hidden sm:block">
 					{isPredicted && (
@@ -605,98 +627,38 @@ const triggerDataExtraction = async (servicesToRun) => {
 					)}
 				</div>
 
-				<div className={`flex flex-col ${isChild ? 'pl-3' : ''}`}>
-					{isPredicted && (
-						<div className="flex items-center gap-1 mb-1">
-							<span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded font-semibold">
-								PREDICTED
-							</span>
-						</div>
-					)}
-					<div className="flex items-center gap-1 truncate font-medium text-gray-800">
+				<div className={`flex flex-col min-w-0 overflow-hidden ${isChild ? 'pl-3' : ''}`}>
+					<div className="flex items-center gap-1 min-w-0 font-medium text-gray-800">
 						{!isChild && !isPredicted && tx.children?.length > 0 && (
 							<button
 								title="Toggle children"
-								className="text-gray-600 hover:text-black sm:hidden"
+								className="flex-shrink-0 text-gray-600 hover:text-black sm:hidden"
 								onClick={() => toggleExpand(tx.id)}
 							>
 								{expandedParents[tx.id] ? "▼" : "▶"}
 							</button>
 						)}
 						<span 
-							className={`truncate ${!isPredicted ? 'cursor-pointer hover:text-blue-600' : ''}`}
-							title={isPredicted ? "Predicted transaction based on historical data" : (hasGpt ? "✨ Click to view AI analysis comparison" : "🔍 Click to view transaction details")}
+							className={`flex-1 truncate min-w-0 ${!isPredicted ? 'cursor-pointer hover:text-blue-600' : ''}`}
+							title={
+								isPredicted
+									? (tx.description || "Predicted transaction based on historical data")
+									: ((tx.description || tx.shortDescription || "") + (hasGpt ? "  •  ✨ Click to view AI analysis" : "  •  🔍 Click to view details"))
+							}
 							onClick={!isPredicted ? () =>
 								setModalContent({
 									title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
 									content: hasGpt ? createComparisonModal(tx) : createDetailsModal(tx),
 								}) : undefined}
 						>
-							{isPredicted ? tx.description : tx.shortDescription}
+							{truncateText(isPredicted ? tx.description : (tx.shortDescription || tx.description), DESCRIPTION_DISPLAY_LIMIT)}
 						</span>
-						{!isPredicted && hasGpt ? (
-							<button
-								title="✨ AI analysis available - Click to view comparison"
-								className="text-blue-700 px-1 ml-1 cursor-pointer hover:text-blue-900"
-								onClick={(e) => {
-									e.stopPropagation();
-									setModalContent({
-										title: "Transaction Analysis & Comparison",
-										content: createComparisonModal(tx),
-									});
-								}}
-							>
-								✨
-							</button>
-						) : !isPredicted ? (
-							<button
-								title="🔍 Click to view full transaction details"
-								className="text-gray-700 px-1 ml-1 cursor-pointer hover:text-gray-900"
-								onClick={(e) => {
-									e.stopPropagation();
-									setModalContent({
-										title: "Transaction Details",
-										content: createDetailsModal(tx),
-									});
-								}}
-							>
-								🔍
-							</button>
-						) : null}
-					</div>
-					<div 
-						className={`text-xs text-gray-500 break-words ${!isPredicted ? 'cursor-pointer hover:text-blue-600' : ''}`}
-						title={isPredicted ? tx.explanation : (hasGpt ? "✨ Click to view AI analysis comparison" : "🔍 Click to view transaction details")}
-						onClick={!isPredicted ? () =>
-							setModalContent({
-								title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
-								content: hasGpt ? createComparisonModal(tx) : createDetailsModal(tx),
-							}) : undefined}
-					>
-						{isPredicted ? tx.explanation : tx.shortExplanation}
-					</div>
-					
-					{isPredicted && (
-						<button
-							onClick={(e) => {
-								e.stopPropagation();
-								fetchLinkedTransactions(tx.id);
-							}}
-							className="text-xs bg-blue-100 text-blue-700 rounded px-2 py-0.5 hover:bg-blue-200 transition-colors mt-1 inline-block"
-							title="View historical and actual transactions linked to this prediction"
-						>
-							🔗 View Details
-						</button>
-					)}
-					
-					{!isPredicted && (
-						<>
-							{/* Label Icon */}
+						{!isPredicted && (
 							<button
 								title={tx.labels && tx.labels.length > 0 ? `Edit labels (${tx.labels.length})` : "Add labels"}
-								className={`text-sm px-1 ml-1 cursor-pointer transition-colors ${
-									tx.labels && tx.labels.length > 0 
-										? "text-blue-600 hover:text-blue-800" 
+								className={`flex-shrink-0 text-sm px-1 cursor-pointer transition-colors ${
+									tx.labels && tx.labels.length > 0
+										? "text-blue-600 hover:text-blue-800"
 										: "text-gray-400 hover:text-gray-600"
 								}`}
 								onClick={(e) => {
@@ -709,7 +671,36 @@ const triggerDataExtraction = async (servicesToRun) => {
 							>
 								{tx.labels && tx.labels.length > 0 ? "🏷️" : "🏷"}
 							</button>
-							
+						)}
+						{!isPredicted && (
+							<button
+								title="View / upload receipt attachments (image or PDF)"
+								className="flex-shrink-0 text-sm px-1 cursor-pointer text-gray-500 hover:text-gray-800 transition-colors"
+								onClick={(e) => {
+									e.stopPropagation();
+									setAttachmentsTx(tx);
+								}}
+							>
+								📎
+							</button>
+						)}
+					</div>
+					{!isPredicted && (tx.shortExplanation || tx.explanation) && (
+						<div 
+							className="truncate text-xs text-gray-500 cursor-pointer hover:text-blue-600"
+							title={(tx.explanation || tx.shortExplanation || "") + (hasGpt ? "  •  ✨ Click to view AI analysis comparison" : "  •  🔍 Click to view transaction details")}
+							onClick={() =>
+								setModalContent({
+									title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
+									content: hasGpt ? createComparisonModal(tx) : createDetailsModal(tx),
+								})}
+						>
+							{truncateText(tx.shortExplanation || tx.explanation, EXPLANATION_DISPLAY_LIMIT)}
+						</div>
+					)}
+
+					{!isPredicted && (
+						<>
 							{/* Display labels if any */}
 							{tx.labels && tx.labels.length > 0 && (
 								<div className="flex flex-wrap gap-1 mt-1">
@@ -734,35 +725,37 @@ const triggerDataExtraction = async (servicesToRun) => {
 				</div>
 
 				<div className="text-gray-700">
-					<span
-						className={`font-semibold ${
-							isPredicted
-								? (tx.remainingAmount < 0 ? "text-red-600" : "text-yellow-700")
-								: (isPredicted ? tx.transactionType : tx.type) === "DEBIT"
-								? "text-red-600"
-								: "text-green-600"
-						}`}
-					>
-						{tx.currency || "₹"}
-						{isPredicted && tx.remainingAmount !== undefined ? (
-							<>
-								{(typeof tx.remainingAmount === "number" 
-									? tx.remainingAmount 
-									: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-								<span className="text-xs text-gray-500 ml-1">
-									/ {(typeof tx.predictedAmount === "number" 
-										? tx.predictedAmount 
+					<span className="whitespace-nowrap inline-flex items-baseline gap-1">
+						<span
+							className={`font-semibold ${
+								isPredicted
+									? (tx.remainingAmount < 0 ? "text-red-600" : "text-yellow-700")
+									: (isPredicted ? tx.transactionType : tx.type) === "DEBIT"
+									? "text-red-600"
+									: "text-green-600"
+							}`}
+						>
+							{tx.currency || "₹"}
+							{isPredicted && tx.remainingAmount !== undefined ? (
+								<>
+									{(typeof tx.remainingAmount === "number" 
+										? tx.remainingAmount 
 										: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-								</span>
-							</>
-						) : (
-							(typeof (isPredicted ? tx.predictedAmount : tx.amount) === "number" 
-								? (isPredicted ? tx.predictedAmount : tx.amount) 
-								: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })
-						)}
-					</span>
-					<span className="uppercase ml-2 text-xs bg-gray-100 rounded px-1">
-						{isPredicted ? tx.transactionType : tx.type}
+									<span className="text-xs text-gray-500 ml-1">
+										/ {(typeof tx.predictedAmount === "number" 
+											? tx.predictedAmount 
+											: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+									</span>
+								</>
+							) : (
+								(typeof (isPredicted ? tx.predictedAmount : tx.amount) === "number" 
+									? (isPredicted ? tx.predictedAmount : tx.amount) 
+									: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })
+							)}
+						</span>
+						<span className="uppercase text-xs bg-gray-100 rounded px-1">
+							{isPredicted ? tx.transactionType : tx.type}
+						</span>
 					</span>
 					{isPredicted && tx.remainingAmount < 0 && (
 						<div className="text-xs text-red-600 font-semibold mt-1">
@@ -807,45 +800,90 @@ const triggerDataExtraction = async (servicesToRun) => {
 						}
 						return null;
 					})()}
-					<br />
-					<span className="text-xs text-gray-500">
-						{isPredicted ? (tx.accountName || "Various accounts") : (tx.account?.name)}
-					</span>
-				</div>
-
-				<div className="order-3 sm:order-none">
-					{isPredicted ? (
-						<span className="text-xs text-gray-600">
-							{tx.categoryName}
-						</span>
-					) : (
-						<SearchSelect
-							options={flattened.map(c => ({ id: c.id, name: c.name }))}
-							value={tx.category?.id || ""}
-							onChange={(val) => {
-								saveTx(
-									{
-										...tx,
-										categoryId: val,
-										accountId: tx.account?.id,
-										parentId: tx.parent?.id,
-									},
-									"put",
-									`/transactions/${tx.id}`
-								);
-							}}
-							placeholder="Category"
-						/>
+					{!isPredicted && (
+						<>
+							<br />
+							<span className="text-xs text-gray-500">
+								{tx.account?.name}
+							</span>
+						</>
 					)}
 				</div>
 
-				<div className="hidden sm:block text-xs sm:text-sm text-gray-500 self-start sm:self-center order-4 sm:order-none">
-					{isPredicted 
-						? `Predicted for ${tx.predictionMonth}`
-						: dayjs(tx.date).format("ddd, DD MMM YY HH:mm")}
+				<div className="order-3 sm:order-none">
+					{isPredicted ? (() => {
+						const c = getCategoryColor(tx.categoryId || tx.categoryName);
+						return (
+							<span className={`inline-block px-2 py-0.5 ${c.bg} ${c.text} border ${c.border} rounded-full text-xs font-semibold uppercase tracking-wide shadow-sm`}>
+								{tx.categoryName}
+							</span>
+						);
+					})() : (() => {
+						const c = getCategoryColor(tx.category?.id || tx.category?.name);
+						return (
+							<div className="flex items-center gap-2">
+								<span
+									className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${tx.category?.id ? c.dot : "bg-gray-300"}`}
+									title={tx.category?.name || "Uncategorised"}
+								/>
+								<div className="flex-1 min-w-0">
+									<SearchSelect
+										options={flattened.map(co => ({ id: co.id, name: co.name }))}
+										value={tx.category?.id || ""}
+										onChange={(val) => {
+											saveTx(
+												{
+													...tx,
+													categoryId: val,
+													accountId: tx.account?.id,
+													parentId: tx.parent?.id,
+												},
+												"put",
+												`/transactions/${tx.id}`
+											);
+										}}
+										placeholder="Category"
+									/>
+								</div>
+							</div>
+						);
+					})()}
+				</div>
+
+				<div className="hidden sm:flex flex-col text-xs sm:text-sm text-gray-500 self-start sm:self-center order-4 sm:order-none leading-tight">
+					{!isPredicted && (
+						<>
+							<span>{dayjs(tx.date).format("DD MMM YYYY")}</span>
+							<span className="text-xs text-gray-400">{dayjs(tx.date).format("ddd, h:mm A")}</span>
+						</>
+					)}
 				</div>
 
 				<div className="hidden sm:flex flex-wrap gap-2 text-xs sm:text-sm justify-start sm:justify-end order-5 sm:order-none">
+					{isPredicted && (
+						<>
+							<button
+								className="text-blue-700 hover:underline"
+								onClick={(e) => {
+									e.stopPropagation();
+									fetchLinkedTransactions(tx.id, 'historical');
+								}}
+								title="View past transactions used to compute this prediction"
+							>
+								Historical
+							</button>
+							<button
+								className="text-green-700 hover:underline"
+								onClick={(e) => {
+									e.stopPropagation();
+									fetchLinkedTransactions(tx.id, 'actual');
+								}}
+								title="View actual transactions applied against this prediction"
+							>
+								Actual
+							</button>
+						</>
+					)}
 					{!isPredicted && !isChild && (
 						<button
 							className="text-purple-600 hover:underline"
@@ -908,7 +946,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 				{/* Mobile footer: date + actions */}
 				{!isPredicted && (
 					<div className="sm:hidden flex items-center justify-between mt-2 text-xs">
-						<div className="text-gray-500">{dayjs(tx.date).format("ddd, DD MMM YY HH:mm")}</div>
+						<div className="text-gray-500">{dayjs(tx.date).format("ddd, DD MMM YYYY h:mm A")}</div>
 						<div className="flex gap-3">
 							{!isChild && (
 								<button
@@ -1293,6 +1331,48 @@ function TransactionPageButtons({
                     currentTotal={currentTotal}
                 />
 
+                {/* Predicted Transactions Section (shown above filters so they read first) */}
+                {filterMode === 'month' && (
+                    <div className="w-full my-2">
+                        <div className="flex items-center justify-between mb-2 gap-3">
+                            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 min-w-0">
+                                <span className="truncate">📊 Predicted Transactions for {filterMonth}</span>
+                                {showPredicted && (
+                                    <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
+                                        ({predictedTransactions.length} prediction{predictedTransactions.length !== 1 ? 's' : ''})
+                                    </span>
+                                )}
+                            </h3>
+                            <label
+                                className="flex items-center gap-2 cursor-pointer select-none flex-shrink-0"
+                                title="Toggle whether predicted transactions appear above the filters"
+                            >
+                                <span className="text-sm text-gray-700 whitespace-nowrap">Show predicted</span>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={showPredicted}
+                                    onClick={() => setShowPredicted(!showPredicted)}
+                                    className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${showPredicted ? 'bg-blue-600' : 'bg-gray-300'}`}
+                                >
+                                    <span
+                                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${showPredicted ? 'translate-x-5' : 'translate-x-1'}`}
+                                    />
+                                </button>
+                            </label>
+                        </div>
+
+                        {showPredicted && predictedTransactions.length > 0 && (
+                            predictedTransactions.map((pred, idx) => renderRow(pred, false, idx, true))
+                        )}
+                        {showPredicted && predictedTransactions.length === 0 && (
+                            <div className="text-sm text-gray-500 italic px-3 py-2 bg-yellow-50 border border-yellow-200 rounded">
+                                No predicted transactions for {filterMonth}.
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Section 2: Filters in two rows */}
                 <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm space-y-2">
                     {/* First row: Date, Type, and Search */}
@@ -1387,21 +1467,23 @@ function TransactionPageButtons({
                             onChange={(val) => { setFilterLabel(val); updateUrlParams({ labelId: val }); }}
                             placeholder="Label"
                         />
-						{/* Show Predicted Transactions Toggle */}
-						{filterMode === 'month' && (
-							<div className="flex items-center">
-								<input
-									type="checkbox"
-									checked={showPredicted}
-									onChange={(e) => setShowPredicted(e.target.checked)}
-									className="mr-2"
-									id="show-predicted"
-								/>
-								<label htmlFor="show-predicted" className="text-sm text-gray-700 cursor-pointer whitespace-nowrap">
-									Show Predicted
-								</label>
-							</div>
-						)}
+						{/* Has Attachments filter */}
+						<div className="flex items-center">
+							<input
+								type="checkbox"
+								checked={filterHasAttachments}
+								onChange={(e) => {
+									setFilterHasAttachments(e.target.checked);
+									setPage(0);
+									updateUrlParams({ hasAttachments: e.target.checked ? "true" : "" });
+								}}
+								className="mr-2"
+								id="has-attachments"
+							/>
+							<label htmlFor="has-attachments" className="text-sm text-gray-700 cursor-pointer whitespace-nowrap">
+								📎 Has attachments
+							</label>
+						</div>
                     </div>
                 </div>
 
@@ -1663,17 +1745,19 @@ function TransactionPageButtons({
                             setFilterLabel('');
                             setFilterType('ALL');
                             setSearch('');
+                            setFilterHasAttachments(false);
                             setPage(0);
                             updateUrlParams({ 
                                 accountId: '', 
                                 categoryId: '', 
                                 labelId: '',
                                 type: 'ALL', 
-                                search: '' 
+                                search: '',
+                                hasAttachments: ''
                             });
                         }}
                         className="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600 whitespace-nowrap"
-                        title="Reset filters (keeps month/date selection, clears account, category, label, type, and search)"
+                        title="Reset filters (keeps month/date selection, clears account, category, label, type, search, and attachments)"
                     >
                         Reset
                     </button>
@@ -1689,6 +1773,7 @@ function TransactionPageButtons({
                             setFilterLabel('');
                             setFilterType('ALL');
                             setSearch('');
+                            setFilterHasAttachments(false);
                             setSortBy(null);
                             setSortDir(null);
                             setPage(0);
@@ -1702,6 +1787,7 @@ function TransactionPageButtons({
                                 labelId: '',
                                 type: 'ALL', 
                                 search: '',
+                                hasAttachments: '',
                                 sortBy: null,
                                 sortDir: null
                             });
@@ -1729,25 +1815,22 @@ function TransactionPageButtons({
 
 			{renderPagination()}
 
-			{/* Predicted Transactions Section */}
-			{showPredicted && predictedTransactions.length > 0 && (
-				<div className="my-4">
-					<h3 className="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
-						<span>📊 Predicted Transactions for {filterMonth}</span>
-						<span className="text-sm font-normal text-gray-600">
-							({predictedTransactions.length} prediction{predictedTransactions.length !== 1 ? 's' : ''})
-						</span>
-					</h3>
-					{predictedTransactions.map((pred, idx) => renderRow(pred, false, idx, true))}
-				</div>
-			)}
-
-			{/* Actual Transactions */}
+			{/* Actual Transactions header (only when predictions are visible above) */}
 			{showPredicted && predictedTransactions.length > 0 && (
 				<h3 className="text-lg font-semibold text-gray-800 my-4">
 					Actual Transactions
 				</h3>
 			)}
+
+			{/* Column Headers (desktop only - row layout collapses on mobile) */}
+			<div className="hidden sm:grid w-full grid-cols-[24px_minmax(0,3fr)_minmax(180px,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)] gap-2 px-3 py-2 bg-gray-100 border border-gray-300 rounded-t text-xs font-semibold text-gray-700 uppercase tracking-wide">
+				<div></div>
+				<div>Description</div>
+				<div>Amount / Account</div>
+				<div>Category</div>
+				<div>Date</div>
+				<div className="text-right">Actions</div>
+			</div>
 
 			{/* Rows */}
 			{transactions.flatMap((tx, idx) => [
@@ -1834,6 +1917,13 @@ function TransactionPageButtons({
 						}
 					}}
 					accounts={accounts}
+				/>
+			)}
+
+			{attachmentsTx && (
+				<TransactionAttachments
+					transaction={attachmentsTx}
+					onClose={() => setAttachmentsTx(null)}
 				/>
 			)}
 

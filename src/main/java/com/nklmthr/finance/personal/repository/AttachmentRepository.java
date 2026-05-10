@@ -1,6 +1,7 @@
 package com.nklmthr.finance.personal.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -12,4 +13,5 @@ public interface AttachmentRepository extends JpaRepository<Attachment, String> 
 	List<Attachment> findByAccountTransaction_IdAndAccountTransaction_AppUser_Id(String transactionId,
 			String appUserId);
 
+	Optional<Attachment> findByIdAndAppUser_Id(String id, String appUserId);
 }

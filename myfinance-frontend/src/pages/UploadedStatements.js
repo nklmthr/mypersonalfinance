@@ -239,7 +239,7 @@ export default function StatementUploadPage() {
               <tr key={s.id} className="border-t hover:bg-gray-50">
                 <td className="px-4 py-2">{s.filename}</td>
                 <td className="px-4 py-2">{s.account?.name || "—"}</td>
-                <td className="px-4 py-2">{dayjs(s.uploadedAt).format("DD MMM YYYY, HH:mm")}</td>
+                <td className="px-4 py-2">{dayjs(s.uploadedAt).format("DD MMM YYYY, h:mm A")}</td>
                 <td className="px-4 py-2">{s.status}</td>
                 <td className="px-4 py-2 text-center">
                   <div className="flex flex-col sm:flex-row gap-2 justify-center items-center">
