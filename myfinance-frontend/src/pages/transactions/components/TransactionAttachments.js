@@ -112,6 +112,74 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 		return mimeType.split("/")[1] || "bin";
 	};
 
+	// Re-encode an image blob as a (smaller) JPEG via a canvas. Used to shrink
+	// pasted/dropped images that browsers re-encode as PNG when copied from a
+	// website (a 600 KB JPEG photo typically expands to ~10 MB PNG on copy).
+	// Returns the original blob unchanged if anything goes wrong.
+	const recompressImage = (blob, { maxDim = 3200, quality = 0.85 } = {}) =>
+		new Promise((resolve) => {
+			if (!blob || !blob.type?.startsWith("image/") || blob.type === "image/gif") {
+				resolve(blob);
+				return;
+			}
+			const url = URL.createObjectURL(blob);
+			const img = new Image();
+			img.onload = () => {
+				try {
+					let { width, height } = img;
+					const longEdge = Math.max(width, height);
+					if (longEdge > maxDim) {
+						const scale = maxDim / longEdge;
+						width = Math.round(width * scale);
+						height = Math.round(height * scale);
+					}
+					const canvas = document.createElement("canvas");
+					canvas.width = width;
+					canvas.height = height;
+					const ctx = canvas.getContext("2d");
+					ctx.drawImage(img, 0, 0, width, height);
+					canvas.toBlob(
+						(out) => {
+							URL.revokeObjectURL(url);
+							resolve(out || blob);
+						},
+						"image/jpeg",
+						quality
+					);
+				} catch (err) {
+					URL.revokeObjectURL(url);
+					console.warn("Image recompress failed, using original", err);
+					resolve(blob);
+				}
+			};
+			img.onerror = () => {
+				URL.revokeObjectURL(url);
+				console.warn("Image recompress: failed to load source");
+				resolve(blob);
+			};
+			img.src = url;
+		});
+
+	// Build a File suitable for upload. If the source is a large image (typically
+	// produced by paste-from-webpage where browsers hand us a bloated PNG bitmap),
+	// re-encode it as JPEG to fit within the upload limit while staying high quality.
+	const prepareForUpload = async (sourceBlob, baseName) => {
+		if (!sourceBlob) return null;
+		const isImage = sourceBlob.type?.startsWith("image/");
+		const tooBigForLossless = isImage && sourceBlob.size > 1.5 * 1024 * 1024;
+		if (tooBigForLossless) {
+			const jpeg = await recompressImage(sourceBlob);
+			if (jpeg && jpeg !== sourceBlob && jpeg.size < sourceBlob.size) {
+				const name = (baseName || "image").replace(/\.[^.]+$/, "") + ".jpg";
+				return new File([jpeg], name, { type: "image/jpeg" });
+			}
+		}
+		// Otherwise wrap the original blob as a File (preserving name & type).
+		const ext = extensionFor(sourceBlob.type);
+		const name = baseName || `upload.${ext}`;
+		return new File([sourceBlob], name, { type: sourceBlob.type });
+	};
+
 	const uploadFile = async (file) => {
 		if (!file) return;
 		setError(null);
@@ -150,15 +218,17 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 
 	const handleFileSelected = async (e) => {
 		const file = e.target.files?.[0];
-		await uploadFile(file);
+		if (!file) return;
+		const prepared = await prepareForUpload(file, file.name);
+		await uploadFile(prepared);
 	};
 
 	// Listen for paste events while the modal is open. If the clipboard contains
 	// an image (e.g. screenshot copied to clipboard via Cmd+Shift+Ctrl+4 on macOS
-	// or Print Screen on Windows), upload it directly so the user doesn't have
-	// to save the image to disk first.
+	// or Print Screen on Windows, or an image copied from a webpage), upload it
+	// directly so the user doesn't have to save the image to disk first.
 	useEffect(() => {
-		const handlePaste = (e) => {
+		const handlePaste = async (e) => {
 			if (uploading) return;
 			const items = e.clipboardData?.items;
 			if (!items || items.length === 0) return;
@@ -167,16 +237,14 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 				if (item.kind === "file") {
 					const blob = item.getAsFile();
 					if (blob) {
-						const ext = extensionFor(blob.type);
+						e.preventDefault();
 						const ts = new Date().toISOString().replace(/[:.]/g, "-");
-						// Pasted images come back without a filename; synthesize a useful one
-						// so the backend can persist it and infer Content-Type from the extension.
-						const filename = blob.name && blob.name !== "image.png"
+						const ext = extensionFor(blob.type);
+						const baseName = blob.name && blob.name !== "image.png"
 							? blob.name
 							: `pasted-${ts}.${ext}`;
-						const file = new File([blob], filename, { type: blob.type });
-						e.preventDefault();
-						uploadFile(file);
+						const prepared = await prepareForUpload(blob, baseName);
+						await uploadFile(prepared);
 						return;
 					}
 				}
@@ -200,12 +268,15 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 		e.stopPropagation();
 		setDragActive(false);
 	};
-	const handleDrop = (e) => {
+	const handleDrop = async (e) => {
 		e.preventDefault();
 		e.stopPropagation();
 		setDragActive(false);
 		const file = e.dataTransfer?.files?.[0];
-		if (file) uploadFile(file);
+		if (file) {
+			const prepared = await prepareForUpload(file, file.name);
+			await uploadFile(prepared);
+		}
 	};
 
 	const inferContentType = (att, blobType) => {
