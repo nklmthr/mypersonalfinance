@@ -19,9 +19,11 @@ import TransactionSplit from "./transactions/components/TransactionSplit";
 import TransactionComparisonModal from "./transactions/components/TransactionComparisonModal";
 import TransactionDetailsModal from "./transactions/components/TransactionDetailsModal";
 import TransactionAttachments from "./transactions/components/TransactionAttachments";
+import BulkActionBar from "./transactions/components/BulkActionBar";
 import LabelInput from "./transactions/components/LabelInput";
 import { buildTree, flattenCategories } from "./transactions/utils/utils";
 import { getCategoryColor } from "./transactions/utils/categoryColors";
+import { getCurrencySymbol, getAmountSizeClass } from "./transactions/utils/currency";
 
 
 // Fixed-length truncation for displayed transaction descriptions/explanations.
@@ -53,6 +55,9 @@ export default function Transactions() {
 	const [transferTx, setTransferTx] = useState(null);
 	const [labelEditTx, setLabelEditTx] = useState(null);
 	const [attachmentsTx, setAttachmentsTx] = useState(null);
+	// Bulk selection: stable Set of selected transaction IDs that survives pagination
+	// but is cleared whenever the filter set changes (see effect below).
+	const [selectedIds, setSelectedIds] = useState(() => new Set());
 	const [loading, setLoading] = useState(false);
 	const [page, setPage] = useState(0);
 	const [totalPages, setTotalPages] = useState(0);
@@ -414,6 +419,67 @@ const triggerDataExtraction = async (servicesToRun) => {
 		}, 0);
 	}, [transactions, expandedParents]);
 
+	// Bulk selection helpers
+	const isSelectable = (tx) => {
+		if (!tx || !tx.id) return false;
+		// Children (split parts) inherit category from parent; skip them in bulk.
+		if (tx.parentId) return false;
+		return true;
+	};
+	const selectablePageIds = useMemo(
+		() => (transactions || []).filter(isSelectable).map((tx) => tx.id),
+		[transactions]
+	);
+	const allOnPageSelected = selectablePageIds.length > 0 && selectablePageIds.every((id) => selectedIds.has(id));
+	const someOnPageSelected = !allOnPageSelected && selectablePageIds.some((id) => selectedIds.has(id));
+	const toggleRowSelection = (id) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	};
+	const togglePageSelection = () => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (allOnPageSelected) {
+				selectablePageIds.forEach((id) => next.delete(id));
+			} else {
+				selectablePageIds.forEach((id) => next.add(id));
+			}
+			return next;
+		});
+	};
+	const clearSelection = () => setSelectedIds(new Set());
+
+	// Clear selection whenever the underlying filter set changes — avoids accidentally
+	// applying a bulk action to rows that are no longer visible.
+	useEffect(() => {
+		setSelectedIds(new Set());
+	}, [filterMode, filterMonth, filterDate, filterStartDate, filterEndDate, filterAccount, filterType, filterCategory, filterLabel, filterHasAttachments, debouncedSearch]);
+
+	const applyBulkCategory = async ({ ids, categoryId }) => {
+		const res = await api.post("/transactions/bulk/category", {
+			transactionIds: ids,
+			categoryId,
+		});
+		await fetchData();
+		clearSelection();
+		return res.data;
+	};
+
+	const applyBulkLabels = async ({ ids, labels, mode }) => {
+		const res = await api.post("/transactions/bulk/labels", {
+			transactionIds: ids,
+			labels: (labels || []).map((l) => ({ id: l.id || null, name: l.name })),
+			mode,
+		});
+		await fetchData();
+		clearSelection();
+		return res.data;
+	};
+
 	const currentPageSum = useMemo(() => {
 		return (transactions || []).reduce((sum, tx) => {
 			const amount = typeof tx.amount === "number" ? tx.amount : 0;
@@ -611,20 +677,39 @@ const triggerDataExtraction = async (servicesToRun) => {
 				key={tx.id}
 				className={`grid w-full grid-cols-1 sm:grid-cols-[24px_minmax(0,3fr)_minmax(180px,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)] gap-2 py-2 px-3 rounded border items-center text-sm ${baseColor} border-gray-200`}
 			>
-				<div className="text-xs sm:col-span-1 hidden sm:block">
-					{isPredicted && (
+				<div className="text-xs sm:col-span-1 hidden sm:flex items-center justify-center">
+					{isPredicted ? (
 						<span className="text-yellow-600" title="Predicted Transaction">
 							📊
 						</span>
-					)}
-					{!isChild && !isPredicted && tx.children?.length > 0 && (
-						<button
-							onClick={() => toggleExpand(tx.id)}
-							className="text-gray-600 hover:text-black"
-						>
-							{expandedParents[tx.id] ? "▼" : "▶"}
-						</button>
-					)}
+					) : !isChild && tx.children?.length > 0 ? (
+						<div className="flex items-center gap-1">
+							<input
+								type="checkbox"
+								checked={selectedIds.has(tx.id)}
+								onChange={() => toggleRowSelection(tx.id)}
+								className="cursor-pointer"
+								title="Select for bulk action"
+								onClick={(e) => e.stopPropagation()}
+							/>
+							<button
+								onClick={() => toggleExpand(tx.id)}
+								className="text-gray-600 hover:text-black"
+								title="Toggle children"
+							>
+								{expandedParents[tx.id] ? "▼" : "▶"}
+							</button>
+						</div>
+					) : !isChild ? (
+						<input
+							type="checkbox"
+							checked={selectedIds.has(tx.id)}
+							onChange={() => toggleRowSelection(tx.id)}
+							className="cursor-pointer"
+							title="Select for bulk action"
+							onClick={(e) => e.stopPropagation()}
+						/>
+					) : null}
 				</div>
 
 				<div className={`flex flex-col min-w-0 overflow-hidden ${isChild ? 'pl-3' : ''}`}>
@@ -724,39 +809,45 @@ const triggerDataExtraction = async (servicesToRun) => {
 					)}
 				</div>
 
-				<div className="text-gray-700">
-					<span className="whitespace-nowrap inline-flex items-baseline gap-1">
-						<span
-							className={`font-semibold ${
-								isPredicted
-									? (tx.remainingAmount < 0 ? "text-red-600" : "text-yellow-700")
-									: (isPredicted ? tx.transactionType : tx.type) === "DEBIT"
-									? "text-red-600"
-									: "text-green-600"
-							}`}
-						>
-							{tx.currency || "₹"}
-							{isPredicted && tx.remainingAmount !== undefined ? (
-								<>
-									{(typeof tx.remainingAmount === "number" 
-										? tx.remainingAmount 
+			<div className="text-gray-700 sm:text-right">
+				<span className="whitespace-nowrap inline-flex items-baseline gap-1 sm:justify-end w-full">
+					<span
+						className={`font-semibold tabular-nums ${getAmountSizeClass(
+							isPredicted
+								? (tx.remainingAmount !== undefined ? tx.remainingAmount : tx.predictedAmount)
+								: tx.amount
+						)} ${
+							isPredicted
+								? (tx.remainingAmount < 0 ? "text-red-600" : "text-yellow-700")
+								: (isPredicted ? tx.transactionType : tx.type) === "DEBIT"
+								? "text-red-600"
+								: "text-green-600"
+						}`}
+					>
+						<span className="text-xs text-gray-500 mr-0.5 font-normal">
+							{getCurrencySymbol(tx.currency)}
+						</span>
+						{isPredicted && tx.remainingAmount !== undefined ? (
+							<>
+								{(typeof tx.remainingAmount === "number"
+									? tx.remainingAmount
+									: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+								<span className="text-xs text-gray-500 ml-1 font-normal">
+									/ {(typeof tx.predictedAmount === "number"
+										? tx.predictedAmount
 										: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-									<span className="text-xs text-gray-500 ml-1">
-										/ {(typeof tx.predictedAmount === "number" 
-											? tx.predictedAmount 
-											: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-									</span>
-								</>
-							) : (
-								(typeof (isPredicted ? tx.predictedAmount : tx.amount) === "number" 
-									? (isPredicted ? tx.predictedAmount : tx.amount) 
-									: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })
-							)}
-						</span>
-						<span className="uppercase text-xs bg-gray-100 rounded px-1">
-							{isPredicted ? tx.transactionType : tx.type}
-						</span>
+								</span>
+							</>
+						) : (
+							(typeof (isPredicted ? tx.predictedAmount : tx.amount) === "number"
+								? (isPredicted ? tx.predictedAmount : tx.amount)
+								: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })
+						)}
 					</span>
+					<span className="uppercase text-[10px] bg-gray-100 text-gray-600 rounded px-1 inline-block min-w-[44px] text-center">
+						{isPredicted ? tx.transactionType : tx.type}
+					</span>
+				</span>
 					{isPredicted && tx.remainingAmount < 0 && (
 						<div className="text-xs text-red-600 font-semibold mt-1">
 							⚠️ Over budget by ₹{Math.abs(tx.remainingAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
@@ -1815,6 +1906,15 @@ function TransactionPageButtons({
 
 			{renderPagination()}
 
+			<BulkActionBar
+				selectedCount={selectedIds.size}
+				selectedIds={selectedIds}
+				flattenedCategories={flattened}
+				onClear={clearSelection}
+				onApplyCategory={applyBulkCategory}
+				onApplyLabels={applyBulkLabels}
+			/>
+
 			{/* Actual Transactions header (only when predictions are visible above) */}
 			{showPredicted && predictedTransactions.length > 0 && (
 				<h3 className="text-lg font-semibold text-gray-800 my-4">
@@ -1824,9 +1924,20 @@ function TransactionPageButtons({
 
 			{/* Column Headers (desktop only - row layout collapses on mobile) */}
 			<div className="hidden sm:grid w-full grid-cols-[24px_minmax(0,3fr)_minmax(180px,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)] gap-2 px-3 py-2 bg-gray-100 border border-gray-300 rounded-t text-xs font-semibold text-gray-700 uppercase tracking-wide">
-				<div></div>
+				<div className="flex items-center justify-center">
+					{selectablePageIds.length > 0 && (
+						<input
+							type="checkbox"
+							ref={(el) => { if (el) el.indeterminate = someOnPageSelected; }}
+							checked={allOnPageSelected}
+							onChange={togglePageSelection}
+							className="cursor-pointer"
+							title={allOnPageSelected ? "Unselect all on this page" : "Select all on this page"}
+						/>
+					)}
+				</div>
 				<div>Description</div>
-				<div>Amount / Account</div>
+				<div className="text-right">Amount / Account</div>
 				<div>Category</div>
 				<div>Date</div>
 				<div className="text-right">Actions</div>
@@ -1948,8 +2059,8 @@ function TransactionPageButtons({
 								<strong>Transaction:</strong> {labelEditTx.description}
 							</div>
 							<div className="text-xs text-gray-500 mb-3">
-								Amount: {labelEditTx.currency || "₹"}
-								{(typeof labelEditTx.amount === "number" ? labelEditTx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+							Amount: {getCurrencySymbol(labelEditTx.currency)}
+							{(typeof labelEditTx.amount === "number" ? labelEditTx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 								{" • "}
 								{dayjs(labelEditTx.date).format("DD MMM YYYY")}
 							</div>

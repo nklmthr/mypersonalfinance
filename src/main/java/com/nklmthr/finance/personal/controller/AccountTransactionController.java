@@ -20,10 +20,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
+import com.nklmthr.finance.personal.dto.BulkCategoryRequest;
+import com.nklmthr.finance.personal.dto.BulkLabelsRequest;
+import com.nklmthr.finance.personal.dto.BulkUpdateResponse;
 import com.nklmthr.finance.personal.dto.TransactionPageDTO;
 import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -128,6 +132,30 @@ public class AccountTransactionController {
 	public ResponseEntity<String> splitTransaction(@RequestBody List<AccountTransactionDTO> splitTransactions) {
 		logger.debug("Splitting transaction into: {}", splitTransactions);
 		return transactionService.splitTransaction(splitTransactions);
+	}
+
+	@PostMapping("/bulk/category")
+	public ResponseEntity<?> bulkAssignCategory(@Valid @RequestBody BulkCategoryRequest request) {
+		try {
+			BulkUpdateResponse response = transactionService.bulkAssignCategory(
+					request.getTransactionIds(), request.getCategoryId());
+			return ResponseEntity.ok(response);
+		} catch (IllegalArgumentException e) {
+			logger.warn("Bulk category update rejected: {}", e.getMessage());
+			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		}
+	}
+
+	@PostMapping("/bulk/labels")
+	public ResponseEntity<?> bulkUpdateLabels(@Valid @RequestBody BulkLabelsRequest request) {
+		try {
+			BulkUpdateResponse response = transactionService.bulkUpdateLabels(
+					request.getTransactionIds(), request.getLabels(), request.getMode());
+			return ResponseEntity.ok(response);
+		} catch (IllegalArgumentException e) {
+			logger.warn("Bulk labels update rejected: {}", e.getMessage());
+			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		}
 	}
 
 	@DeleteMapping("/{id}")

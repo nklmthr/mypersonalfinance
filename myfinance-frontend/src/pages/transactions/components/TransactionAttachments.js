@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import api from "../../../auth/api";
 import dayjs from "dayjs";
+import { getCurrencySymbol } from "../utils/currency";
 
 const ACCEPTED_TYPES = "image/jpeg,image/png,image/gif,image/webp,application/pdf";
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
@@ -259,7 +260,7 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 							{transaction.shortDescription || transaction.description}
 						</p>
 						<p className="text-xs text-gray-500">
-							{(transaction.currency || "₹")}
+							{getCurrencySymbol(transaction.currency)}
 							{(typeof transaction.amount === "number" ? transaction.amount : 0).toLocaleString("en-IN", {
 								minimumFractionDigits: 2,
 							})}

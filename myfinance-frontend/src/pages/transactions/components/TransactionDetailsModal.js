@@ -1,4 +1,5 @@
 import React from "react";
+import { getCurrencySymbol } from "../utils/currency";
 
 export default function TransactionDetailsModal({ tx }) {
 	return (
@@ -28,8 +29,8 @@ export default function TransactionDetailsModal({ tx }) {
 					{/* Amount */}
 					<div>
 						<div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">💰 Amount</div>
-						<div className={`text-base font-bold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-							{tx.currency || "₹"}
+						<div className={`text-base font-bold tabular-nums ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+							{getCurrencySymbol(tx.currency)}
 							{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 						</div>
 					</div>

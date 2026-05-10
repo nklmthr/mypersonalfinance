@@ -1,4 +1,5 @@
 import React from "react";
+import { getCurrencySymbol } from "../utils/currency";
 
 export default function TransactionComparisonModal({ tx }) {
 	const hasGptData = tx.gptDescription || tx.gptAmount || tx.gptExplanation || tx.gptType || tx.gptAccount;
@@ -47,14 +48,14 @@ export default function TransactionComparisonModal({ tx }) {
 							<tr className="hover:bg-gray-50">
 								<td className="px-2 sm:px-3 py-1.5 sm:py-2 font-semibold text-gray-700 align-top">💰 Amount</td>
 								<td className="px-2 sm:px-3 py-1.5 sm:py-2 border-l border-gray-200 align-top">
-									<span className={`text-sm sm:text-lg font-bold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-										₹{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+									<span className={`text-sm sm:text-lg font-bold tabular-nums ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+										{getCurrencySymbol(tx.currency)}{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 									</span>
 								</td>
 								<td className="px-2 sm:px-3 py-1.5 sm:py-2 border-l-2 border-blue-200 align-top">
 									{tx.gptAmount ? (
-										<span className={`text-sm sm:text-lg font-bold ${tx.gptType === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-											{tx.currency || "INR"}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+										<span className={`text-sm sm:text-lg font-bold tabular-nums ${tx.gptType === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+											{getCurrencySymbol(tx.currency)}{(typeof tx.gptAmount === "number" ? tx.gptAmount : parseFloat(tx.gptAmount) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 										</span>
 									) : (
 										<span className="text-gray-400 italic text-xs sm:text-sm">Not analyzed</span>
@@ -178,8 +179,8 @@ export default function TransactionComparisonModal({ tx }) {
 						{/* Amount */}
 						<div>
 							<div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">💰 Amount</div>
-							<div className={`text-lg font-bold ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
-								₹{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+							<div className={`text-lg font-bold tabular-nums ${tx.type === "DEBIT" ? "text-red-600" : "text-green-600"}`}>
+								{getCurrencySymbol(tx.currency)}{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 							</div>
 						</div>
 

@@ -26,6 +26,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
+import com.nklmthr.finance.personal.dto.BulkLabelsRequest;
+import com.nklmthr.finance.personal.dto.BulkUpdateResponse;
+import com.nklmthr.finance.personal.dto.LabelDTO;
 import com.nklmthr.finance.personal.dto.TransactionPageDTO;
 import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.enums.TransactionType;
@@ -699,6 +702,127 @@ public class AccountTransactionService {
 	
 	accountTransactionRepository.deleteByAppUserAndId(appUser, id);
 }
+
+	@Transactional
+	public BulkUpdateResponse bulkAssignCategory(List<String> transactionIds, String categoryId) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (transactionIds == null || transactionIds.isEmpty()) {
+			return new BulkUpdateResponse(0, 0, List.of());
+		}
+		// Resolve & validate the target category up front so we fail fast.
+		var category = categoryService.getCategoryById(appUser, categoryId);
+		if (category == null) {
+			throw new IllegalArgumentException("Category not found");
+		}
+
+		List<BulkUpdateResponse.SkippedItem> skipped = new ArrayList<>();
+		int updated = 0;
+
+		for (String id : transactionIds) {
+			Optional<AccountTransaction> opt = accountTransactionRepository.findByAppUserAndId(appUser, id);
+			if (opt.isEmpty()) {
+				skipped.add(new BulkUpdateResponse.SkippedItem(id, "Transaction not found"));
+				continue;
+			}
+			AccountTransaction tx = opt.get();
+
+			// Skip transfer transactions (either side) — their category is locked to TRANSFER.
+			boolean isTransfer = tx.getLinkedTransferId() != null
+					|| accountTransactionRepository.findByAppUserAndLinkedTransferId(appUser, tx.getId()).isPresent();
+			if (isTransfer) {
+				skipped.add(new BulkUpdateResponse.SkippedItem(id,
+						"Cannot change category of a transfer transaction"));
+				continue;
+			}
+
+			// Skip split parents (their children carry the real category) to avoid silently
+			// changing aggregated rows.
+			List<AccountTransaction> children = accountTransactionRepository
+					.findByAppUserAndParent(appUser, tx.getId());
+			if (!children.isEmpty()) {
+				skipped.add(new BulkUpdateResponse.SkippedItem(id,
+						"Cannot change category of a split parent — change its children instead"));
+				continue;
+			}
+
+			tx.setCategory(category);
+			if (tx.getGptAccount() == null) {
+				tx.setGptAccount(tx.getAccount());
+			}
+			AccountTransaction saved = accountTransactionRepository.save(tx);
+			applyPredictionAdjustment(saved);
+			updated++;
+		}
+
+		logger.info("Bulk category update for user {}: requested={}, updated={}, skipped={}",
+				appUser.getUsername(), transactionIds.size(), updated, skipped.size());
+		return new BulkUpdateResponse(transactionIds.size(), updated, skipped);
+	}
+
+	@Transactional
+	public BulkUpdateResponse bulkUpdateLabels(List<String> transactionIds,
+			List<LabelDTO> labels, BulkLabelsRequest.Mode mode) {
+		AppUser appUser = appUserService.getCurrentUser();
+		if (transactionIds == null || transactionIds.isEmpty()) {
+			return new BulkUpdateResponse(0, 0, List.of());
+		}
+		if (mode == null) {
+			throw new IllegalArgumentException("Mode is required (ADD or REPLACE)");
+		}
+		if (mode == BulkLabelsRequest.Mode.ADD && (labels == null || labels.isEmpty())) {
+			throw new IllegalArgumentException("At least one label is required for ADD mode");
+		}
+
+		// Resolve all labels once (creates new ones if needed) — same pattern as processLabels.
+		List<com.nklmthr.finance.personal.model.Label> resolved;
+		if (labels == null || labels.isEmpty()) {
+			resolved = new ArrayList<>();
+		} else {
+			resolved = labels.stream()
+					.map(LabelDTO::name)
+					.filter(n -> n != null && !n.trim().isEmpty())
+					.distinct()
+					.map(name -> labelService.findOrCreateLabel(appUser, name))
+					.collect(Collectors.toList());
+		}
+
+		List<BulkUpdateResponse.SkippedItem> skipped = new ArrayList<>();
+		int updated = 0;
+
+		for (String id : transactionIds) {
+			Optional<AccountTransaction> opt = accountTransactionRepository.findByAppUserAndId(appUser, id);
+			if (opt.isEmpty()) {
+				skipped.add(new BulkUpdateResponse.SkippedItem(id, "Transaction not found"));
+				continue;
+			}
+			AccountTransaction tx = opt.get();
+
+			List<com.nklmthr.finance.personal.model.Label> nextLabels;
+			if (mode == BulkLabelsRequest.Mode.REPLACE) {
+				nextLabels = new ArrayList<>(resolved);
+			} else {
+				// ADD mode: union of existing and new (deduplicate by id).
+				nextLabels = new ArrayList<>(tx.getLabels() != null ? tx.getLabels() : List.of());
+				for (com.nklmthr.finance.personal.model.Label newLabel : resolved) {
+					boolean already = nextLabels.stream()
+							.anyMatch(l -> l != null && l.getId() != null && l.getId().equals(newLabel.getId()));
+					if (!already) {
+						nextLabels.add(newLabel);
+					}
+				}
+			}
+			tx.setLabels(nextLabels, appUser);
+			if (tx.getGptAccount() == null) {
+				tx.setGptAccount(tx.getAccount());
+			}
+			accountTransactionRepository.save(tx);
+			updated++;
+		}
+
+		logger.info("Bulk label update for user {}: mode={}, requested={}, updated={}, skipped={}",
+				appUser.getUsername(), mode, transactionIds.size(), updated, skipped.size());
+		return new BulkUpdateResponse(transactionIds.size(), updated, skipped);
+	}
 
 	/**
 	 * Check if a statement transaction already exists (for uploaded statement deduplication).
