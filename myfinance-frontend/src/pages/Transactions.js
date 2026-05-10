@@ -1538,10 +1538,30 @@ function TransactionPageButtons({
                             const doc = new jsPDF();
                             const headers = ['Date', 'Description', 'Amount', 'Type', 'Account'];
                             const rows = flattenedRows.map((row) => headers.map((key) => row[key]));
+
+                            // Compute totals (CREDIT adds, DEBIT subtracts) for the summary footer
+                            const totalCredit = res.data.reduce(
+                                (sum, tx) => sum + (tx.type === 'CREDIT' && typeof tx.amount === 'number' ? tx.amount : 0),
+                                0
+                            );
+                            const totalDebit = res.data.reduce(
+                                (sum, tx) => sum + (tx.type === 'DEBIT' && typeof tx.amount === 'number' ? tx.amount : 0),
+                                0
+                            );
+                            const netTotal = totalCredit - totalDebit;
+                            const fmt = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
                             autoTable(doc, {
                                 head: [headers],
                                 body: rows,
+                                foot: [
+                                    ['', `Total Credits (${res.data.filter((t) => t.type === 'CREDIT').length})`, fmt(totalCredit), 'CREDIT', ''],
+                                    ['', `Total Debits (${res.data.filter((t) => t.type === 'DEBIT').length})`, fmt(totalDebit), 'DEBIT', ''],
+                                    ['', `Net Total (${res.data.length} txns)`, fmt(netTotal), '', ''],
+                                ],
+                                showFoot: 'lastPage',
                                 styles: { fontSize: 8, cellWidth: 'wrap' },
+                                footStyles: { fillColor: [230, 230, 230], textColor: 20, fontStyle: 'bold', halign: 'right' },
                                 columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 70 }, 2: { cellWidth: 25, halign: 'right' }, 3: { cellWidth: 15 }, 4: { cellWidth: 30 } },
                                 tableWidth: 'wrap',
                                 margin: { top: 20 },
