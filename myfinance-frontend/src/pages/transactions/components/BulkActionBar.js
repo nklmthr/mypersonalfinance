@@ -31,7 +31,10 @@ export default function BulkActionBar({
 	const [confirm, setConfirm] = useState(null); // { kind, payload, summary }
 	const [result, setResult] = useState(null);
 
-	if (!selectedCount) return null;
+	// Note: we DON'T early-return when selectedCount === 0. The bar itself is
+	// rendered conditionally below, but the confirm + result modals must keep
+	// rendering even after a successful apply (which clears the selection),
+	// otherwise they vanish before the user sees them.
 
 	const ids = Array.isArray(selectedIds) ? selectedIds : Array.from(selectedIds || []);
 
@@ -102,6 +105,7 @@ export default function BulkActionBar({
 
 	return (
 		<>
+			{selectedCount > 0 && (
 			<div className="w-full my-2">
 				<div className="bg-gray-900 text-white rounded-lg shadow-md border border-gray-700">
 					{activePanel === "category" && (
@@ -225,6 +229,7 @@ export default function BulkActionBar({
 					</div>
 				</div>
 			</div>
+			)}
 
 			{confirm && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
