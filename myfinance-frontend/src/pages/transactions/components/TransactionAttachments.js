@@ -101,10 +101,19 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 		};
 	}, [preview]);
 
-	const handleFileSelected = async (e) => {
-		const file = e.target.files?.[0];
-		if (!file) return;
+	const extensionFor = (mimeType) => {
+		if (!mimeType) return "bin";
+		if (mimeType === "image/jpeg") return "jpg";
+		if (mimeType === "image/png") return "png";
+		if (mimeType === "image/gif") return "gif";
+		if (mimeType === "image/webp") return "webp";
+		if (mimeType === "image/bmp") return "bmp";
+		if (mimeType === "application/pdf") return "pdf";
+		return mimeType.split("/")[1] || "bin";
+	};
 
+	const uploadFile = async (file) => {
+		if (!file) return;
 		setError(null);
 		const isAcceptedType =
 			file.type?.startsWith("image/") || file.type === "application/pdf";
@@ -120,7 +129,7 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 		}
 
 		const formData = new FormData();
-		formData.append("file", file);
+		formData.append("file", file, file.name);
 
 		setUploading(true);
 		try {
@@ -137,6 +146,66 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 			setUploading(false);
 			if (fileInputRef.current) fileInputRef.current.value = "";
 		}
+	};
+
+	const handleFileSelected = async (e) => {
+		const file = e.target.files?.[0];
+		await uploadFile(file);
+	};
+
+	// Listen for paste events while the modal is open. If the clipboard contains
+	// an image (e.g. screenshot copied to clipboard via Cmd+Shift+Ctrl+4 on macOS
+	// or Print Screen on Windows), upload it directly so the user doesn't have
+	// to save the image to disk first.
+	useEffect(() => {
+		const handlePaste = (e) => {
+			if (uploading) return;
+			const items = e.clipboardData?.items;
+			if (!items || items.length === 0) return;
+
+			for (const item of items) {
+				if (item.kind === "file") {
+					const blob = item.getAsFile();
+					if (blob) {
+						const ext = extensionFor(blob.type);
+						const ts = new Date().toISOString().replace(/[:.]/g, "-");
+						// Pasted images come back without a filename; synthesize a useful one
+						// so the backend can persist it and infer Content-Type from the extension.
+						const filename = blob.name && blob.name !== "image.png"
+							? blob.name
+							: `pasted-${ts}.${ext}`;
+						const file = new File([blob], filename, { type: blob.type });
+						e.preventDefault();
+						uploadFile(file);
+						return;
+					}
+				}
+			}
+		};
+
+		document.addEventListener("paste", handlePaste);
+		return () => document.removeEventListener("paste", handlePaste);
+		// eslint-disable-next-line
+	}, [uploading, transaction?.id]);
+
+	// Drag-and-drop into the dialog (bonus convenience).
+	const [dragActive, setDragActive] = useState(false);
+	const handleDragOver = (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (!dragActive) setDragActive(true);
+	};
+	const handleDragLeave = (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		setDragActive(false);
+	};
+	const handleDrop = (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		setDragActive(false);
+		const file = e.dataTransfer?.files?.[0];
+		if (file) uploadFile(file);
 	};
 
 	const inferContentType = (att, blobType) => {
@@ -278,7 +347,17 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 				</div>
 
 				<div className="p-4">
-					<div className="mb-4 p-3 border border-dashed border-blue-300 bg-blue-50 rounded">
+					<div
+						className={`mb-4 p-3 border border-dashed rounded transition-colors ${
+							dragActive
+								? "border-blue-500 bg-blue-100"
+								: "border-blue-300 bg-blue-50"
+						}`}
+						onDragOver={handleDragOver}
+						onDragEnter={handleDragOver}
+						onDragLeave={handleDragLeave}
+						onDrop={handleDrop}
+					>
 						<label className="block text-sm font-medium text-gray-700 mb-2">
 							Upload receipt (image or PDF, max 10 MB)
 						</label>
@@ -290,6 +369,9 @@ export default function TransactionAttachments({ transaction, onClose, onCountCh
 							disabled={uploading}
 							className="block w-full text-sm text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
 						/>
+						<p className="text-xs text-gray-600 mt-2">
+							Tip: you can also <strong>paste</strong> an image (⌘V / Ctrl+V) or <strong>drag &amp; drop</strong> a file here.
+						</p>
 						{uploading && (
 							<p className="text-xs text-blue-700 mt-2 flex items-center gap-2">
 								<span className="inline-block w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
