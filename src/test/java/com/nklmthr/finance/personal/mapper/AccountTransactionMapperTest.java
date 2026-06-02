@@ -57,7 +57,7 @@ class AccountTransactionMapperTest {
     void toEntity_mapsParentAndIgnoresAppUser() {
         AccountDTO a = new AccountDTO("a1","A", BigDecimal.ZERO, null, null, null, null, null);
         CategoryDTO c = new CategoryDTO(); c.setId("c1");
-        AccountTransactionDTO dto = new AccountTransactionDTO("t1", LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.CREDIT, a, c, "p1", java.util.List.of(), "linked1", null, null, null, null, null, null, null, null);
+        AccountTransactionDTO dto = new AccountTransactionDTO("t1", LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.CREDIT, a, c, "p1", java.util.List.of(), "linked1", null, null, null, null, null, null, null, null, null);
         AccountTransaction entity = mapper.toEntity(dto);
         assertThat(entity.getParent()).isEqualTo("p1");
         assertThat(entity.getLinkedTransferId()).isEqualTo("linked1");
@@ -137,7 +137,8 @@ class AccountTransactionMapperTest {
             null,
             null,
             null,
-            List.of(label1, label2)
+            List.of(label1, label2),
+            null
         );
         
         AccountTransaction entity = mapper.toEntity(dto);

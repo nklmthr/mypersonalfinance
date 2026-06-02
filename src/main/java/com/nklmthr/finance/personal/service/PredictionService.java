@@ -31,6 +31,52 @@ import com.nklmthr.finance.personal.repository.PredictionRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * TODO(prediction-concurrency): The prediction running totals are derived data
+ * that we currently denormalize into mutable counters on {@link PredictedTransaction}
+ * ({@code actualSpent} / {@code remainingAmount}) and rebuild via delete-then-insert
+ * on {@code prediction_actual_txn_mapping}. This is race-prone under any genuine
+ * concurrency (e.g. {@link com.nklmthr.finance.personal.scheduler.ConfigurableDataExtractionService}
+ * importing a transaction while the user edits another in the same category, or
+ * the same user editing from multiple browser tabs). Three known gaps:
+ *
+ *   1. NO OPTIMISTIC LOCKING. {@link PredictedTransaction} has no {@code @Version}.
+ *      Two concurrent flows that both read {@code actualSpent = X} and write
+ *      {@code X.add(amountA)} / {@code X.add(amountB)} silently lose one update —
+ *      the row ends up with the wrong total, no exception thrown.
+ *      Quick fix: add {@code @Version Long version} to PredictedTransaction and
+ *      let callers retry on {@link org.springframework.orm.ObjectOptimisticLockingFailureException}.
+ *
+ *   2. DELETE-THEN-INSERT ON A UNIQUE-KEYED TABLE.
+ *      {@link #adjustPredictionForActualTransaction} calls
+ *      {@link #removePredictionAdjustmentForTransaction} (which deletes mapping
+ *      rows) and then re-inserts new rows. {@code prediction_actual_txn_mapping}
+ *      has a unique index on {@code (predicted_transaction_id, actual_transaction_id)},
+ *      so under InnoDB this acquires gap locks on the unique index and is the
+ *      classic deadlock recipe (SQLState 40001 / Error 1213). The duplicate UI
+ *      PUTs that hit production on 2026-06-02 surfaced this; the cron-driven
+ *      email/SMS extractor concurrent with a user edit will too.
+ *      Fix: replace delete + insert with an upsert (MERGE / INSERT ... ON DUPLICATE
+ *      KEY UPDATE), so the operation is a single idempotent statement.
+ *
+ *   3. {@code @Transactional(noRollbackFor = Exception.class)} BELOW IS MISLEADING.
+ *      The intent (per its Javadoc) is "don't let prediction failures roll back
+ *      the caller's account_transaction save". But the failing INSERT is queued
+ *      in the persistence context and only executes during the OUTER transaction's
+ *      commit/flush — after {@code AccountTransactionService.applyPredictionAdjustment}'s
+ *      catch block has already returned. The outer transaction is therefore still
+ *      marked rollback-only on a deadlock, and the user-facing transaction save
+ *      is also lost. The 2026-06-02 incident only "looked fine" because the
+ *      duplicate edits were no-ops. Fix: address (1) and (2); the noRollbackFor
+ *      guard becomes meaningful once the inner write can no longer fail at flush.
+ *
+ *   PREFERRED LONG-TERM FIX: stop denormalizing {@code actualSpent} /
+ *   {@code remainingAmount} entirely. Compute them on read via
+ *   {@code SUM(amount_applied)} over {@code prediction_actual_txn_mapping} (or
+ *   {@code SUM} over {@code account_transaction} filtered by category descendants
+ *   + month). This removes the shared mutable row, makes the whole flow naturally
+ *   idempotent, and obviates the need for both @Version and the upsert.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -324,6 +370,12 @@ public class PredictionService {
 	 * bookkeeping cannot mark the caller's transaction as rollback-only. The caller
 	 * ({@code AccountTransactionService.applyPredictionAdjustment}) already swallows
 	 * exceptions so the underlying transaction save stays committed.
+	 *
+	 * TODO(prediction-concurrency): see class-level TODOs (gaps 2 and 3). The
+	 * delete-then-insert pattern via {@link #removePredictionAdjustmentForTransaction}
+	 * + {@code actualMappingRepository.save(...)} below is what deadlocks under
+	 * concurrent edits, and {@code noRollbackFor} cannot rescue a flush-time
+	 * deadlock — by then the outer transaction is already rollback-only.
 	 */
 	@Transactional(noRollbackFor = Exception.class)
 	public void adjustPredictionForActualTransaction(AccountTransaction actualTransaction) {
@@ -385,9 +437,20 @@ public class PredictionService {
 			BigDecimal newRemaining = prediction.getPredictedAmount().subtract(newActualSpent);
 			prediction.setRemainingAmount(newRemaining);
 
+			// TODO(prediction-concurrency, gap 1): read-modify-write on a counter
+			// without @Version on PredictedTransaction. Two concurrent flows can
+			// both read actualSpent=X and write X+amountA / X+amountB, silently
+			// losing one update. Add @Version to PredictedTransaction (or compute
+			// these on read; see class-level TODO) before relying on these totals.
 			predictedTransactionRepository.save(prediction);
 
 			// Create mapping to track this actual transaction
+			// TODO(prediction-concurrency, gap 2): this insert, paired with the
+			// preceding deleteByActualTransaction, races against the unique index
+			// on (predicted_transaction_id, actual_transaction_id) under InnoDB
+			// and produces SQLState 40001 / Error 1213 deadlocks. Replace with an
+			// upsert (INSERT ... ON DUPLICATE KEY UPDATE) once we move off the
+			// delete-then-insert pattern.
 			PredictionActualTxnMapping actualMapping = PredictionActualTxnMapping.builder()
 				.predictedTransaction(prediction)
 				.actualTransaction(actualTransaction)

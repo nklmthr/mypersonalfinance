@@ -65,6 +65,13 @@ public class PredictedTransaction {
 	@Column(name = "predicted_amount", precision = 19, scale = 4, nullable = false)
 	private BigDecimal predictedAmount;
 
+	// TODO(prediction-concurrency, gap 1): remainingAmount and actualSpent are
+	// mutable counters with no @Version on this entity, so concurrent updates
+	// silently lose writes (read-modify-write race in
+	// PredictionService.adjustPredictionForActualTransaction). Either add
+	// @Version Long version here, or drop these fields entirely and compute
+	// on read from prediction_actual_txn_mapping. See PredictionService class
+	// Javadoc for the full plan.
 	@Column(name = "remaining_amount", precision = 19, scale = 4, nullable = false)
 	private BigDecimal remainingAmount;  // Decreases as actual transactions occur
 

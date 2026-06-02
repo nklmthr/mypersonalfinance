@@ -28,7 +28,11 @@ public record AccountTransactionDTO(
 	String currency,
 	AccountDTO gptAccount,
 	String gptCurrency,
-	List<LabelDTO> labels
+	List<LabelDTO> labels,
+	// Number of receipt attachments associated with this transaction.
+	// Nullable: only the list endpoint batch-populates this; flows that don't
+	// need it leave it null so the UI can treat null/0 identically (no badge).
+	Integer attachmentCount
 ) {
 	public String getShortDescription() {
 		// Use only description field - GPT fields are only for comparison, not display

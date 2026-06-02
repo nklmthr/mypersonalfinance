@@ -376,6 +376,7 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
+            null,
             null
         );
 
@@ -398,6 +399,7 @@ class AccountTransactionServiceTest {
             null,
             null,
             "INR",
+            null,
             null,
             null,
             null
@@ -439,6 +441,7 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
+            null,
             null
         );
         ResponseEntity<String> resp = service.splitTransaction(List.of(st));
@@ -462,9 +465,9 @@ class AccountTransactionServiceTest {
         when(categoryService.getCategoryById("cat")).thenReturn(foodCat2);
 
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
-        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
 
@@ -493,9 +496,9 @@ class AccountTransactionServiceTest {
         when(categoryService.getCategoryById("cat")).thenReturn(foodCat3);
 
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
-        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
 
@@ -525,9 +528,9 @@ class AccountTransactionServiceTest {
         when(categoryService.getCategoryById("cat")).thenReturn(foodCat4);
 
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
-        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
 
@@ -566,11 +569,12 @@ class AccountTransactionServiceTest {
             new CategoryDTO("cat", "Food", null, false, List.of()), 
             null, 
             List.of(), 
-            null, 
-            null, 
-            null, 
-            null, 
-            null, 
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -609,7 +613,7 @@ class AccountTransactionServiceTest {
                 null, null, null, TransactionType.DEBIT, 
                 new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
                 new CategoryDTO("newcat", "NewCategory", null, false, List.of()), 
-                null, List.of(),             null, null, null, null, null, null, null, null, null)
+                null, List.of(),             null, null, null, null, null, null, null, null, null, null)
         );
 
         AccountTransactionDTO update = new AccountTransactionDTO(
@@ -625,11 +629,12 @@ class AccountTransactionServiceTest {
             new CategoryDTO("newcat", "NewCategory", null, false, List.of()), 
             null, 
             List.of(), 
-            null, 
-            null, 
-            null, 
-            null, 
-            null, 
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -660,9 +665,9 @@ class AccountTransactionServiceTest {
             return mapped;
         });
         when(accountTransactionRepository.save(mapped)).thenReturn(mapped);
-        when(accountTransactionMapper.toDTO(mapped)).thenReturn(new AccountTransactionDTO("txN", LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
+        when(accountTransactionMapper.toDTO(mapped)).thenReturn(new AccountTransactionDTO("txN", LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null);
 
         AccountTransactionDTO result = service.save(input);
         assertThat(result.id()).isEqualTo("txN");
@@ -673,7 +678,7 @@ class AccountTransactionServiceTest {
     @Test
     void getById_mapsToDto() {
         AccountTransaction entity = AccountTransaction.builder().id("t1").appUser(currentUser).build();
-        AccountTransactionDTO dto = new AccountTransactionDTO("t1", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO dto = new AccountTransactionDTO("t1", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null);
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "t1")).thenReturn(Optional.of(entity));
         when(accountTransactionMapper.toDTO(entity)).thenReturn(dto);
 
@@ -686,8 +691,8 @@ class AccountTransactionServiceTest {
         AccountTransaction e1 = AccountTransaction.builder().id("c1").appUser(currentUser).build();
         AccountTransaction e2 = AccountTransaction.builder().id("c2").appUser(currentUser).build();
         when(accountTransactionRepository.findByAppUserAndParent(currentUser, "p1")).thenReturn(List.of(e1, e2));
-        AccountTransactionDTO d1 = new AccountTransactionDTO("c1", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null);
-        AccountTransactionDTO d2 = new AccountTransactionDTO("c2", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO d1 = new AccountTransactionDTO("c1", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO d2 = new AccountTransactionDTO("c2", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null);
         when(accountTransactionMapper.toDTOList(List.of(e1, e2))).thenReturn(List.of(d1, d2));
 
         List<AccountTransactionDTO> result = service.getChildren("p1");
@@ -895,6 +900,7 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
+            null,
             null
         );
 
@@ -1000,6 +1006,7 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
+            null,
             null
         );
 
@@ -1102,6 +1109,7 @@ class AccountTransactionServiceTest {
             "debit1",
             null, null, null, null,
             "INR",
+            null,
             null,
             null,
             null
@@ -1214,6 +1222,7 @@ class AccountTransactionServiceTest {
             null,
             null,
             "INR",
+            null,
             null,
             null,
             null
@@ -1429,11 +1438,11 @@ class AccountTransactionServiceTest {
         when(accountTransactionMapper.toDTO(transaction)).thenReturn(
             new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("150"), "d", null, null, null, 
                 TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
-                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
+                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
 
         AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("150"), "d", null, null, null, 
             TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
-            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null);
+            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null);
 
         AccountTransactionDTO result = service.save(input);
         
@@ -1466,11 +1475,11 @@ class AccountTransactionServiceTest {
         when(accountTransactionMapper.toDTO(transaction)).thenReturn(
             new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("250"), "d", null, null, null, 
                 TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
-                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null));
+                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
 
         AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("250"), "d", null, null, null, 
             TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null), 
-            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null);
+            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null);
 
         AccountTransactionDTO result = service.save(input);
         
@@ -1536,7 +1545,8 @@ class AccountTransactionServiceTest {
             "INR",                          // currency
             null,                           // gptAccount
             null,                           // gptCurrency
-            null                            // labels
+            null,                           // labels
+            null                            // attachmentCount
         );
 
         // Execute and verify exception is thrown using assertThatThrownBy
@@ -1602,7 +1612,8 @@ class AccountTransactionServiceTest {
             "INR",                          // currency
             null,                           // gptAccount
             null,                           // gptCurrency
-            null                            // labels
+            null,                           // labels
+            null                            // attachmentCount
         );
 
         // Execute and verify exception is thrown
@@ -1667,7 +1678,8 @@ class AccountTransactionServiceTest {
             "INR",                          // currency
             null,                           // gptAccount
             null,                           // gptCurrency
-            null                            // labels
+            null,                           // labels
+            null                            // attachmentCount
         );
 
         // Execute and verify exception is thrown
@@ -1721,7 +1733,8 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
-            List.of(new LabelDTO("l1", "Food"), new LabelDTO("l2", "Personal"))
+            List.of(new LabelDTO("l1", "Food"), new LabelDTO("l2", "Personal")),
+            null
         );
 
         AccountTransaction entity = new AccountTransaction();
@@ -1761,7 +1774,8 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
-            List.of(new LabelDTO("l1", "Food"), new LabelDTO("l2", "Personal"))
+            List.of(new LabelDTO("l1", "Food"), new LabelDTO("l2", "Personal")),
+            null
         );
 
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(outputDTO);
@@ -1837,7 +1851,8 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
-            List.of(new LabelDTO("l2", "NewLabel1"), new LabelDTO("l3", "NewLabel2"))
+            List.of(new LabelDTO("l2", "NewLabel1"), new LabelDTO("l3", "NewLabel2")),
+            null
         );
 
         AccountTransaction mappedEntity = new AccountTransaction();
@@ -1873,7 +1888,8 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
-            List.of(new LabelDTO("l2", "NewLabel1"), new LabelDTO("l3", "NewLabel2"))
+            List.of(new LabelDTO("l2", "NewLabel1"), new LabelDTO("l3", "NewLabel2")),
+            null
         );
 
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(outputDTO);
@@ -1926,7 +1942,8 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
-            List.of(new LabelDTO(null, "BrandNewLabel"))
+            List.of(new LabelDTO(null, "BrandNewLabel")),
+            null
         );
 
         AccountTransaction entity = new AccountTransaction();
@@ -1966,7 +1983,8 @@ class AccountTransactionServiceTest {
             "INR",
             null,
             null,
-            List.of(new LabelDTO("l1", "BrandNewLabel"))
+            List.of(new LabelDTO("l1", "BrandNewLabel")),
+            null
         );
 
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(outputDTO);

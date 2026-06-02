@@ -1,10 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 // Reusable searchable select (combobox) for Accounts/Categories
 export default function SearchSelect({ options, value, onChange, placeholder, error = false, disabled = false }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const containerRef = React.useRef(null);
+    // Tracks the id we most recently fired onChange for via auto-select. The
+    // parent's `value` prop can lag behind during async saves (await api.put +
+    // refetch), and `options` / `onChange` get fresh references on every parent
+    // render — without this guard, the auto-select effect re-runs and fires
+    // onChange repeatedly for the same id, triggering duplicate PUTs.
+    const lastFiredIdRef = useRef(null);
 
     const normalize = (s) => (s || "")
         .toLowerCase()
@@ -19,6 +25,11 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
             setQuery(selected.name);
         } else {
             setQuery("");
+        }
+        // Once the parent's value catches up to what we fired, clear the guard
+        // so the user can pick a different option later.
+        if (value && lastFiredIdRef.current === value) {
+            lastFiredIdRef.current = null;
         }
     }, [value, selected?.name]);
 
@@ -42,7 +53,11 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
         const filteredNonPlaceholder = options.filter(o => (o.id || o.id === 0) && normalize(o.name).includes(norm));
         if (filteredNonPlaceholder.length === 1) {
             const only = filteredNonPlaceholder[0];
-            if (only.id !== value) {
+            // Don't fire if value already matches, AND don't re-fire while the
+            // parent is still mid-save and value hasn't caught up to what we
+            // just fired.
+            if (only.id !== value && lastFiredIdRef.current !== only.id) {
+                lastFiredIdRef.current = only.id;
                 onChange(only.id);
             }
             setOpen(false);
@@ -51,6 +66,12 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
 
     const handleSelectOption = (option) => {
         if (disabled) return;
+        if (option.id === value || lastFiredIdRef.current === option.id) {
+            setQuery(option.name);
+            setOpen(false);
+            return;
+        }
+        lastFiredIdRef.current = option.id;
         onChange(option.id);
         // Set query to the selected name immediately
         setQuery(option.name);

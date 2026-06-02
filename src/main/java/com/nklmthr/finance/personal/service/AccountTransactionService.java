@@ -42,6 +42,7 @@ import com.nklmthr.finance.personal.model.UploadedStatement;
 import com.nklmthr.finance.personal.repository.AccountRepository;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 import com.nklmthr.finance.personal.repository.AccountTransactionSpecifications;
+import com.nklmthr.finance.personal.repository.AttachmentRepository;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -86,7 +87,10 @@ public class AccountTransactionService {
 	
 	@Autowired
 	private PredictionService predictionService;
-	
+
+	@Autowired
+	private AttachmentRepository attachmentRepository;
+
 	@PersistenceContext
 	private EntityManager entityManager;
 
@@ -1103,6 +1107,19 @@ public TransactionPageDTO getFilteredTransactions(Pageable pageable, String mont
 			}
 		}
 
+		// Batch-fetch attachment counts — single grouped query keeps this O(1)
+		// per page instead of N+1. Used by the UI to show a distinct icon for
+		// transactions that already have receipts uploaded.
+		Map<String, Integer> attachmentCountByTxId = new HashMap<>();
+		if (!pageIds.isEmpty()) {
+			List<Object[]> rows = attachmentRepository.countByTransactionIdIn(pageIds);
+			for (Object[] row : rows) {
+				String txId = (String) row[0];
+				Long cnt = (Long) row[1];
+				attachmentCountByTxId.put(txId, cnt != null ? cnt.intValue() : 0);
+			}
+		}
+
 		List<AccountTransactionDTO> formatted = page.getContent().stream()
 			    .map(tx -> {
 			        List<AccountTransactionDTO> children = childrenByParent.getOrDefault(tx.getId(), List.of());
@@ -1110,6 +1127,7 @@ public TransactionPageDTO getFilteredTransactions(Pageable pageable, String mont
 					List<com.nklmthr.finance.personal.dto.LabelDTO> labels = labelSource != null && !labelSource.isEmpty()
 						? labelMapper.toDTOList(labelSource.get(0).getLabels())
 						: List.of();
+					Integer attachmentCount = attachmentCountByTxId.getOrDefault(tx.getId(), 0);
 
 		        return new AccountTransactionDTO(
 		            tx.getId(),
@@ -1132,7 +1150,8 @@ public TransactionPageDTO getFilteredTransactions(Pageable pageable, String mont
 		            tx.getCurrency(),
 		            accountMapper.toDTO(tx.getGptAccount()),
 		            tx.getGptCurrency(),
-		            labels
+		            labels,
+		            attachmentCount
 		        );
 			    })
 			    .toList();

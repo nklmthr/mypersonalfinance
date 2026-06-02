@@ -41,9 +41,20 @@ const truncateText = (text, limit) => {
 export default function Transactions() {
 	const navigate = useNavigate();
 	const { showModal } = useErrorModal();
+	// Read initial URL params eagerly so all useState initializers below can derive
+	// their defaults from them. We deliberately read once via window.location rather
+	// than the React Router hook, because useSearchParams() must be called inside
+	// the component body and we want this snapshot available before any state.
+	const initialUrlParams = (() => {
+		if (typeof window === "undefined") return new URLSearchParams();
+		return new URLSearchParams(window.location.search);
+	})();
 	const [transactions, setTransactions] = useState([]);
 	const [predictedTransactions, setPredictedTransactions] = useState([]);
-	const [showPredicted, setShowPredicted] = useState(true);
+	// Persisted in URL via the param-sync effect below; default visible.
+	const [showPredicted, setShowPredicted] = useState(
+		initialUrlParams.get("showPredicted") !== "false"
+	);
 	const [linkedTxns, setLinkedTxns] = useState(null);
 	const [activeTab, setActiveTab] = useState('historical'); // For prediction details modal tabs
 	const [expandedParents, setExpandedParents] = useState({});
@@ -58,10 +69,24 @@ export default function Transactions() {
 	// Bulk selection: stable Set of selected transaction IDs that survives pagination
 	// but is cleared whenever the filter set changes (see effect below).
 	const [selectedIds, setSelectedIds] = useState(() => new Set());
+	// Tracks transactions whose inline category dropdown is currently saving.
+	// Used to suppress duplicate PUTs that the inline picker can otherwise fire
+	// (e.g. from React re-renders during an in-flight save, double-tap, or
+	// SearchSelect's auto-select effect re-running when parent refs change).
+	const [savingCategoryIds, setSavingCategoryIds] = useState(() => new Set());
 	const [loading, setLoading] = useState(false);
-	const [page, setPage] = useState(0);
+	// page/pageSize are persisted in URL via the param-sync effect below so a
+	// browser refresh keeps the user on the same row range. Parsed defensively
+	// in case the URL was hand-edited.
+	const [page, setPage] = useState(() => {
+		const p = parseInt(initialUrlParams.get("page") || "0", 10);
+		return Number.isFinite(p) && p >= 0 ? p : 0;
+	});
 	const [totalPages, setTotalPages] = useState(0);
-	const [pageSize, setPageSize] = useState(10);
+	const [pageSize, setPageSize] = useState(() => {
+		const s = parseInt(initialUrlParams.get("size") || "10", 10);
+		return Number.isFinite(s) && s > 0 ? s : 10;
+	});
 	const [totalCount, setTotalCount] = useState(0);
 	const [modalContent, setModalContent] = useState(null);
 	const [deleteConfirmation, setDeleteConfirmation] = useState(null);
@@ -92,6 +117,31 @@ export default function Transactions() {
 
 	  setSearchParams(params);
 	};
+
+	// Keep page / pageSize / showPredicted in the URL so refreshing or sharing
+	// the link preserves them. Defaults (page=0, size=10, showPredicted=true) are
+	// represented by the absence of the param to keep URLs clean.
+	useEffect(() => {
+		const params = new URLSearchParams(searchParams);
+		const setOrDelete = (key, value) => {
+			if (value === null || value === undefined || value === "") {
+				params.delete(key);
+			} else {
+				params.set(key, value);
+			}
+		};
+		setOrDelete("page", page > 0 ? String(page) : "");
+		setOrDelete("size", pageSize !== 10 ? String(pageSize) : "");
+		setOrDelete("showPredicted", showPredicted ? "" : "false");
+		// Avoid pushing a new history entry if nothing actually changed.
+		// `searchParams` and `setSearchParams` are intentionally omitted from
+		// the dep array — they're stable enough from useSearchParams, and
+		// including them would re-fire this effect on every URL change (which
+		// is exactly what this effect causes), creating a feedback loop.
+		if (params.toString() !== searchParams.toString()) {
+			setSearchParams(params, { replace: true });
+		}
+	}, [page, pageSize, showPredicted]);
 	const [filterAccount, setFilterAccount] = useState(
 		searchParams.get("accountId") || ""
 	);
@@ -289,6 +339,44 @@ useEffect(() => {
 		} finally {
 			NProgress.done();
 			setLoading(false);
+		}
+	};
+
+	// Inline category change from the transaction list. Guards against the
+	// duplicate PUTs that caused MySQL deadlocks on prediction_actual_txn_mapping:
+	//   1. Skip when the value didn't actually change (no-op edits).
+	//   2. Skip when a save for the same row is already in flight (double-tap,
+	//      React re-render, SearchSelect auto-select effect re-running).
+	// The savingCategoryIds set drives the SearchSelect's `disabled` prop too,
+	// so the picker visually locks until the save round-trip completes.
+	const handleInlineCategoryChange = async (tx, val) => {
+		const currentCategoryId = tx.category?.id || "";
+		if (val === currentCategoryId) return;
+		if (savingCategoryIds.has(tx.id)) return;
+
+		setSavingCategoryIds((prev) => {
+			const next = new Set(prev);
+			next.add(tx.id);
+			return next;
+		});
+		try {
+			await saveTx(
+				{
+					...tx,
+					categoryId: val,
+					accountId: tx.account?.id,
+					parentId: tx.parent?.id,
+				},
+				"put",
+				`/transactions/${tx.id}`
+			);
+		} finally {
+			setSavingCategoryIds((prev) => {
+				if (!prev.has(tx.id)) return prev;
+				const next = new Set(prev);
+				next.delete(tx.id);
+				return next;
+			});
 		}
 	};
 
@@ -712,7 +800,11 @@ const triggerDataExtraction = async (servicesToRun) => {
 					) : null}
 				</div>
 
-				<div className={`flex flex-col min-w-0 overflow-hidden ${isChild ? 'pl-3' : ''}`}>
+				<div className={`flex flex-col min-w-0 ${isChild ? 'pl-3' : ''}`}>
+					{/* The icon row deliberately stays overflow-visible so the
+					    attachment count badge can sit slightly above the row.
+					    The description/explanation children still clip themselves
+					    via `truncate`, so we don't need overflow-hidden here. */}
 					<div className="flex items-center gap-1 min-w-0 font-medium text-gray-800">
 						{!isChild && !isPredicted && tx.children?.length > 0 && (
 							<button
@@ -757,18 +849,34 @@ const triggerDataExtraction = async (servicesToRun) => {
 								{tx.labels && tx.labels.length > 0 ? "🏷️" : "🏷"}
 							</button>
 						)}
-						{!isPredicted && (
-							<button
-								title="View / upload receipt attachments (image or PDF)"
-								className="flex-shrink-0 text-sm px-1 cursor-pointer text-gray-500 hover:text-gray-800 transition-colors"
-								onClick={(e) => {
-									e.stopPropagation();
-									setAttachmentsTx(tx);
-								}}
-							>
-								📎
-							</button>
-						)}
+						{!isPredicted && (() => {
+							const attachmentCount = tx.attachmentCount || 0;
+							const hasAttachments = attachmentCount > 0;
+							return (
+								<button
+									title={hasAttachments
+										? `${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"} — click to view or upload more`
+										: "View / upload receipt attachments (image or PDF)"}
+									className={`relative flex-shrink-0 text-sm px-1 cursor-pointer transition-colors ${hasAttachments
+										? "text-blue-600 hover:text-blue-800"
+										: "text-gray-400 hover:text-gray-600 opacity-70 hover:opacity-100"}`}
+									onClick={(e) => {
+										e.stopPropagation();
+										setAttachmentsTx(tx);
+									}}
+								>
+									<span aria-hidden="true">📎</span>
+									{hasAttachments && (
+										<span
+											aria-label={`${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"}`}
+											className="absolute -top-1 -right-0.5 inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 text-[10px] font-bold leading-none text-white bg-blue-600 rounded-full ring-1 ring-white"
+										>
+											{attachmentCount > 99 ? "99+" : attachmentCount}
+										</span>
+									)}
+								</button>
+							);
+						})()}
 					</div>
 					{!isPredicted && (tx.shortExplanation || tx.explanation) && (
 						<div 
@@ -921,17 +1029,9 @@ const triggerDataExtraction = async (servicesToRun) => {
 									<SearchSelect
 										options={flattened.map(co => ({ id: co.id, name: co.name }))}
 										value={tx.category?.id || ""}
+										disabled={savingCategoryIds.has(tx.id)}
 										onChange={(val) => {
-											saveTx(
-												{
-													...tx,
-													categoryId: val,
-													accountId: tx.account?.id,
-													parentId: tx.parent?.id,
-												},
-												"put",
-												`/transactions/${tx.id}`
-											);
+											handleInlineCategoryChange(tx, val);
 										}}
 										placeholder="Category"
 									/>
@@ -1868,6 +1968,11 @@ function TransactionPageButtons({
                             setSortBy(null);
                             setSortDir(null);
                             setPage(0);
+                            setPageSize(10);
+                            setShowPredicted(true);
+                            // page / size / showPredicted are kept in sync by
+                            // the param-sync effect; we only need to clear the
+                            // explicit filter params here.
                             updateUrlParams({ 
                                 month: '', 
                                 date: '', 
@@ -2035,6 +2140,14 @@ function TransactionPageButtons({
 				<TransactionAttachments
 					transaction={attachmentsTx}
 					onClose={() => setAttachmentsTx(null)}
+					onCountChange={(txId, count) => {
+						// Update the badge in place without a full refetch so the
+						// list reflects uploads/deletes immediately when the modal
+						// closes (or while it's open).
+						setTransactions((prev) =>
+							prev.map((t) => (t.id === txId ? { ...t, attachmentCount: count } : t))
+						);
+					}}
 				/>
 			)}
 
