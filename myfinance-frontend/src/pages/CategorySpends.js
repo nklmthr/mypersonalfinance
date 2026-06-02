@@ -2,6 +2,10 @@ import React, { useState, useEffect } from "react";
 import dayjs from "dayjs";
 import api from "../auth/api";
 import { useNavigate, Link } from "react-router-dom";
+// Reuse the same hash-based palette the transactions page uses so a category's
+// colour is stable across the Transactions list, the Categories tree and this
+// spends summary. Driven by category id with a name fallback.
+import { getCategoryColor } from "./transactions/utils/categoryColors";
 
 export default function CategorySpendSummary() {
 	const [data, setData] = useState([]);
@@ -120,15 +124,22 @@ export default function CategorySpendSummary() {
 						className="py-1 px-2 sticky left-0 border-r z-10"
 						style={{ background: '#fff', minWidth: '200px' }}
 					>
-						<div style={{ paddingLeft: depth * 20 }} className="flex items-center gap-1">
+						<div style={{ paddingLeft: depth * 20 }} className="flex items-center gap-2 min-w-0">
 							{hasChildren ? (
-								<button onClick={() => toggle(item.id)} className="text-sm text-blue-500">
+								<button onClick={() => toggle(item.id)} className="text-sm text-blue-500 flex-shrink-0">
 									{expandedState ? "▾" : "▸"}
 								</button>
 							) : (
-								<span className="w-4" />
+								// Reserve the same horizontal slot as the chevron so dots in
+								// leaf and parent rows line up under each other.
+								<span className="w-4 flex-shrink-0" />
 							)}
-							{item.name}
+							<span
+								className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${getCategoryColor(item.id || item.name).dot}`}
+								title={item.name}
+								aria-hidden="true"
+							/>
+							<span className="truncate">{item.name}</span>
 						</div>
 					</td>
 

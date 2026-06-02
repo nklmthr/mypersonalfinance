@@ -2,6 +2,10 @@ import React, { useEffect, useState } from "react";
 import api from "./../auth/api";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
+// Reuse the same hash-based palette the transactions page uses so a category's
+// colour is stable across both screens (driven by category id, falls back to
+// name). See myfinance-frontend/src/pages/transactions/utils/categoryColors.js.
+import { getCategoryColor } from "./transactions/utils/categoryColors";
 
 const Modal = ({ title, onClose, children }) => (
 	<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -238,23 +242,35 @@ export default function Categories() {
 	const inputClass =
 		"border px-3 py-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50";
 
-	const renderCategoryTree = (nodes, depth = 0) =>
-		nodes.map((cat) => (
+	const renderCategoryTree = (nodes, depth = 0) => {
+		const colorFor = (cat) => getCategoryColor(cat.id || cat.name);
+		return nodes.map((cat) => {
+			const c = colorFor(cat);
+			return (
 			<div
 				key={cat.id}
 				className={`ml-${depth * 2} mt-1 border-l border-blue-200 pl-2`}
 			>
 				<div className="flex justify-between items-center text-sm text-gray-800 hover:bg-blue-50 px-1 py-0.5 rounded">
 					<div
-						className="flex items-center gap-1 cursor-pointer"
+						className="flex items-center gap-2 cursor-pointer min-w-0"
 						onClick={() => toggleExpand(cat.id)}
 					>
-						{cat.children && cat.children.length > 0 && (
-							<span className="text-blue-500 text-xs w-4">
+						{cat.children && cat.children.length > 0 ? (
+							<span className="text-blue-500 text-xs w-4 flex-shrink-0">
 								{isExpanded(cat.id) ? "▼" : "▶"}
 							</span>
+						) : (
+							// Reserve the same horizontal slot as the chevron so dots
+							// in leaf and parent rows line up under each other.
+							<span className="text-xs w-4 flex-shrink-0" aria-hidden="true" />
 						)}
-						<span className="font-medium">{cat.name}</span>
+						<span
+							className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${c.dot}`}
+							title={cat.name}
+							aria-hidden="true"
+						/>
+						<span className="font-medium truncate">{cat.name}</span>
 					</div>
 					<div className="space-x-2 text-xs">
 						<button
@@ -282,7 +298,9 @@ export default function Categories() {
 					isExpanded(cat.id) &&
 					renderCategoryTree(cat.children, depth + 1)}
 			</div>
-		));
+			);
+		});
+	};
 
 	return (
 		<div className="p-6 space-y-6 bg-blue-50 min-h-screen">

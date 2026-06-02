@@ -28,30 +28,34 @@ function AccountTypeForm({ account, setAccount, mode, onCancel, onSubmit }) {
     if (!trimmedName) nextErrors.name = "Required";
     if (!trimmedClassification) nextErrors.classification = "Required";
 
-    const balanceValue =
-      account.accountTypeBalance === "" || account.accountTypeBalance === null || account.accountTypeBalance === undefined
-        ? 0
-        : parseFloat(account.accountTypeBalance);
-
-    if (Number.isNaN(balanceValue)) {
-      nextErrors.balance = "Invalid number";
-    }
-
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
     }
 
+    // accountTypeBalance is deliberately omitted from the payload. It is a
+    // derived value (sum of Account.balance for accounts of this type) and
+    // the backend ignores it on POST/PUT. Sending it would just be noise.
+    const { accountTypeBalance: _ignored, ...rest } = account;
     onSubmit({
-      ...account,
+      ...rest,
       name: trimmedName,
       classification: trimmedClassification,
       description: account.description?.trim() || "",
-      accountTypeBalance: balanceValue,
     });
   };
 
   const valueOrEmpty = (value) => (value === null || value === undefined ? "" : value);
+
+  const formatReadOnlyBalance = (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    const num = Number(value);
+    if (Number.isNaN(num)) return String(value);
+    return num.toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
@@ -113,22 +117,30 @@ function AccountTypeForm({ account, setAccount, mode, onCancel, onSubmit }) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Balance</label>
-            <input
-              name="balance"
-              type="number"
-              step="0.01"
-              placeholder="Balance"
-              className={`${inputClass} ${errors.balance ? "border-red-500" : ""}`}
-              value={valueOrEmpty(account.accountTypeBalance)}
-              onChange={(e) => {
-                setAccount((prev) => ({ ...prev, accountTypeBalance: e.target.value }));
-                setErrors((prev) => ({ ...prev, balance: undefined }));
-              }}
-            />
-            {errors.balance && <p className="text-xs text-red-600 mt-1">{errors.balance}</p>}
-          </div>
+          {/* Balance is a derived sum of Account.balance for accounts of this
+              type. It is not stored on AccountType and cannot be set here.
+              We hide it entirely in Add mode (a brand-new type has no accounts
+              and the value is always 0) and show it as a read-only summary in
+              Edit mode so the user can see the current total without being
+              misled into thinking they can change it. */}
+          {mode === "edit" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Balance
+              </label>
+              <div
+                className="w-full border rounded px-3 py-2 bg-gray-100 text-gray-700 select-text cursor-not-allowed"
+                aria-readonly="true"
+                title="Auto-calculated from accounts under this type"
+              >
+                {formatReadOnlyBalance(account.accountTypeBalance)}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Auto-calculated from accounts under this type. Edit the underlying
+                accounts to change this total.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2">
@@ -157,12 +169,15 @@ export default function AccountTypes() {
 
   const API_BASE = "/account-types";
 
+  // accountTypeBalance is intentionally omitted — it's a derived field on
+  // the server (sum of Account.balance for this type) and cannot be set from
+  // this form. The Edit modal still receives it from the row data so it can
+  // render the current sum read-only.
   const createEmptyAccount = () => ({
     id: null,
     name: "",
     description: "",
     classification: "",
-    accountTypeBalance: 0,
   });
 
   const [modalMode, setModalMode] = useState(null);
