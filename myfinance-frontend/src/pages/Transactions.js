@@ -610,7 +610,15 @@ const triggerDataExtraction = async (servicesToRun) => {
 	
 	const createPredictionDetailsModal = (data) => {
 		const { historicalTransactions, actualTransactions, prediction } = data;
-		
+		// "actualSpent" / "remainingAmount" on the prediction model are
+		// transaction-type agnostic — for CREDIT predictions the same fields
+		// mean "received so far" and "still expected to be received".
+		// Label them appropriately so income predictions don't read like
+		// budget overruns.
+		const isCredit = prediction?.transactionType === 'CREDIT';
+		const actualLabel = isCredit ? 'Actual Received' : 'Actual Spent';
+		const remainingLabel = isCredit ? 'Yet to Receive' : 'Remaining';
+
 		return (
 			<div className="space-y-4">
 				{/* Prediction Summary */}
@@ -622,12 +630,12 @@ const triggerDataExtraction = async (servicesToRun) => {
 							<span className="font-semibold">₹{(prediction.predictedAmount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
 						</div>
 						<div className="flex justify-between">
-							<span>Actual Spent:</span>
-							<span className="font-semibold text-red-600">₹{(prediction.actualSpent || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+							<span>{actualLabel}:</span>
+							<span className={`font-semibold ${isCredit ? 'text-green-600' : 'text-red-600'}`}>₹{(prediction.actualSpent || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
 						</div>
 						<div className="flex justify-between">
-							<span>Remaining:</span>
-							<span className={`font-semibold ${(prediction.remainingAmount || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+							<span>{remainingLabel}:</span>
+							<span className={`font-semibold ${(prediction.remainingAmount || 0) < 0 ? (isCredit ? 'text-green-600' : 'text-red-600') : (isCredit ? 'text-blue-600' : 'text-green-600')}`}>
 								₹{(prediction.remainingAmount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}
 							</span>
 						</div>
@@ -926,7 +934,13 @@ const triggerDataExtraction = async (servicesToRun) => {
 								: tx.amount
 						)} ${
 							isPredicted
-								? (tx.remainingAmount < 0 ? "text-red-600" : "text-yellow-700")
+								// For DEBIT predictions, a negative remaining means over budget → red.
+								// For CREDIT predictions (income/earnings), a negative remaining
+								// means we received more than expected → green (good news).
+								// Otherwise stay neutral yellow.
+								? (tx.remainingAmount < 0
+									? (tx.transactionType === "CREDIT" ? "text-green-600" : "text-red-600")
+									: "text-yellow-700")
 								: (isPredicted ? tx.transactionType : tx.type) === "DEBIT"
 								? "text-red-600"
 								: "text-green-600"
@@ -957,14 +971,24 @@ const triggerDataExtraction = async (servicesToRun) => {
 					</span>
 				</span>
 					{isPredicted && tx.remainingAmount < 0 && (
-						<div className="text-xs text-red-600 font-semibold mt-1">
-							⚠️ Over budget by ₹{Math.abs(tx.remainingAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-						</div>
+						// Negative remaining means the actuals overshot the prediction.
+						// For DEBIT this is a budget overrun (bad). For CREDIT
+						// (e.g. salary, earnings) it means we received more than
+						// expected — that's a good thing, label it differently.
+						tx.transactionType === 'CREDIT' ? (
+							<div className="text-xs text-green-700 font-semibold mt-1">
+								✨ Above prediction by ₹{Math.abs(tx.remainingAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+							</div>
+						) : (
+							<div className="text-xs text-red-600 font-semibold mt-1">
+								⚠️ Over budget by ₹{Math.abs(tx.remainingAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+							</div>
+						)
 					)}
 					{isPredicted && tx.actualSpent > 0 && (
 						<div className="text-xs text-gray-600 mt-1">
-							Spent: ₹{(typeof tx.actualSpent === "number" 
-								? tx.actualSpent 
+							{tx.transactionType === 'CREDIT' ? 'Received' : 'Spent'}: ₹{(typeof tx.actualSpent === "number"
+								? tx.actualSpent
 								: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 						</div>
 					)}
