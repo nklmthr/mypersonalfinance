@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.model.AccountTransaction;
@@ -12,7 +13,7 @@ import com.nklmthr.finance.personal.model.UploadedStatement;
 
 public class AmazonPayStatementParser extends StatementParser {
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AmazonPayStatementParser.class);
-	private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm a");
+	private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm a", Locale.ENGLISH);
 
 	@Override
 	protected List<AccountTransaction> mapTransactions(List<String[]> rows, UploadedStatement statement) {

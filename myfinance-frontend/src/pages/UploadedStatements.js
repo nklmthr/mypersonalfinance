@@ -208,6 +208,7 @@ export default function StatementUploadPage() {
           <option value="">All Status</option>
           <option value="UPLOADED">Uploaded</option>
           <option value="PROCESSED">Processed</option>
+          <option value="FAILED">Failed</option>
         </select>
 
         <select
@@ -240,7 +241,11 @@ export default function StatementUploadPage() {
                 <td className="px-4 py-2">{s.filename}</td>
                 <td className="px-4 py-2">{s.account?.name || "—"}</td>
                 <td className="px-4 py-2">{dayjs(s.uploadedAt).format("DD MMM YYYY, h:mm A")}</td>
-                <td className="px-4 py-2">{s.status}</td>
+                <td className="px-4 py-2">
+                  {s.status === "PROCESSED" && <span className="text-green-600 font-medium">✓ Processed</span>}
+                  {s.status === "UPLOADED" && <span className="text-blue-600 font-medium">Uploaded</span>}
+                  {s.status === "FAILED" && <span className="text-red-600 font-medium">✗ Failed</span>}
+                </td>
                 <td className="px-4 py-2 text-center">
                   <div className="flex flex-col sm:flex-row gap-2 justify-center items-center">
                     {s.status === "UPLOADED" && (
@@ -261,12 +266,27 @@ export default function StatementUploadPage() {
                     )}
                     {s.status === "PROCESSED" && (
                       <>
-                        <span className="text-green-600 font-medium">✓ Processed</span>
                         <button
                           className="text-red-600 hover:underline font-medium"
                           onClick={() => handleUnlink(s.id)}
                         >
                           Unlink
+                        </button>
+                      </>
+                    )}
+                    {s.status === "FAILED" && (
+                      <>
+                        <button
+                          className="text-blue-600 hover:underline font-medium"
+                          onClick={() => handleProcess(s.id)}
+                        >
+                          Retry
+                        </button>
+                        <button
+                          className="text-red-600 hover:underline font-medium"
+                          onClick={() => handleDelete(s.id)}
+                        >
+                          Delete
                         </button>
                       </>
                     )}

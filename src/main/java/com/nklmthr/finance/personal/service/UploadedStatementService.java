@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.nklmthr.finance.personal.model.Account;
@@ -26,8 +28,6 @@ import com.nklmthr.finance.personal.upload.parser.AmazonPayStatementParser;
 import com.nklmthr.finance.personal.upload.parser.ICICIStatementParserXLS;
 import com.nklmthr.finance.personal.upload.parser.SBIStatentParserXLS;
 import com.nklmthr.finance.personal.upload.parser.StatementParser;
-
-import jakarta.transaction.Transactional;
 
 @Service
 public class UploadedStatementService {
@@ -129,9 +129,9 @@ public class UploadedStatementService {
 		UploadedStatement statement = uploadedStatementRepository.findByAppUserAndId(appUser, id)
 				.orElseThrow(() -> new IllegalArgumentException("Statement not found: " + id));
 		logger.info("Processing statement with id: {} for user: {}", id, appUser.getUsername());
-		if (!Status.UPLOADED.equals(statement.getStatus())) {
-			logger.error("Statement with id: {} is not in UPLOADED status", id);
-			throw new IllegalStateException("Only uploaded statements can be processed.");
+		if (!Status.UPLOADED.equals(statement.getStatus()) && !Status.FAILED.equals(statement.getStatus())) {
+			logger.error("Statement with id: {} is not in UPLOADED or FAILED status", id);
+			throw new IllegalStateException("Only uploaded or failed statements can be processed.");
 		}
 
 		StatementParser parser;
@@ -165,36 +165,57 @@ public class UploadedStatementService {
 			throw new IllegalStateException("Statement has no content to process");
 		}
 		
-		List<AccountTransaction> transactions = parser.parse(inputStream, statement);
-		
-		int savedCount = 0;
-		int duplicateCount = 0;
-		
-		for (AccountTransaction tx : transactions) {
-			tx.setAppUser(appUser); // Associate with current user
-			tx.setCategory(categoryService.getNonClassifiedCategory());
-			
-			// Check for duplicates using statement-specific duplicate detection
-			// This checks based on account, explanation (full UPI reference), amount, type, and date
-			if (accountTransactionService.isStatementTransactionDuplicate(tx, appUser)) {
-				logger.info("Skipping duplicate transaction: date={}, amount={}, explanation={}", 
-						tx.getDate(), tx.getAmount(), 
-						tx.getExplanation() != null ? tx.getExplanation().substring(0, Math.min(50, tx.getExplanation().length())) : "null");
-				duplicateCount++;
-			} else {
-				accountTransactionService.save(tx, appUser);
-				savedCount++;
-				logger.info("Saved new transaction: date={}, amount={}, description={}", 
-						tx.getDate(), tx.getAmount(), tx.getDescription());
-			}
+		List<AccountTransaction> transactions;
+		try {
+			transactions = parser.parse(inputStream, statement);
+		} catch (Exception e) {
+			markFailed(statement);
+			throw new RuntimeException("Parsing failed: " + e.getMessage() + ". Statement marked as FAILED.", e);
 		}
-		
-		logger.info("Parsed {} transactions from statement {}. Saved: {}, Duplicates skipped: {}", 
-				transactions.size(), id, savedCount, duplicateCount);
-		
-		statement.setStatus(Status.PROCESSED);
+
+		if (transactions.isEmpty()) {
+			markFailed(statement);
+			throw new IllegalStateException("No transactions could be parsed from the statement. Statement marked as FAILED.");
+		}
+
+		try {
+			int savedCount = 0;
+			int duplicateCount = 0;
+
+			for (AccountTransaction tx : transactions) {
+				tx.setAppUser(appUser);
+				tx.setCategory(categoryService.getNonClassifiedCategory());
+
+				if (accountTransactionService.isStatementTransactionDuplicate(tx, appUser)) {
+					logger.info("Skipping duplicate transaction: date={}, amount={}, explanation={}",
+							tx.getDate(), tx.getAmount(),
+							tx.getExplanation() != null ? tx.getExplanation().substring(0, Math.min(50, tx.getExplanation().length())) : "null");
+					duplicateCount++;
+				} else {
+					accountTransactionService.save(tx, appUser);
+					savedCount++;
+					logger.info("Saved new transaction: date={}, amount={}, description={}",
+							tx.getDate(), tx.getAmount(), tx.getDescription());
+				}
+			}
+
+			logger.info("Parsed {} transactions from statement {}. Saved: {}, Duplicates skipped: {}",
+					transactions.size(), id, savedCount, duplicateCount);
+
+			statement.setStatus(Status.PROCESSED);
+			uploadedStatementRepository.save(statement);
+			logger.info("Statement {} processed successfully", id);
+		} catch (Exception e) {
+			markFailed(statement);
+			throw new RuntimeException("Failed to save transactions: " + e.getMessage() + ". Statement marked as FAILED.", e);
+		}
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void markFailed(UploadedStatement statement) {
+		statement.setStatus(Status.FAILED);
 		uploadedStatementRepository.save(statement);
-		logger.info("Statement {} processed successfully", id);
+		logger.error("Statement {} marked as FAILED", statement.getId());
 	}
 
 	@Transactional
