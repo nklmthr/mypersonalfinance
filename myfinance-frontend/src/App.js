@@ -31,8 +31,8 @@ export default function App() {
 					path="/"
 					element={
 						<RequireAuth>
-							<DashboardLayout pageTitle="🏠 Home">
-								<Overview />
+							<DashboardLayout pageTitle="💸 Transactions">
+								<Transactions />
 							</DashboardLayout>
 						</RequireAuth>
 					}

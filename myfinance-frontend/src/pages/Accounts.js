@@ -94,6 +94,19 @@ const AccountModal = React.memo(({
 						/>
 					</div>
 
+					<div className="flex items-center gap-2 pt-1">
+						<input
+							type="checkbox"
+							id="statementUploadAvailable"
+							checked={!!data.statementUploadAvailable}
+							onChange={(e) => setData({ ...data, statementUploadAvailable: e.target.checked })}
+							className="w-4 h-4"
+						/>
+						<label htmlFor="statementUploadAvailable" className="text-sm text-gray-700">
+							Statement upload available
+						</label>
+					</div>
+
 					<div className="flex justify-end space-x-2">
 						<button type="button" onClick={onCancel} className="px-4 py-2 border rounded">Cancel</button>
 						<button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
@@ -123,6 +136,7 @@ export default function Accounts() {
 		accountNumber: "",
 		accountKeywords: "",
 		accountAliases: "",
+		statementUploadAvailable: false,
 	});
 
 	useEffect(() => {
@@ -156,6 +170,7 @@ export default function Accounts() {
 		accountNumber: "",
 		accountKeywords: "",
 		accountAliases: "",
+		statementUploadAvailable: false,
 	});
 
 	NProgress.configure({ showSpinner: false });
@@ -193,14 +208,15 @@ export default function Accounts() {
 		try {
 			await api.post("/accounts", {
 				name: newAccount.name,
-				balance: parseFloat(newAccount.balance), // ✅ parse on save
+				balance: parseFloat(newAccount.balance),
 				institution: { id: newAccount.institutionId },
 				accountType: { id: newAccount.accountTypeId },
 				accountNumber: newAccount.accountNumber || null,
 				accountKeywords: newAccount.accountKeywords || null,
 				accountAliases: newAccount.accountAliases || null,
+				statementUploadAvailable: newAccount.statementUploadAvailable,
 			});
-			setNewAccount({ name: "", balance: "", institutionId: "", accountTypeId: "", accountNumber: "", accountKeywords: "", accountAliases: "" });
+			setNewAccount({ name: "", balance: "", institutionId: "", accountTypeId: "", accountNumber: "", accountKeywords: "", accountAliases: "", statementUploadAvailable: false });
 			setShowAddModal(false);
 			fetchAccounts(selectedAccountTypeId, selectedInstitutionId);
 		} catch (err) {
@@ -227,6 +243,7 @@ export default function Accounts() {
 			accountNumber: acc.accountNumber || "",
 			accountKeywords: acc.accountKeywords || "",
 			accountAliases: acc.accountAliases || "",
+			statementUploadAvailable: acc.statementUploadAvailable || false,
 		});
 		setShowEditModal(true);
 	};
@@ -244,6 +261,7 @@ export default function Accounts() {
 				accountNumber: editData.accountNumber || null,
 				accountKeywords: editData.accountKeywords || null,
 				accountAliases: editData.accountAliases || null,
+				statementUploadAvailable: editData.statementUploadAvailable,
 			});
 			setShowEditModal(false);
 			fetchAccounts(selectedAccountTypeId, selectedInstitutionId);

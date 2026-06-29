@@ -57,5 +57,7 @@ public class Account {
 	@Column(name = "account_aliases", length = 300)
 	private String accountAliases; // Comma-separated alternative names/abbreviations
 
+	@Column(name = "statement_upload_available", nullable = false)
+	private boolean statementUploadAvailable = false;
 
 }

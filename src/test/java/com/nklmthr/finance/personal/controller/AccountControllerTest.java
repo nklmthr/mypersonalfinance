@@ -59,7 +59,7 @@ class AccountControllerTest {
 
     @Test
     void getAllAccounts_returnsList() throws Exception {
-        when(accountService.getAllAccounts()).thenReturn(List.of(new AccountDTO("a1","A1", BigDecimal.ONE, null, null, null, null, null)));
+        when(accountService.getAllAccounts()).thenReturn(List.of(new AccountDTO("a1","A1", BigDecimal.ONE, null, null, null, null, null, false)));
         mvc.perform(get("/api/accounts"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", hasSize(1)));
@@ -67,7 +67,7 @@ class AccountControllerTest {
 
     @Test
     void getAccount_returns200() throws Exception {
-        when(accountService.findById("a1")).thenReturn(new AccountDTO("a1","A1", BigDecimal.ONE, null, null, null, null, null));
+        when(accountService.findById("a1")).thenReturn(new AccountDTO("a1","A1", BigDecimal.ONE, null, null, null, null, null, false));
         mvc.perform(get("/api/accounts/a1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value("a1"));
@@ -75,8 +75,8 @@ class AccountControllerTest {
 
     @Test
     void createAccount_returns200() throws Exception {
-        AccountDTO in = new AccountDTO(null,"A1", BigDecimal.TEN, null, null, null, null, null);
-        AccountDTO out = new AccountDTO("a1","A1", BigDecimal.TEN, null, null, null, null, null);
+        AccountDTO in = new AccountDTO(null,"A1", BigDecimal.TEN, null, null, null, null, null, false);
+        AccountDTO out = new AccountDTO("a1","A1", BigDecimal.TEN, null, null, null, null, null, false);
         when(accountService.createAccount(Mockito.any())).thenReturn(out);
         mvc.perform(post("/api/accounts").contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(in)))
@@ -86,7 +86,7 @@ class AccountControllerTest {
 
     @Test
     void updateAccount_returns200() throws Exception {
-        AccountDTO out = new AccountDTO("a1","A2", BigDecimal.ONE, null, null, null, null, null);
+        AccountDTO out = new AccountDTO("a1","A2", BigDecimal.ONE, null, null, null, null, null, false);
         when(accountService.updateAccount(Mockito.eq("a1"), Mockito.any())).thenReturn(out);
         mvc.perform(put("/api/accounts/a1").contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(out)))

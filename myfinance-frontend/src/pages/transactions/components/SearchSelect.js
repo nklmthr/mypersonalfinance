@@ -90,11 +90,11 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
                 className={`border px-2 py-1 rounded text-sm w-full ${error ? 'border-red-500' : ''} ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             />
             {open && !disabled && (
-                <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-auto w-full mt-1">
+                <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-auto w-full mt-1 text-gray-900">
                     {filtered.map(o => (
                         <div
                             key={o.id || 'all'}
-                            className={`px-2 py-1 text-sm cursor-pointer hover:bg-blue-50 ${o.id === value ? 'bg-blue-100' : ''}`}
+                            className={`px-2 py-1 text-sm cursor-pointer hover:bg-blue-50 text-gray-900 ${o.id === value ? 'bg-blue-100' : ''}`}
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => handleSelectOption(o)}
                         >

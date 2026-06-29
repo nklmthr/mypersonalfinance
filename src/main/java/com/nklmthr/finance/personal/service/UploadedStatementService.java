@@ -22,6 +22,7 @@ import com.nklmthr.finance.personal.model.UploadedStatement;
 import com.nklmthr.finance.personal.model.UploadedStatement.Status;
 import com.nklmthr.finance.personal.repository.AccountRepository;
 import com.nklmthr.finance.personal.repository.UploadedStatementRepository;
+import com.nklmthr.finance.personal.upload.parser.AmazonPayStatementParser;
 import com.nklmthr.finance.personal.upload.parser.ICICIStatementParserXLS;
 import com.nklmthr.finance.personal.upload.parser.SBIStatentParserXLS;
 import com.nklmthr.finance.personal.upload.parser.StatementParser;
@@ -142,6 +143,9 @@ public class UploadedStatementService {
 		} else if (accountName.contains("icici")) {
 			logger.info("Using ICICIStatementParserXLS for account: {}", accountName);
 			parser = new ICICIStatementParserXLS();
+		} else if (accountName.contains("amazon")) {
+			logger.info("Using AmazonPayStatementParser for account: {}", accountName);
+			parser = new AmazonPayStatementParser();
 		} else {
 			logger.error("No parser implemented for account: {}", accountName);
 			throw new UnsupportedOperationException("No parser implemented for account: " + accountName);

@@ -89,6 +89,7 @@ public class AccountService {
         account.setAccountNumber(updatedAccount.getAccountNumber());
         account.setAccountKeywords(updatedAccount.getAccountKeywords());
         account.setAccountAliases(updatedAccount.getAccountAliases());
+        account.setStatementUploadAvailable(updatedAccount.isStatementUploadAvailable());
         
         if (updatedAccount.getInstitution() != null) {
             account.setInstitution(updatedAccount.getInstitution());

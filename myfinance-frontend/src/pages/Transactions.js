@@ -1655,12 +1655,23 @@ function TransactionPageButtons({
                         <option value="CREDIT">Credit</option>
                         <option value="DEBIT">Debit</option>
                     </select>
-                    <input
-                        value={search}
-                        onChange={(e) => {setSearch(e.target.value); updateUrlParams({ search: e.target.value }); setPage(0);}}
-                        placeholder="Search"
-                        className="border px-2 py-1 rounded text-sm w-full"
-                    />
+                    <div className="relative flex-1">
+                        <input
+                            value={search}
+                            onChange={(e) => {setSearch(e.target.value); updateUrlParams({ search: e.target.value }); setPage(0);}}
+                            placeholder="Search"
+                            className="border px-2 py-1 pr-6 rounded text-sm w-full"
+                        />
+                        {search && (
+                            <button
+                                onClick={() => { setSearch(''); updateUrlParams({ search: '' }); setPage(0); }}
+                                className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-lg leading-none"
+                                tabIndex={-1}
+                            >
+                                ×
+                            </button>
+                        )}
+                    </div>
                     </div>
                     {/* Second row: Account, Category, and Label */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-center">

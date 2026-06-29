@@ -184,7 +184,7 @@ export default function StatementUploadPage() {
           onChange={(e) => setSelectedAccountId(e.target.value)}
         >
           <option value="">Select Account</option>
-          {accounts.map((acc) => (
+          {accounts.filter((acc) => acc.statementUploadAvailable).map((acc) => (
             <option key={acc.id} value={acc.id}>
               {acc.name}
             </option>

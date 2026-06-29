@@ -72,8 +72,8 @@ class AccountServiceTest {
         Account a1 = make("a1","A1", BigDecimal.ONE);
         Account a2 = make("a2","A2", BigDecimal.TWO);
         when(accountRepository.findAllByAppUser(user, Sort.by("name").ascending())).thenReturn(List.of(a1, a2));
-        AccountDTO d1 = new AccountDTO("a1","A1", BigDecimal.ONE, null, null, null, null, null);
-        AccountDTO d2 = new AccountDTO("a2","A2", BigDecimal.TWO, null, null, null, null, null);
+        AccountDTO d1 = new AccountDTO("a1","A1", BigDecimal.ONE, null, null, null, null, null, false);
+        AccountDTO d2 = new AccountDTO("a2","A2", BigDecimal.TWO, null, null, null, null, null, false);
         when(accountMapper.toDTO(a1)).thenReturn(d1);
         when(accountMapper.toDTO(a2)).thenReturn(d2);
 
@@ -85,7 +85,7 @@ class AccountServiceTest {
     void findById_usesMapper() {
         Account a = make("a1","A1", BigDecimal.ONE);
         when(accountRepository.findByAppUserAndId(user, "a1")).thenReturn(Optional.of(a));
-        AccountDTO dto = new AccountDTO("a1","A1", BigDecimal.ONE, null, null, null, null, null);
+        AccountDTO dto = new AccountDTO("a1","A1", BigDecimal.ONE, null, null, null, null, null, false);
         when(accountMapper.toDTO(a)).thenReturn(dto);
 
         AccountDTO result = service.findById("a1");
@@ -100,10 +100,10 @@ class AccountServiceTest {
         when(accountTypeRepository.existsByAppUserAndId(user, "type")).thenReturn(true);
         Account saved = make("a1","A1", BigDecimal.TEN);
         when(accountRepository.save(toSave)).thenReturn(saved);
-        AccountDTO dto = new AccountDTO("a1","A1", BigDecimal.TEN, null, null, null, null, null);
+        AccountDTO dto = new AccountDTO("a1","A1", BigDecimal.TEN, null, null, null, null, null, false);
         when(accountMapper.toDTO(saved)).thenReturn(dto);
 
-        AccountDTO result = service.createAccount(new AccountDTO(null,"A1", BigDecimal.TEN, null, null, null, null, null));
+        AccountDTO result = service.createAccount(new AccountDTO(null,"A1", BigDecimal.TEN, null, null, null, null, null, false));
         assertThat(result).isEqualTo(dto);
     }
 
@@ -112,7 +112,7 @@ class AccountServiceTest {
         Account toSave = make(null, "A1", BigDecimal.TEN);
         when(accountMapper.toEntity(any(AccountDTO.class))).thenReturn(toSave);
         when(institutionRepository.findByAppUserAndId(user, "ins")).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.createAccount(new AccountDTO(null,"A1", BigDecimal.TEN, null, null, null, null, null)))
+        assertThatThrownBy(() -> service.createAccount(new AccountDTO(null,"A1", BigDecimal.TEN, null, null, null, null, null, false)))
             .isInstanceOf(RuntimeException.class)
             .hasMessageContaining("Institution not found");
     }
@@ -123,7 +123,7 @@ class AccountServiceTest {
         when(accountMapper.toEntity(any(AccountDTO.class))).thenReturn(toSave);
         when(institutionRepository.findByAppUserAndId(user, "ins")).thenReturn(Optional.of(new Institution()));
         when(accountTypeRepository.existsByAppUserAndId(user, "type")).thenReturn(false);
-        assertThatThrownBy(() -> service.createAccount(new AccountDTO(null,"A1", BigDecimal.TEN, null, null, null, null, null)))
+        assertThatThrownBy(() -> service.createAccount(new AccountDTO(null,"A1", BigDecimal.TEN, null, null, null, null, null, false)))
             .isInstanceOf(RuntimeException.class)
             .hasMessageContaining("AccountType not found");
     }
@@ -138,9 +138,9 @@ class AccountServiceTest {
         updatedEntity.setAccountAliases("al");
         when(accountMapper.toEntity(any(AccountDTO.class))).thenReturn(updatedEntity);
         when(accountRepository.save(existing)).thenReturn(existing);
-        when(accountMapper.toDTO(existing)).thenReturn(new AccountDTO("a1","New", new BigDecimal("150"), null, null, "123","k","al"));
+        when(accountMapper.toDTO(existing)).thenReturn(new AccountDTO("a1","New", new BigDecimal("150"), null, null, "123","k","al", false));
 
-        AccountDTO result = service.updateAccount("a1", new AccountDTO("a1","New", new BigDecimal("150"), null, null, "123","k","al"));
+        AccountDTO result = service.updateAccount("a1", new AccountDTO("a1","New", new BigDecimal("150"), null, null, "123","k","al", false));
         assertThat(result.name()).isEqualTo("New");
         verify(accountRepository).save(existing);
     }
@@ -180,7 +180,7 @@ class AccountServiceTest {
     void save_setsAppUser() {
         when(accountMapper.toEntity(any(AccountDTO.class))).thenReturn(new Account());
         when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
-        service.save(new AccountDTO(null, "A", BigDecimal.TEN, null, null, null, null, null));
+        service.save(new AccountDTO(null, "A", BigDecimal.TEN, null, null, null, null, null, false));
         verify(accountRepository, times(1)).save(any(Account.class));
     }
 }
