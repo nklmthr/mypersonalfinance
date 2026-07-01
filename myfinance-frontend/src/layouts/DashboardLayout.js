@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }) {
         <div className="p-4 text-2xl font-bold text-blue-700 tracking-tight">💰 MyFinance</div>
 
         <nav className="flex flex-col p-2 space-y-2 text-sm">
-          <Link to="/" onClick={handleNavClick} className="flex items-center gap-2 hover:text-blue-500">
+          <Link to="/overview" onClick={handleNavClick} className="flex items-center gap-2 hover:text-blue-500">
             <HomeIcon className="h-5 w-5" />
             Overview
           </Link>
