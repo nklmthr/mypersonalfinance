@@ -107,7 +107,7 @@ export default function DashboardLayout({ children }) {
 
         {/* Footer */}
         <footer className="text-center text-xs py-2 text-gray-500 bg-blue-100 border-t">
-          © 2025 MyFinance by Nikhil Mathur
+          © 2026 MyFinance by Nikhil Mathur
         </footer>
       </div>
     </div>
