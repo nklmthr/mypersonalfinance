@@ -38,6 +38,16 @@ export default function App() {
 					}
 				/>
 					<Route
+						path="/overview"
+						element={
+							<RequireAuth>
+								<DashboardLayout pageTitle="🏠 Overview">
+									<Overview />
+								</DashboardLayout>
+							</RequireAuth>
+						}
+					/>
+					<Route
 						path="/uploaded-statements"
 						element={
 							<RequireAuth>
