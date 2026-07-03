@@ -1,5 +1,9 @@
 package com.nklmthr.finance.personal.controller;
 
+import java.math.BigDecimal;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -13,15 +17,19 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
+import com.nklmthr.finance.personal.dto.HistoricalMonthlySummaryDTO;
 import com.nklmthr.finance.personal.dto.PredictedTransactionDTO;
 import com.nklmthr.finance.personal.mapper.AccountTransactionMapper;
 import com.nklmthr.finance.personal.mapper.PredictedTransactionMapper;
+import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.PredictedTransaction;
 import com.nklmthr.finance.personal.model.PredictionActualTxnMapping;
 import com.nklmthr.finance.personal.model.PredictionHistoricalTxnMapping;
+import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 import com.nklmthr.finance.personal.repository.PredictedTransactionRepository;
 import com.nklmthr.finance.personal.repository.PredictionActualTxnMappingRepository;
 import com.nklmthr.finance.personal.repository.PredictionHistoricalTxnMappingRepository;
+import com.nklmthr.finance.personal.service.AppUserService;
 import com.nklmthr.finance.personal.service.PredictionService;
 
 import lombok.RequiredArgsConstructor;
@@ -39,6 +47,8 @@ public class PredictedTransactionController {
 	private final PredictionHistoricalTxnMappingRepository historicalMappingRepository;
 	private final PredictionActualTxnMappingRepository actualMappingRepository;
 	private final AccountTransactionMapper accountTransactionMapper;
+	private final AccountTransactionRepository accountTransactionRepository;
+	private final AppUserService appUserService;
 
 	/**
 	 * Get predicted transactions for a specific month
@@ -145,6 +155,69 @@ public class PredictedTransactionController {
 		} catch (Exception e) {
 			log.error("Failed to get linked transactions for prediction: {}", id, e);
 			return ResponseEntity.badRequest().body("Failed to get linked transactions: " + e.getMessage());
+		}
+	}
+
+	@GetMapping("/{id}/historical-summary")
+	public ResponseEntity<?> getHistoricalSummary(@PathVariable String id) {
+		try {
+			PredictedTransaction prediction = predictedTransactionRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("Prediction not found"));
+
+			List<PredictionHistoricalTxnMapping> mappings = historicalMappingRepository.findByPredictedTransaction(prediction);
+
+			// Collect all parent transaction IDs to batch-fetch their children
+			List<String> parentIds = mappings.stream()
+				.map(m -> m.getHistoricalTransaction().getId())
+				.collect(Collectors.toList());
+
+			Map<String, List<AccountTransaction>> childrenByParent = accountTransactionRepository
+				.findByAppUserAndParentIn(appUserService.getCurrentUser(), parentIds)
+				.stream()
+				.collect(Collectors.groupingBy(AccountTransaction::getParent));
+
+			// Accumulate effective amounts per YYYY-MM
+			// Key: "YYYY-MM", Value: [totalAmount, count]
+			Map<String, BigDecimal> amountByMonth = new LinkedHashMap<>();
+			Map<String, Integer> countByMonth = new LinkedHashMap<>();
+
+			for (PredictionHistoricalTxnMapping mapping : mappings) {
+				AccountTransaction parent = mapping.getHistoricalTransaction();
+				List<AccountTransaction> children = childrenByParent.get(parent.getId());
+
+				String month = parent.getDate().format(DateTimeFormatter.ofPattern("yyyy-MM"));
+
+				if (children != null && !children.isEmpty()) {
+					for (AccountTransaction child : children) {
+						String childMonth = child.getDate().format(DateTimeFormatter.ofPattern("yyyy-MM"));
+						amountByMonth.merge(childMonth, child.getAmount(), BigDecimal::add);
+						countByMonth.merge(childMonth, 1, Integer::sum);
+					}
+				} else {
+					amountByMonth.merge(month, parent.getAmount(), BigDecimal::add);
+					countByMonth.merge(month, 1, Integer::sum);
+				}
+			}
+
+			// Sort by month ascending and build result
+			DateTimeFormatter labelFormatter = DateTimeFormatter.ofPattern("MMM yyyy");
+			List<HistoricalMonthlySummaryDTO> summary = amountByMonth.entrySet().stream()
+				.sorted(Map.Entry.comparingByKey())
+				.map(e -> {
+					String month = e.getKey();
+					String label = java.time.YearMonth.parse(month).atDay(1)
+						.format(labelFormatter);
+					return new HistoricalMonthlySummaryDTO(month, label, countByMonth.get(month), e.getValue());
+				})
+				.collect(Collectors.toList());
+
+			int totalCount = countByMonth.values().stream().mapToInt(Integer::intValue).sum();
+			log.info("Historical summary for prediction {}: {} months, {} effective transactions", id, summary.size(), totalCount);
+
+			return ResponseEntity.ok(Map.of("summary", summary, "totalCount", totalCount));
+		} catch (Exception e) {
+			log.error("Failed to get historical summary for prediction: {}", id, e);
+			return ResponseEntity.badRequest().body("Failed to get historical summary: " + e.getMessage());
 		}
 	}
 }

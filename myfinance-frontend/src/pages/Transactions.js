@@ -593,8 +593,11 @@ const triggerDataExtraction = async (servicesToRun) => {
 	const fetchLinkedTransactions = async (predictionId, initialTab = 'historical') => {
 		try {
 			NProgress.start();
-			const res = await api.get(`/predicted-transactions/${predictionId}/linked-transactions`);
-			setLinkedTxns(res.data);
+			const [linkedRes, summaryRes] = await Promise.all([
+				api.get(`/predicted-transactions/${predictionId}/linked-transactions`),
+				api.get(`/predicted-transactions/${predictionId}/historical-summary`)
+			]);
+			setLinkedTxns({ ...linkedRes.data, historicalSummary: summaryRes.data });
 			setActiveTab(initialTab);
 			setModalContent({
 				title: "🔗 Prediction Transaction Details",
@@ -609,7 +612,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 	};
 	
 	const createPredictionDetailsModal = (data) => {
-		const { historicalTransactions, actualTransactions, prediction } = data;
+		const { historicalTransactions, actualTransactions, prediction, historicalSummary } = data;
 		// "actualSpent" / "remainingAmount" on the prediction model are
 		// transaction-type agnostic — for CREDIT predictions the same fields
 		// mean "received so far" and "still expected to be received".
@@ -653,7 +656,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 									: 'text-gray-600 hover:text-gray-800'
 							}`}
 						>
-							📊 Historical Transactions ({historicalTransactions.length})
+							📊 Historical Transactions ({historicalSummary?.totalCount ?? historicalTransactions.length})
 						</button>
 						<button
 							onClick={() => setActiveTab('actual')}
@@ -673,22 +676,20 @@ const triggerDataExtraction = async (servicesToRun) => {
 					{activeTab === 'historical' && (
 						<div className="space-y-2">
 							<p className="text-xs text-gray-600 mb-2">
-								These transactions were used to calculate the predicted amount
+								Monthly totals used to calculate the predicted amount
 							</p>
-							{historicalTransactions.map(tx => (
-								<div key={tx.id} className="text-sm bg-gray-50 p-3 rounded border border-gray-200 hover:bg-gray-100 transition-colors">
-									<div className="flex justify-between items-start">
-										<span className="flex-1 truncate font-medium">{tx.shortDescription || tx.description}</span>
-										<span className="font-semibold ml-2 text-red-600">
-											₹{(tx.amount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}
-										</span>
+							{(historicalSummary?.summary || []).map(row => (
+								<div key={row.month} className="text-sm bg-gray-50 p-3 rounded border border-gray-200 flex justify-between items-center">
+									<div>
+										<span className="font-medium text-gray-800">{row.monthLabel}</span>
+										<span className="text-xs text-gray-500 ml-2">{row.transactionCount} transaction{row.transactionCount !== 1 ? 's' : ''}</span>
 									</div>
-									<div className="text-xs text-gray-500 mt-1">
-										{new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-									</div>
+									<span className="font-semibold text-red-600">
+										₹{(row.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+									</span>
 								</div>
 							))}
-							{historicalTransactions.length === 0 && (
+							{(!historicalSummary?.summary || historicalSummary.summary.length === 0) && (
 								<div className="text-sm text-gray-500 italic text-center py-8">
 									No historical transactions found
 								</div>
