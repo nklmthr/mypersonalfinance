@@ -66,7 +66,7 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
                 placeholder={placeholder}
                 aria-invalid={error ? "true" : "false"}
                 disabled={disabled}
-                className={`border px-2 py-1 rounded text-sm w-full ${error ? 'border-red-500' : ''} ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                className={`border px-2 py-1 rounded text-sm w-full bg-white text-gray-900 placeholder:text-gray-400 ${error ? 'border-red-500' : ''} ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             />
             {open && !disabled && (
                 <div className="absolute z-50 bg-white border rounded shadow max-h-48 overflow-auto w-full mt-1 text-gray-900">
