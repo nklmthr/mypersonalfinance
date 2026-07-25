@@ -5,11 +5,9 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const containerRef = React.useRef(null);
-    // Tracks the id we most recently fired onChange for via auto-select. The
-    // parent's `value` prop can lag behind during async saves (await api.put +
-    // refetch), and `options` / `onChange` get fresh references on every parent
-    // render — without this guard, the auto-select effect re-runs and fires
-    // onChange repeatedly for the same id, triggering duplicate PUTs.
+    // Tracks the id we most recently fired onChange for. The parent's `value`
+    // can lag during async saves (await api.put + refetch); without this guard
+    // a second click before value catches up would fire a duplicate PUT.
     const lastFiredIdRef = useRef(null);
 
     const normalize = (s) => (s || "")
@@ -44,25 +42,6 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
     }, []);
 
     const filtered = options.filter(o => normalize(o.name).includes(normalize(query)));
-
-    // Auto-select when a single non-placeholder option remains
-    useEffect(() => {
-        if (!open || disabled) return;
-        const norm = normalize(query);
-        if (!norm) return; // only after user types something
-        const filteredNonPlaceholder = options.filter(o => (o.id || o.id === 0) && normalize(o.name).includes(norm));
-        if (filteredNonPlaceholder.length === 1) {
-            const only = filteredNonPlaceholder[0];
-            // Don't fire if value already matches, AND don't re-fire while the
-            // parent is still mid-save and value hasn't caught up to what we
-            // just fired.
-            if (only.id !== value && lastFiredIdRef.current !== only.id) {
-                lastFiredIdRef.current = only.id;
-                onChange(only.id);
-            }
-            setOpen(false);
-        }
-    }, [query, open, options, value, onChange, disabled]);
 
     const handleSelectOption = (option) => {
         if (disabled) return;
