@@ -115,20 +115,22 @@ public class AccountService {
     public List<AccountDTO> getFilteredAccounts(String accountTypeId, String institutionId) {
         AppUser appUser = appUserService.getCurrentUser();
         List<Account> accounts;
+        Sort nameAsc = Sort.by("name").ascending();
 
         if (accountTypeId != null && institutionId != null) {
             logger.info("Fetching accounts for user: {} with accountTypeId: {} and institutionId: {}",
                     appUser.getUsername(), accountTypeId, institutionId);
-            accounts = accountRepository.findByAppUserAndAccountTypeIdAndInstitutionId(appUser, accountTypeId, institutionId);
+            accounts = accountRepository.findByAppUserAndAccountTypeIdAndInstitutionId(
+                    appUser, accountTypeId, institutionId, nameAsc);
         } else if (accountTypeId != null) {
             logger.info("Fetching accounts for user: {} with accountTypeId: {}", appUser.getUsername(), accountTypeId);
-            accounts = accountRepository.findByAppUserAndAccountTypeId(appUser, accountTypeId);
+            accounts = accountRepository.findByAppUserAndAccountTypeId(appUser, accountTypeId, nameAsc);
         } else if (institutionId != null) {
             logger.info("Fetching accounts for user: {} with institutionId: {}", appUser.getUsername(), institutionId);
-            accounts = accountRepository.findByAppUserAndInstitutionId(appUser, institutionId);
+            accounts = accountRepository.findByAppUserAndInstitutionId(appUser, institutionId, nameAsc);
         } else {
             logger.info("Fetching all accounts for user: {}", appUser.getUsername());
-            accounts = accountRepository.findAllByAppUser(appUser, Sort.by("name").ascending());
+            accounts = accountRepository.findAllByAppUser(appUser, nameAsc);
         }
 
         return accounts.stream().map(accountMapper::toDTO).collect(Collectors.toList());

@@ -160,10 +160,11 @@ class AccountServiceTest {
 
     @Test
     void getFilteredAccounts_handlesBranches() {
-        when(accountRepository.findByAppUserAndAccountTypeIdAndInstitutionId(user, "t","i")).thenReturn(List.of());
-        when(accountRepository.findByAppUserAndAccountTypeId(user, "t")).thenReturn(List.of());
-        when(accountRepository.findByAppUserAndInstitutionId(user, "i")).thenReturn(List.of());
-        when(accountRepository.findAllByAppUser(user, Sort.by("name").ascending())).thenReturn(List.of());
+        Sort nameAsc = Sort.by("name").ascending();
+        when(accountRepository.findByAppUserAndAccountTypeIdAndInstitutionId(user, "t", "i", nameAsc)).thenReturn(List.of());
+        when(accountRepository.findByAppUserAndAccountTypeId(user, "t", nameAsc)).thenReturn(List.of());
+        when(accountRepository.findByAppUserAndInstitutionId(user, "i", nameAsc)).thenReturn(List.of());
+        when(accountRepository.findAllByAppUser(user, nameAsc)).thenReturn(List.of());
         assertThat(service.getFilteredAccounts("t","i")).isEmpty();
         assertThat(service.getFilteredAccounts("t",null)).isEmpty();
         assertThat(service.getFilteredAccounts(null,"i")).isEmpty();

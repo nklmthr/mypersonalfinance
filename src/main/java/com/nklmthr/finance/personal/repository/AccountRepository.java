@@ -15,14 +15,14 @@ import com.nklmthr.finance.personal.model.AppUser;
 public interface AccountRepository extends JpaRepository<Account, String> {
 
 	@EntityGraph(attributePaths = { "accountType", "institution" })
-	List<Account> findByAppUserAndAccountTypeId(AppUser user, String accountTypeId);
+	List<Account> findByAppUserAndAccountTypeId(AppUser user, String accountTypeId, Sort sort);
 
 	@EntityGraph(attributePaths = { "accountType", "institution" })
-	List<Account> findByAppUserAndInstitutionId(AppUser user, String institutionId);
+	List<Account> findByAppUserAndInstitutionId(AppUser user, String institutionId, Sort sort);
 
 	@EntityGraph(attributePaths = { "accountType", "institution" })
 	List<Account> findByAppUserAndAccountTypeIdAndInstitutionId(AppUser user, String accountTypeId,
-			String institutionId);
+			String institutionId, Sort sort);
 
 	@EntityGraph(attributePaths = { "accountType", "institution" })
 	Optional<Account> findByAppUserAndName(AppUser appUser, String string);
