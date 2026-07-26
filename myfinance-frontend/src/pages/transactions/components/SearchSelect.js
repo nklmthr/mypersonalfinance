@@ -46,19 +46,6 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
 
     const filtered = options.filter(o => normalize(o.name).includes(normalize(query)));
 
-    // Reset highlight when the query changes or the menu opens/closes — not when
-    // `options` gets a new array reference from a parent re-render (that would
-    // cancel ArrowUp/ArrowDown navigation).
-    useEffect(() => {
-        if (!open) {
-            setHighlightedIndex(-1);
-            return;
-        }
-        setHighlightedIndex(filtered.length > 0 ? 0 : -1);
-        // Only re-run on query/open; filtered.length is read for the initial index.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [query, open]);
-
     // Keep highlighted option visible in the scrollable list
     useEffect(() => {
         if (!open || highlightedIndex < 0 || !listRef.current) return;
@@ -110,10 +97,14 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
             if (!open) {
                 setOpen(true);
                 setQuery("");
+                setHighlightedIndex(0);
                 return;
             }
             if (filtered.length === 0) return;
-            setHighlightedIndex((i) => (i + 1) % filtered.length);
+            setHighlightedIndex((i) => {
+                const next = i < 0 ? 0 : (i + 1) % filtered.length;
+                return next;
+            });
             return;
         }
 
@@ -122,6 +113,7 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
             if (!open) {
                 setOpen(true);
                 setQuery("");
+                setHighlightedIndex(0);
                 return;
             }
             if (filtered.length === 0) return;
@@ -149,8 +141,18 @@ export default function SearchSelect({ options, value, onChange, placeholder, er
         <div ref={containerRef} className="relative w-full">
             <input
                 value={query}
-                onChange={(e) => { if (!disabled) { setQuery(e.target.value); setOpen(true); } }}
-                onFocus={() => { if (!disabled) { setOpen(true); setQuery(""); } }}
+                onChange={(e) => {
+                    if (disabled) return;
+                    setQuery(e.target.value);
+                    setOpen(true);
+                    setHighlightedIndex(0);
+                }}
+                onFocus={() => {
+                    if (disabled) return;
+                    setOpen(true);
+                    setQuery("");
+                    setHighlightedIndex(0);
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 aria-invalid={error ? "true" : "false"}
