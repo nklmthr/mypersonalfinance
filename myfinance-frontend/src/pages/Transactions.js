@@ -15,6 +15,7 @@ import FetchToolbar from "./transactions/components/FetchToolbar";
 import SearchSelect from "./transactions/components/SearchSelect";
 import TransactionForm from "./transactions/components/TransactionForm";
 import TransferForm from "./transactions/components/TransferForm";
+import TransferPairModal from "./transactions/components/TransferPairModal";
 import TransactionSplit from "./transactions/components/TransactionSplit";
 import TransactionComparisonModal from "./transactions/components/TransactionComparisonModal";
 import TransactionDetailsModal from "./transactions/components/TransactionDetailsModal";
@@ -727,13 +728,11 @@ const triggerDataExtraction = async (servicesToRun) => {
 		);
 	};
 
-	const handleTransferLinkClick = async (linkedTransferId, e) => {
-		e.stopPropagation(); // Prevent event bubbling
-		
-		// First, try to find the linked transaction in the current page's transactions
+	const handleTransferLinkClick = async (currentTx, linkedTransferId, e) => {
+		e.stopPropagation();
+
 		let linkedTx = transactions.find(tx => tx.id === linkedTransferId);
-		
-		// If not found on current page, fetch it from API
+
 		if (!linkedTx) {
 			try {
 				setLoading(true);
@@ -749,15 +748,17 @@ const triggerDataExtraction = async (servicesToRun) => {
 				setLoading(false);
 			}
 		}
-		
-		// Open the appropriate modal with the linked transaction
-		if (linkedTx) {
-			const hasGpt = typeof linkedTx.gptDescription === 'string' && linkedTx.gptDescription.trim().length > 0;
-			setModalContent({
-				title: "Linked Transfer Transaction",
-				content: hasGpt ? createComparisonModal(linkedTx) : createDetailsModal(linkedTx),
-			});
-		}
+
+		if (!linkedTx) return;
+
+		const pair = [currentTx, linkedTx];
+		const fromTx = pair.find((t) => t.type === "DEBIT") || currentTx;
+		const toTx = pair.find((t) => t.type === "CREDIT") || linkedTx;
+
+		setModalContent({
+			title: "Transfer details",
+			content: <TransferPairModal fromTx={fromTx} toTx={toTx} />,
+		});
 	};
 
 	const renderRow = (tx, isChild = false, index = 0, isPredicted = false) => {
@@ -1012,10 +1013,10 @@ const triggerDataExtraction = async (servicesToRun) => {
 								<button
 									onClick={(e) => {
 										e.stopPropagation();
-										handleTransferLinkClick(linkTargetId, e);
+										handleTransferLinkClick(tx, linkTargetId, e);
 									}}
 									className="ml-2 text-xs bg-purple-100 text-purple-700 rounded px-2 py-0.5 inline-flex items-center gap-1 hover:bg-purple-200 cursor-pointer transition-colors"
-									title={`Click to view linked transfer transaction: ${linkTargetId}`}
+									title="View transfer (from → to)"
 									type="button"
 						>
 							🔗 Transfer
@@ -2258,7 +2259,9 @@ function TransactionPageButtons({
 				<div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
 					<div className={`bg-white rounded-lg shadow-lg w-full p-4 my-2 sm:my-4 ${
 						modalContent.title === "Transaction Details" 
-							? "max-w-[95vw] sm:max-w-lg md:max-w-2xl" 
+							? "max-w-[95vw] sm:max-w-lg md:max-w-2xl"
+							: modalContent.title === "Transfer details"
+							? "max-w-[95vw] sm:max-w-2xl md:max-w-4xl"
 							: "max-w-[95vw] sm:max-w-xl md:max-w-3xl lg:max-w-4xl"
 					}`}>
 						<h2 className="text-base sm:text-lg font-semibold mb-3">{modalContent.title}</h2>

@@ -157,12 +157,35 @@ export default function TransactionSplit({ transaction, setTransaction, onCancel
 		});
 	};
 
+	// Calculate current sum of child amounts
+	const currentSum = children.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+	const parentAmount = parseFloat(transaction.amount || 0);
+	// Balance remaining = how much of the parent amount is NOT yet covered by
+	// child entries. Positive means the user still needs to allocate more;
+	// negative means they've over-allocated. Displayed alongside Current Sum
+	// so the user can see at a glance how close they are to a valid split.
+	const balanceRemaining = parentAmount - currentSum;
+
+	const hasUnknownDescription = children.some(
+		(c) => (c.description || "").trim().toLowerCase() === "unknown"
+	);
+	const amountsBalanced = Math.abs(balanceRemaining) <= 1;
+	const canSubmit = !hasUnknownDescription && amountsBalanced && children.length > 0;
+
+	const formatINR = (value) =>
+		value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 	const submit = () => {
 		// Filter out empty children (no description and no amount)
 		const validChildren = children.filter(c => c.description.trim() || c.amount);
 		
 		if (validChildren.length === 0) {
 			alert("Please add at least one child transaction with description or amount");
+			return;
+		}
+
+		if (validChildren.some((c) => (c.description || "").trim().toLowerCase() === "unknown")) {
+			alert('Please replace "Unknown" with a real description before splitting.');
 			return;
 		}
 		
@@ -193,19 +216,6 @@ export default function TransactionSplit({ transaction, setTransaction, onCancel
 			children: enrichedChildren,
 		});
 	};
-
-	// Calculate current sum of child amounts
-	const currentSum = children.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
-	const parentAmount = parseFloat(transaction.amount || 0);
-	// Balance remaining = how much of the parent amount is NOT yet covered by
-	// child entries. Positive means the user still needs to allocate more;
-	// negative means they've over-allocated. Displayed alongside Current Sum
-	// so the user can see at a glance how close they are to a valid split.
-	const balanceRemaining = parentAmount - currentSum;
-
-	const formatINR = (value) =>
-		value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 	return (
 		<div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
 			<form
@@ -292,11 +302,27 @@ export default function TransactionSplit({ transaction, setTransaction, onCancel
 					+ Add Child
 				</button>
 
-				<div className="flex justify-end space-x-2">
+				<div className="flex justify-end space-x-2 items-center">
+					{hasUnknownDescription && (
+						<span className="text-xs text-amber-700 mr-auto">
+							Replace &quot;Unknown&quot; descriptions before splitting
+						</span>
+					)}
 					<button type="button" onClick={onCancel} className="px-4 py-1 hover:bg-gray-100 rounded transition-colors">
 						Cancel
 					</button>
-					<button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 transition-colors">
+					<button
+						type="submit"
+						disabled={!canSubmit}
+						title={
+							hasUnknownDescription
+								? 'Replace "Unknown" with a real description'
+								: !amountsBalanced
+									? "Child amounts must match the parent"
+									: "Split transaction"
+						}
+						className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+					>
 						Split
 					</button>
 				</div>

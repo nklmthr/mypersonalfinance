@@ -622,6 +622,13 @@ public class AccountTransactionService {
 		AccountTransaction existingTransaction = accountTransactionRepository.findByAppUserAndId(appUser, id)
 				.orElseThrow(
 						() -> new IllegalArgumentException("Transaction not found for user: " + appUser.getUsername()));
+
+		// Fail fast before any balance mutations — otherwise a blocked parent
+		// delete would reverse the account and then throw, desyncing balances.
+		if (accountTransactionRepository.findByParentAndAppUser(existingTransaction.getId(), appUser).size() > 0) {
+			throw new IllegalArgumentException(
+					"Cannot delete transaction with children. Please delete children first.");
+		}
 		
 		// Handle linked transfer - reverse balances and delete both sides
 		// Case 1: This transaction points to another (has linkedTransferId)
@@ -669,17 +676,25 @@ public class AccountTransactionService {
 			accountTransactionRepository.deleteByAppUserAndId(appUser, linkedTx.getId());
 		}
 		
-		// Reverse balance for this transaction's account
-		Account account = existingTransaction.getAccount();
-		if (existingTransaction.getType() == TransactionType.DEBIT) {
-			account.setBalance(account.getBalance().add(existingTransaction.getAmount()));
-		} else if (existingTransaction.getType() == TransactionType.CREDIT) {
-			account.setBalance(account.getBalance().subtract(existingTransaction.getAmount()));
+		// Account balance was applied once when the root (non-child) transaction
+		// was created. Split children only reshuffle parent/child amounts and never
+		// touch the account — so deleting a child must restore the parent amount
+		// only, not reverse the account again.
+		boolean isSplitChild = existingTransaction.getParent() != null;
+		if (!isSplitChild) {
+			Account account = existingTransaction.getAccount();
+			if (existingTransaction.getType() == TransactionType.DEBIT) {
+				account.setBalance(account.getBalance().add(existingTransaction.getAmount()));
+			} else if (existingTransaction.getType() == TransactionType.CREDIT) {
+				account.setBalance(account.getBalance().subtract(existingTransaction.getAmount()));
+			}
+			account.setAppUser(appUser);
+			accountRepository.save(account);
+		} else {
+			logger.info("Skipping account balance reverse for split child ID: {}; restoring parent amount only", id);
 		}
-		account.setAppUser(appUser);
-		accountRepository.save(account);
 		
-		if (existingTransaction.getParent() != null) {
+		if (isSplitChild) {
 			AccountTransaction parent = accountTransactionRepository.findByAppUserAndId(appUser, existingTransaction.getParent()).get();
 			parent.setAmount(parent.getAmount().add(existingTransaction.getAmount()));
 			logger.info("Updated parent transaction ID: {} amount to: {}", parent.getId(), parent.getAmount());
@@ -690,10 +705,6 @@ public class AccountTransactionService {
 			}
 			accountTransactionRepository.save(parent);
 		}
-	if (accountTransactionRepository.findByParentAndAppUser(existingTransaction.getId(), appUser).size() > 0) {
-		throw new IllegalArgumentException(
-				"Cannot delete transaction with children. Please delete children first.");
-	}
 	
 	// Remove prediction adjustments if this transaction was applied to any predictions
 	try {

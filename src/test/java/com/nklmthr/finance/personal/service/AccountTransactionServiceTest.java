@@ -727,6 +727,7 @@ class AccountTransactionServiceTest {
         AccountTransaction child = AccountTransaction.builder()
             .id("t1")
             .amount(new BigDecimal("50"))
+            .type(TransactionType.DEBIT)
             .parent("p1")
             .account(acc)
             .appUser(currentUser)
@@ -739,7 +740,32 @@ class AccountTransactionServiceTest {
         service.delete("t1");
 
         assertThat(parent.getAmount()).isEqualByComparingTo("250");
+        // Split children never applied to account balance — deleting one must
+        // not reverse the account (only restore parent amount).
+        assertThat(acc.getBalance()).isEqualByComparingTo("1000");
         verify(accountTransactionRepository).save(parent);
+        verify(accountTransactionRepository).deleteByAppUserAndId(currentUser, "t1");
+        verify(accountRepository, org.mockito.Mockito.never()).save(acc);
+    }
+
+    @Test
+    void delete_rootTransaction_reversesAccountBalance() {
+        Account acc = createAccount("a1", new BigDecimal("1000"));
+        AccountTransaction txn = AccountTransaction.builder()
+            .id("t1")
+            .amount(new BigDecimal("50"))
+            .type(TransactionType.DEBIT)
+            .account(acc)
+            .appUser(currentUser)
+            .description("Root")
+            .build();
+        when(accountTransactionRepository.findByAppUserAndId(currentUser, "t1")).thenReturn(Optional.of(txn));
+        when(accountTransactionRepository.findByParentAndAppUser("t1", currentUser)).thenReturn(List.of());
+
+        service.delete("t1");
+
+        assertThat(acc.getBalance()).isEqualByComparingTo("1050");
+        verify(accountRepository).save(acc);
         verify(accountTransactionRepository).deleteByAppUserAndId(currentUser, "t1");
     }
 
