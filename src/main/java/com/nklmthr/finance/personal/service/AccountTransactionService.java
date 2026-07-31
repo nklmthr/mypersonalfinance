@@ -841,11 +841,9 @@ public class AccountTransactionService {
 
 	/**
 	 * Check if a statement transaction already exists (for uploaded statement deduplication).
-	 * Uses explanation (contains full UPI reference), amount, type, account, and date.
-	 * 
-	 * @param newTransaction The transaction to check
-	 * @param appUser The current user
-	 * @return true if a duplicate exists
+	 * Keys off description (original bank import text), amount, type, account, and date.
+	 * Explanation is intentionally ignored so human notes do not break re-import dedupe.
+	 * Also accepts a legacy layout where older SBI imports stored the full bank text in explanation.
 	 */
 	@Transactional
 	public boolean isStatementTransactionDuplicate(AccountTransaction newTransaction, AppUser appUser) {
@@ -868,29 +866,44 @@ public class AccountTransactionService {
 			return false;
 		}
 		
-		// Check for exact match on key fields
+		String newDescription = normalizeDescription(newTransaction.getDescription());
+		
 		for (AccountTransaction existing : candidateTransactions) {
 			boolean isAmountEqual = existing.getAmount() != null && newTransaction.getAmount() != null
 					&& existing.getAmount().compareTo(newTransaction.getAmount()) == 0;
 			
 			boolean isTypeEqual = existing.getType() != null && existing.getType().equals(newTransaction.getType());
 			
-			// Use explanation for matching (contains full UPI reference)
-			String existingExplanation = normalizeDescription(existing.getExplanation());
-			String newExplanation = normalizeDescription(newTransaction.getExplanation());
-			boolean isExplanationEqual = StringUtils.isNotBlank(existingExplanation) 
-					&& StringUtils.isNotBlank(newExplanation)
-					&& existingExplanation.equals(newExplanation);
-			
 			boolean isAccountEqual = StringUtils.equals(
 					existing.getAccount().getId(), 
 					newTransaction.getAccount().getId()
 			);
+
+			if (!isAmountEqual || !isTypeEqual || !isAccountEqual || StringUtils.isBlank(newDescription)) {
+				continue;
+			}
+
+			String existingDescription = normalizeDescription(existing.getDescription());
+			boolean isDescriptionEqual = StringUtils.isNotBlank(existingDescription)
+					&& existingDescription.equals(newDescription);
+
+			// Legacy SBI rows: full bank text lived in explanation, short extract in description
+			String existingExplanation = normalizeDescription(existing.getExplanation());
+			boolean isLegacyBankTextEqual = StringUtils.isNotBlank(existingExplanation)
+					&& existingExplanation.equals(newDescription);
+
+			// Legacy short extract in description is a substring of the new full bank text
+			// (or vice versa). Require a minimum length to avoid weak matches.
+			boolean isLegacyDescriptionContained = false;
+			if (StringUtils.isNotBlank(existingDescription) && existingDescription.length() >= 20) {
+				isLegacyDescriptionContained = newDescription.contains(existingDescription)
+						|| existingDescription.contains(newDescription);
+			}
 			
-			if (isAmountEqual && isTypeEqual && isExplanationEqual && isAccountEqual) {
-				logger.info("Found duplicate statement transaction: existing ID={}, date={}, amount={}, explanation={}", 
+			if (isDescriptionEqual || isLegacyBankTextEqual || isLegacyDescriptionContained) {
+				logger.info("Found duplicate statement transaction: existing ID={}, date={}, amount={}, description={}", 
 						existing.getId(), existing.getDate(), existing.getAmount(), 
-						existing.getExplanation() != null ? existing.getExplanation().substring(0, Math.min(50, existing.getExplanation().length())) : "null");
+						existing.getDescription() != null ? existing.getDescription().substring(0, Math.min(50, existing.getDescription().length())) : "null");
 				return true;
 			}
 		}

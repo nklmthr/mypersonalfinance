@@ -191,9 +191,9 @@ public class UploadedStatementService {
 				tx.setCategory(categoryService.getNonClassifiedCategory());
 
 				if (accountTransactionService.isStatementTransactionDuplicate(tx, appUser)) {
-					logger.info("Skipping duplicate transaction: date={}, amount={}, explanation={}",
+					logger.info("Skipping duplicate transaction: date={}, amount={}, description={}",
 							tx.getDate(), tx.getAmount(),
-							tx.getExplanation() != null ? tx.getExplanation().substring(0, Math.min(50, tx.getExplanation().length())) : "null");
+							tx.getDescription() != null ? tx.getDescription().substring(0, Math.min(50, tx.getDescription().length())) : "null");
 					duplicateCount++;
 				} else {
 					accountTransactionService.save(tx, appUser);

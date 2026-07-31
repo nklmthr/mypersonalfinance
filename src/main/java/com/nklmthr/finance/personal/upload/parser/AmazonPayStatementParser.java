@@ -37,12 +37,12 @@ public class AmazonPayStatementParser extends StatementParser {
 				BigDecimal amount = new BigDecimal(amountStr);
 				TransactionType type = typeStr.equalsIgnoreCase("Credit") ? TransactionType.CREDIT : TransactionType.DEBIT;
 
+				// Description = original CSV text (dedupe key). Leave explanation for user notes.
 				AccountTransaction tx = new AccountTransaction();
 				tx.setDate(date);
 				tx.setAmount(amount);
 				tx.setType(type);
 				tx.setDescription(description);
-				tx.setExplanation(description);
 				tx.setAccount(statement.getAccount());
 				tx.setUploadedStatement(statement);
 

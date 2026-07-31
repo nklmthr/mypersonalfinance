@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.poi.ss.usermodel.*;
 
@@ -18,6 +20,7 @@ import com.nklmthr.finance.personal.model.UploadedStatement;
 public class SBIStatentParserXLS extends StatementParser {
 	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SBIStatentParserXLS.class);
 	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+	private static final Pattern AT_LOCATION_PATTERN = Pattern.compile("AT\\d+");
 	private static final int DATA_START_ROW_INDEX = 18; // Row 19 (0-indexed) is where data starts
 
 	@Override
@@ -84,16 +87,14 @@ public class SBIStatentParserXLS extends StatementParser {
 				return null;
 			}
 			
-			// Column B (index 1): Description
+			// Column B (index 1): Description — keep original bank text (whitespace-normalized)
+			// for stable re-import deduplication. Human-readable notes go in explanation.
 			Cell descCell = row.getCell(1);
 			String fullDescription = descCell != null ? getCellValueAsString(descCell).trim() : "";
-			
-			// Remove all whitespace including newlines, returns, tabs, and spaces
 			fullDescription = fullDescription.replaceAll("\\s+", "");
 			
-			// Extract merchant name for UPI transactions
-			String description = extractMerchantName(fullDescription);
-			String explanation = fullDescription;
+			String description = fullDescription;
+			String explanation = extractMerchantName(fullDescription);
 			
 			// Column D (index 3): Debit
 			Cell debitCell = row.getCell(3);
@@ -137,52 +138,46 @@ public class SBIStatentParserXLS extends StatementParser {
 	}
 
 	/**
-	 * Extracts the merchant/counterparty name from UPI transaction descriptions.
-	 * For UPI transactions like "WDL TFR UPI/DR/601644317405/MOTI RAM/UTIB/735 8814407/UPI 0097694162092 AT 40351 DOMMASANDRA",
-	 * extracts "MOTI RAM/UTIB/735 8814407/UPI 0097694162092".
-	 * 
-	 * @param fullDescription The full transaction description
-	 * @return The extracted merchant name, or the original description if not a UPI transaction
+	 * Builds an initial human-readable explanation from the bank description.
+	 * For UPI rows like "WDLTFRUPI/DR/601644317405/MOTIRAM/UTIB/7358814407/UPI0097694162092AT40351DOMMASANDRA",
+	 * extracts "MOTIRAM/UTIB/7358814407/UPI0097694162092".
+	 * Description keeps the full original string for dedupe; users can later edit explanation.
 	 */
 	private String extractMerchantName(String fullDescription) {
 		if (fullDescription == null || fullDescription.isEmpty()) {
 			return fullDescription;
 		}
 		
-		// Pattern for UPI transactions: UPI/CR/ or UPI/DR/ followed by transaction ID and merchant details
-		// Example: "WDL TFR UPI/DR/601644317405/MOTI RAM/UTIB/735 8814407/UPI 0097694162092 AT 40351 DOMMASANDRA"
-		// We want to extract: "MOTI RAM/UTIB/735 8814407/UPI 0097694162092"
-		
 		int upiIndex = fullDescription.indexOf("UPI/");
 		if (upiIndex == -1) {
-			// Not a UPI transaction, return as is
 			return fullDescription;
 		}
 		
-		// Find the transaction ID end (after UPI/CR/ or UPI/DR/)
-		int afterUpiType = fullDescription.indexOf("/", upiIndex + 7); // Skip "UPI/CR/" or "UPI/DR/"
+		// After "UPI/CR/" or "UPI/DR/"
+		int afterUpiType = fullDescription.indexOf("/", upiIndex + 7);
 		if (afterUpiType == -1) {
 			return fullDescription;
 		}
 		
-		// Find the next "/" after transaction ID
 		int merchantStart = fullDescription.indexOf("/", afterUpiType + 1);
 		if (merchantStart == -1) {
 			return fullDescription;
 		}
-		merchantStart++; // Move past the "/"
+		merchantStart++;
 		
-		// Find where merchant details end - look for " AT " which indicates location info
-		int merchantEnd = fullDescription.indexOf(" AT ", merchantStart);
-		if (merchantEnd == -1) {
-			// If no " AT " found, use the entire remaining string
-			merchantEnd = fullDescription.length();
+		// Location suffix is " AT 40351 ..." or, after whitespace strip, "AT40351..."
+		int merchantEnd = fullDescription.length();
+		int atSpaced = fullDescription.indexOf(" AT ", merchantStart);
+		if (atSpaced != -1) {
+			merchantEnd = atSpaced;
+		} else {
+			Matcher atMatcher = AT_LOCATION_PATTERN.matcher(fullDescription.substring(merchantStart));
+			if (atMatcher.find()) {
+				merchantEnd = merchantStart + atMatcher.start();
+			}
 		}
 		
-		// Extract and clean up the merchant name
 		String merchantName = fullDescription.substring(merchantStart, merchantEnd).trim();
-		
-		// If merchant name is empty or too short, return original
 		if (merchantName.isEmpty() || merchantName.length() < 3) {
 			return fullDescription;
 		}

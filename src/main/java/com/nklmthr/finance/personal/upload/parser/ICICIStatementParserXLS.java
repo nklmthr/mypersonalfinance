@@ -88,12 +88,10 @@ public class ICICIStatementParserXLS extends StatementParser {
 			Cell descCell = row.getCell(5);
 			String fullDescription = descCell != null ? getCellValueAsString(descCell).trim() : "";
 			
-			// Remove newlines and extra whitespace
+			// Normalize whitespace; keep original bank remarks in description for dedupe.
+			// Leave explanation empty — user fills human-readable notes later.
 			fullDescription = fullDescription.replaceAll("\\r\\n|\\r|\\n", " ").replaceAll("\\s+", " ").trim();
-			
-			// For ICICI, use full description as both description and explanation
 			String description = fullDescription;
-			String explanation = fullDescription;
 			
 			// Column G (index 6): Withdrawal Amount (Debit)
 			Cell debitCell = row.getCell(6);
@@ -124,7 +122,6 @@ public class ICICIStatementParserXLS extends StatementParser {
 			tx.setAmount(amount);
 			tx.setType(isCredit ? TransactionType.CREDIT : TransactionType.DEBIT);
 			tx.setDescription(description);
-			tx.setExplanation(explanation);
 			tx.setAccount(statement.getAccount());
 			tx.setUploadedStatement(statement);
 			

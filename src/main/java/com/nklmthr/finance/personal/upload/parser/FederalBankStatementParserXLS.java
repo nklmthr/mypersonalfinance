@@ -81,6 +81,7 @@ public class FederalBankStatementParserXLS extends StatementParser {
 				return null;
 			}
 
+			// Keep original particulars in description for dedupe; leave explanation for user notes.
 			Cell particularsCell = row.getCell(COL_PARTICULARS);
 			String description = particularsCell != null ? getCellValueAsString(particularsCell).trim() : "";
 			description = description.replaceAll("\\s+", " ").trim();
@@ -109,7 +110,6 @@ public class FederalBankStatementParserXLS extends StatementParser {
 			tx.setAmount(amount);
 			tx.setType(type);
 			tx.setDescription(description);
-			tx.setExplanation(description);
 			tx.setAccount(statement.getAccount());
 			tx.setUploadedStatement(statement);
 
