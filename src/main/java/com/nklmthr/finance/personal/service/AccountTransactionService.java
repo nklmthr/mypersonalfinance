@@ -869,13 +869,19 @@ public class AccountTransactionService {
 		String newDescription = normalizeDescription(newTransaction.getDescription());
 		
 		for (AccountTransaction existing : candidateTransactions) {
-			boolean isAmountEqual = existing.getAmount() != null && newTransaction.getAmount() != null
-					&& existing.getAmount().compareTo(newTransaction.getAmount()) == 0;
-			
+			// Split parents have their amount drained to 0 (redistributed to children),
+			// so skip the amount check for them — description + type + account is enough.
+			boolean isSplitParent = existing.getCategory() != null
+					&& "SPLIT".equals(existing.getCategory().getName());
+
+			boolean isAmountEqual = isSplitParent
+					|| (existing.getAmount() != null && newTransaction.getAmount() != null
+							&& existing.getAmount().compareTo(newTransaction.getAmount()) == 0);
+
 			boolean isTypeEqual = existing.getType() != null && existing.getType().equals(newTransaction.getType());
-			
+
 			boolean isAccountEqual = StringUtils.equals(
-					existing.getAccount().getId(), 
+					existing.getAccount().getId(),
 					newTransaction.getAccount().getId()
 			);
 
