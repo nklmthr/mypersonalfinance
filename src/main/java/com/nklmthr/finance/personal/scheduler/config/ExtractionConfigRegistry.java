@@ -79,6 +79,15 @@ public class ExtractionConfigRegistry {
 			true  // skip declined transactions
 		));
 
+		// IndusInd Bank Credit Card
+		configs.add(new ExtractionConfig(
+			"IndusIndCC",
+			List.of("Transaction Alert - IndusInd Bank Credit Card"),
+			List.of("transactionalert@indusind.com"),
+			null, // auto-detect transaction type
+			true  // skip declined transactions
+		));
+
 		// SBI Bank Credit Card
 		configs.add(new ExtractionConfig(
 			"SBICC",
