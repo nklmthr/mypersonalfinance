@@ -199,7 +199,16 @@ public class ConfigurableDataExtractionService {
 				logger.info("{}: {} messages found.", query, messages.size());
 
 				for (Message message : messages) {
-					processMessage(gmailService, message, config, appUser);
+					try {
+						processMessage(gmailService, message, config, appUser);
+					} catch (Exception ex) {
+						// Isolate per-message failures so one bad email doesn't
+						// abort processing of the remaining messages, queries,
+						// configurations, or users in this scheduler tick.
+						logger.error(
+							"Failed to process message ID {} for config {} (user {}). Continuing with next message.",
+							message.getId(), config.getName(), appUser.getUsername(), ex);
+					}
 				}
 			}
 		}
@@ -221,6 +230,15 @@ public class ConfigurableDataExtractionService {
 		    "[Empty content]".equals(emailContent) ||
 		    "[Error extracting message]".equals(emailContent)) {
 			logger.warn("Skipping message with empty content.");
+			return;
+		}
+
+		// Always skip OTP / informational (non-transactional) emails regardless
+		// of config flags — they never represent real transactions and would
+		// otherwise fail downstream with a null amount.
+		if (isInformationalEmail(emailContent)) {
+			logger.info("Skipping OTP/informational email (not a transaction) for {}, email ID: {}",
+				config.getName(), mess.getId());
 			return;
 		}
 
@@ -316,6 +334,31 @@ public class ConfigurableDataExtractionService {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Detects OTP / password-reset / verification / purely informational emails
+	 * that are not real financial transactions. Such emails commonly slip past
+	 * bank-sender filters but contain no amount/merchant data, so they must be
+	 * skipped up front to avoid downstream null-amount failures.
+	 */
+	private boolean isInformationalEmail(String emailContent) {
+		if (StringUtils.isBlank(emailContent)) {
+			return false;
+		}
+		String lowerContent = emailContent.toLowerCase();
+
+		return lowerContent.contains("one-time password") ||
+		       lowerContent.contains("one time password") ||
+		       lowerContent.contains("otp to reset") ||
+		       lowerContent.contains("is the otp") ||
+		       lowerContent.contains("is your otp") ||
+		       lowerContent.contains("otp for") ||
+		       lowerContent.contains("verification code") ||
+		       lowerContent.contains("reset the password") ||
+		       lowerContent.contains("reset your password") ||
+		       lowerContent.contains("password for internet banking") ||
+		       lowerContent.contains("password for netbanking");
 	}
 
 	/**
