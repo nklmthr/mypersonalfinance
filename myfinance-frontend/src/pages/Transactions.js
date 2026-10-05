@@ -51,13 +51,6 @@ export default function Transactions() {
 		return new URLSearchParams(window.location.search);
 	})();
 	const [transactions, setTransactions] = useState([]);
-	const [predictedTransactions, setPredictedTransactions] = useState([]);
-	// Persisted in URL via the param-sync effect below; default visible.
-	const [showPredicted, setShowPredicted] = useState(
-		initialUrlParams.get("showPredicted") !== "false"
-	);
-	const [linkedTxns, setLinkedTxns] = useState(null);
-	const [activeTab, setActiveTab] = useState('historical'); // For prediction details modal tabs
 	const [expandedParents, setExpandedParents] = useState({});
 	const [accounts, setAccounts] = useState([]);
 	const [currentTotal, setCurrentTotal] = useState(0);
@@ -119,9 +112,8 @@ export default function Transactions() {
 	  setSearchParams(params);
 	};
 
-	// Keep page / pageSize / showPredicted in the URL so refreshing or sharing
-	// the link preserves them. Defaults (page=0, size=10, showPredicted=true) are
-	// represented by the absence of the param to keep URLs clean.
+	// Keep page / pageSize in the URL so refreshing or sharing the link preserves them.
+	// Defaults (page=0, size=10) are represented by absence of the param to keep URLs clean.
 	useEffect(() => {
 		const params = new URLSearchParams(searchParams);
 		const setOrDelete = (key, value) => {
@@ -133,7 +125,6 @@ export default function Transactions() {
 		};
 		setOrDelete("page", page > 0 ? String(page) : "");
 		setOrDelete("size", pageSize !== 10 ? String(pageSize) : "");
-		setOrDelete("showPredicted", showPredicted ? "" : "false");
 		// Avoid pushing a new history entry if nothing actually changed.
 		// `searchParams` and `setSearchParams` are intentionally omitted from
 		// the dep array — they're stable enough from useSearchParams, and
@@ -142,7 +133,7 @@ export default function Transactions() {
 		if (params.toString() !== searchParams.toString()) {
 			setSearchParams(params, { replace: true });
 		}
-	}, [page, pageSize, showPredicted]);
+	}, [page, pageSize]);
 	const [filterAccount, setFilterAccount] = useState(
 		searchParams.get("accountId") || ""
 	);
@@ -173,7 +164,7 @@ const [sortDir, setSortDir] = useState(searchParams.get("sortDir") || null);
 
 // Unified date filter: choose Month, Date, or Range (default Month unless URL has date or startDate)
 const [filterMode, setFilterMode] = useState(
-	searchParams.get("startDate") ? "range" : searchParams.get("date") ? "date" : "month"
+	searchParams.get("startDate") ? "range" : searchParams.get("date") ? "date" : searchParams.get("noMonth") ? "range" : "month"
 );
 
 // (moved to top-level above)
@@ -267,29 +258,12 @@ useEffect(() => {
 				params.append("hasAttachments", "true");
 			}
 
-			const promises = [
-				api.get(`/transactions?${params.toString()}`),
-			];
-
-			// Fetch predicted transactions if enabled and viewing a month
-			if (showPredicted && filterMode === 'month' && filterMonth) {
-				promises.push(api.get(`/predicted-transactions?month=${filterMonth}`));
-			}
-
-			const results = await Promise.all(promises);
-			const [txRes, predictedRes] = results;
+			const txRes = await api.get(`/transactions?${params.toString()}`);
 
 			setTransactions(txRes.data.content);
 			setTotalPages(txRes.data.totalPages);
 			setTotalCount(txRes.data.totalElements);
 			setCurrentTotal(txRes.data.currentTotal);
-
-			// Set predicted transactions if fetched
-			if (predictedRes) {
-				setPredictedTransactions(predictedRes.data || []);
-			} else {
-				setPredictedTransactions([]);
-			}
 		} catch (error) {
 			if (error.response?.status === 401) {
 				localStorage.removeItem("authToken");
@@ -312,7 +286,7 @@ useEffect(() => {
 	useEffect(() => {
 		setCurrentTotal(0);
 		fetchData();
-    }, [page, pageSize, filterMode, filterMonth, filterDate, filterStartDate, filterEndDate, filterAccount, filterType, filterCategory, filterLabel, filterHasAttachments, debouncedSearch, sortBy, sortDir, showPredicted]);
+    }, [page, pageSize, filterMode, filterMonth, filterDate, filterStartDate, filterEndDate, filterAccount, filterType, filterCategory, filterLabel, filterHasAttachments, debouncedSearch, sortBy, sortDir]);
 
 	const saveTx = async (tx, method, url) => {
 		setLoading(true);
@@ -590,143 +564,6 @@ const triggerDataExtraction = async (servicesToRun) => {
 	const createDetailsModal = (tx) => {
 		return <TransactionDetailsModal tx={tx} />;
 	};
-	
-	const fetchLinkedTransactions = async (predictionId, initialTab = 'historical') => {
-		try {
-			NProgress.start();
-			const [linkedRes, summaryRes] = await Promise.all([
-				api.get(`/predicted-transactions/${predictionId}/linked-transactions`),
-				api.get(`/predicted-transactions/${predictionId}/historical-summary`)
-			]);
-			setLinkedTxns({ ...linkedRes.data, historicalSummary: summaryRes.data });
-			setActiveTab(initialTab);
-			setModalContent({
-				title: "🔗 Prediction Transaction Details",
-				content: null // Will be rendered dynamically in the modal
-			});
-		} catch (error) {
-			console.error("Failed to fetch linked transactions", error);
-			showModal(error.response?.data || "Failed to fetch linked transactions");
-		} finally {
-			NProgress.done();
-		}
-	};
-	
-	const createPredictionDetailsModal = (data) => {
-		const { historicalTransactions, actualTransactions, prediction, historicalSummary } = data;
-		// "actualSpent" / "remainingAmount" on the prediction model are
-		// transaction-type agnostic — for CREDIT predictions the same fields
-		// mean "received so far" and "still expected to be received".
-		// Label them appropriately so income predictions don't read like
-		// budget overruns.
-		const isCredit = prediction?.transactionType === 'CREDIT';
-		const actualLabel = isCredit ? 'Actual Received' : 'Actual Spent';
-		const remainingLabel = isCredit ? 'Yet to Receive' : 'Remaining';
-
-		return (
-			<div className="space-y-4">
-				{/* Prediction Summary */}
-				<div className="bg-blue-50 p-3 rounded">
-					<h4 className="font-semibold text-gray-800 mb-2">Prediction Summary</h4>
-					<div className="text-sm space-y-1">
-						<div className="flex justify-between">
-							<span>Predicted Amount:</span>
-							<span className="font-semibold">₹{(prediction.predictedAmount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-						</div>
-						<div className="flex justify-between">
-							<span>{actualLabel}:</span>
-							<span className={`font-semibold ${isCredit ? 'text-green-600' : 'text-red-600'}`}>₹{(prediction.actualSpent || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-						</div>
-						<div className="flex justify-between">
-							<span>{remainingLabel}:</span>
-							<span className={`font-semibold ${(prediction.remainingAmount || 0) < 0 ? (isCredit ? 'text-green-600' : 'text-red-600') : (isCredit ? 'text-blue-600' : 'text-green-600')}`}>
-								₹{(prediction.remainingAmount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}
-							</span>
-						</div>
-					</div>
-				</div>
-				
-				{/* Tabs */}
-				<div className="border-b border-gray-200">
-					<div className="flex space-x-1">
-						<button
-							onClick={() => setActiveTab('historical')}
-							className={`px-4 py-2 font-medium text-sm transition-colors ${
-								activeTab === 'historical'
-									? 'border-b-2 border-blue-600 text-blue-600'
-									: 'text-gray-600 hover:text-gray-800'
-							}`}
-						>
-							📊 Historical Transactions ({historicalSummary?.totalCount ?? historicalTransactions.length})
-						</button>
-						<button
-							onClick={() => setActiveTab('actual')}
-							className={`px-4 py-2 font-medium text-sm transition-colors ${
-								activeTab === 'actual'
-									? 'border-b-2 border-green-600 text-green-600'
-									: 'text-gray-600 hover:text-gray-800'
-							}`}
-						>
-							💰 Actual Transactions ({actualTransactions.length})
-						</button>
-					</div>
-				</div>
-				
-				{/* Tab Content */}
-				<div className="max-h-96 overflow-y-auto">
-					{activeTab === 'historical' && (
-						<div className="space-y-2">
-							<p className="text-xs text-gray-600 mb-2">
-								Monthly totals used to calculate the predicted amount
-							</p>
-							{(historicalSummary?.summary || []).map(row => (
-								<div key={row.month} className="text-sm bg-gray-50 p-3 rounded border border-gray-200 flex justify-between items-center">
-									<div>
-										<span className="font-medium text-gray-800">{row.monthLabel}</span>
-										<span className="text-xs text-gray-500 ml-2">{row.transactionCount} transaction{row.transactionCount !== 1 ? 's' : ''}</span>
-									</div>
-									<span className="font-semibold text-red-600">
-										₹{(row.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-									</span>
-								</div>
-							))}
-							{(!historicalSummary?.summary || historicalSummary.summary.length === 0) && (
-								<div className="text-sm text-gray-500 italic text-center py-8">
-									No historical transactions found
-								</div>
-							)}
-						</div>
-					)}
-					
-					{activeTab === 'actual' && (
-						<div className="space-y-2">
-							<p className="text-xs text-gray-600 mb-2">
-								These transactions have been applied against this prediction
-							</p>
-							{actualTransactions.map(tx => (
-								<div key={tx.id} className="text-sm bg-green-50 p-3 rounded border border-green-200 hover:bg-green-100 transition-colors">
-									<div className="flex justify-between items-start">
-										<span className="flex-1 truncate font-medium">{tx.shortDescription || tx.description}</span>
-										<span className="font-semibold ml-2 text-red-600">
-											₹{(tx.amount || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}
-										</span>
-									</div>
-									<div className="text-xs text-gray-500 mt-1">
-										{new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-									</div>
-								</div>
-							))}
-							{actualTransactions.length === 0 && (
-								<div className="text-sm text-gray-500 italic text-center py-8">
-									No actual transactions yet for this prediction
-								</div>
-							)}
-						</div>
-					)}
-				</div>
-			</div>
-		);
-	};
 
 	const handleTransferLinkClick = async (currentTx, linkedTransferId, e) => {
 		e.stopPropagation();
@@ -761,26 +598,20 @@ const triggerDataExtraction = async (servicesToRun) => {
 		});
 	};
 
-	const renderRow = (tx, isChild = false, index = 0, isPredicted = false) => {
-		const baseColor = isPredicted
-			? "bg-yellow-50 border-2 border-yellow-300"
-			: isChild
+	const renderRow = (tx, isChild = false, index = 0) => {
+		const baseColor = isChild
 			? "bg-gray-50 border-dashed"
 			: index % 2 === 0
 				? "bg-blue-50"
 				: "bg-blue-100";
-		const hasGpt = !isPredicted && typeof tx.gptDescription === 'string' && tx.gptDescription.trim().length > 0;
+		const hasGpt = typeof tx.gptDescription === 'string' && tx.gptDescription.trim().length > 0;
 		return (
 			<div
 				key={tx.id}
 				className={`grid w-full grid-cols-1 sm:grid-cols-[24px_minmax(0,3fr)_minmax(180px,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)] gap-2 py-2 px-3 rounded border items-center text-sm ${baseColor} border-gray-200`}
 			>
 				<div className="text-xs sm:col-span-1 hidden sm:flex items-center justify-center">
-					{isPredicted ? (
-						<span className="text-yellow-600" title="Predicted Transaction">
-							📊
-						</span>
-					) : !isChild && tx.children?.length > 0 ? (
+					{!isChild && tx.children?.length > 0 ? (
 						<div className="flex items-center gap-1">
 							<input
 								type="checkbox"
@@ -816,7 +647,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 					    The description/explanation children still clip themselves
 					    via `truncate`, so we don't need overflow-hidden here. */}
 					<div className="flex items-center gap-1 min-w-0 font-medium text-gray-800">
-						{!isChild && !isPredicted && tx.children?.length > 0 && (
+						{!isChild && tx.children?.length > 0 && (
 							<button
 								title="Toggle children"
 								className="flex-shrink-0 text-gray-600 hover:text-black sm:hidden"
@@ -825,24 +656,19 @@ const triggerDataExtraction = async (servicesToRun) => {
 								{expandedParents[tx.id] ? "▼" : "▶"}
 							</button>
 						)}
-						<span 
-							className={`flex-1 truncate min-w-0 ${!isPredicted ? 'cursor-pointer hover:text-blue-600' : ''}`}
-							title={
-								isPredicted
-									? (tx.description || "Predicted transaction based on historical data")
-									: ((tx.description || tx.shortDescription || "") + (hasGpt ? "  •  ✨ Click to view AI analysis" : "  •  🔍 Click to view details"))
-							}
-							onClick={!isPredicted ? () =>
+						<span
+							className="flex-1 truncate min-w-0 cursor-pointer hover:text-blue-600"
+							title={(tx.description || tx.shortDescription || "") + (hasGpt ? "  •  ✨ Click to view AI analysis" : "  •  🔍 Click to view details")}
+							onClick={() =>
 								setModalContent({
 									title: hasGpt ? "Transaction Analysis & Comparison" : "Transaction Details",
 									content: hasGpt ? createComparisonModal(tx) : createDetailsModal(tx),
-								}) : undefined}
+								})}
 						>
-							{truncateText(isPredicted ? tx.description : (tx.shortDescription || tx.description), DESCRIPTION_DISPLAY_LIMIT)}
+							{truncateText(tx.shortDescription || tx.description, DESCRIPTION_DISPLAY_LIMIT)}
 						</span>
-						{!isPredicted && (
-							<button
-								title={tx.labels && tx.labels.length > 0 ? `Edit labels (${tx.labels.length})` : "Add labels"}
+						<button
+							title={tx.labels && tx.labels.length > 0 ? `Edit labels (${tx.labels.length})` : "Add labels"}
 								className={`flex-shrink-0 text-sm px-1 cursor-pointer transition-colors ${
 									tx.labels && tx.labels.length > 0
 										? "text-blue-600 hover:text-blue-800"
@@ -858,8 +684,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 							>
 								{tx.labels && tx.labels.length > 0 ? "🏷️" : "🏷"}
 							</button>
-						)}
-						{!isPredicted && (() => {
+						{(() => {
 							const attachmentCount = tx.attachmentCount || 0;
 							const hasAttachments = attachmentCount > 0;
 							return (
@@ -888,7 +713,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 							);
 						})()}
 					</div>
-					{!isPredicted && (tx.shortExplanation || tx.explanation) && (
+					{(tx.shortExplanation || tx.explanation) && (
 						<div 
 							className="truncate text-xs text-gray-500 cursor-pointer hover:text-blue-600"
 							title={(tx.explanation || tx.shortExplanation || "") + (hasGpt ? "  •  ✨ Click to view AI analysis comparison" : "  •  🔍 Click to view transaction details")}
@@ -902,10 +727,8 @@ const triggerDataExtraction = async (servicesToRun) => {
 						</div>
 					)}
 
-					{!isPredicted && (
-						<>
-							{/* Display labels if any */}
-							{tx.labels && tx.labels.length > 0 && (
+						{/* Display labels if any */}
+					{tx.labels && tx.labels.length > 0 && (
 								<div className="flex flex-wrap gap-1 mt-1">
 									{tx.labels.slice(0, 3).map((label, idx) => (
 										<span
@@ -923,91 +746,31 @@ const triggerDataExtraction = async (servicesToRun) => {
 									)}
 								</div>
 							)}
-						</>
-					)}
-				</div>
+					</div>
 
 			<div className="text-gray-700 sm:text-right">
 				<span className="whitespace-nowrap inline-flex items-baseline gap-1 sm:justify-end w-full">
 					<span
-						className={`font-semibold tabular-nums ${getAmountSizeClass(
-							isPredicted
-								? (tx.remainingAmount !== undefined ? tx.remainingAmount : tx.predictedAmount)
-								: tx.amount
-						)} ${
-							isPredicted
-								// For DEBIT predictions, a negative remaining means over budget → red.
-								// For CREDIT predictions (income/earnings), a negative remaining
-								// means we received more than expected → green (good news).
-								// Otherwise stay neutral yellow.
-								? (tx.remainingAmount < 0
-									? (tx.transactionType === "CREDIT" ? "text-green-600" : "text-red-600")
-									: "text-yellow-700")
-								: (isPredicted ? tx.transactionType : tx.type) === "DEBIT"
-								? "text-red-600"
-								: "text-green-600"
+						className={`font-semibold tabular-nums ${getAmountSizeClass(tx.amount)} ${
+							tx.type === "DEBIT" ? "text-red-600" : "text-green-600"
 						}`}
 					>
 						<span className="text-xs text-gray-500 mr-0.5 font-normal">
 							{getCurrencySymbol(tx.currency)}
 						</span>
-						{isPredicted && tx.remainingAmount !== undefined ? (
-							<>
-								{(typeof tx.remainingAmount === "number"
-									? tx.remainingAmount
-									: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-								<span className="text-xs text-gray-500 ml-1 font-normal">
-									/ {(typeof tx.predictedAmount === "number"
-										? tx.predictedAmount
-										: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-								</span>
-							</>
-						) : (
-							(typeof (isPredicted ? tx.predictedAmount : tx.amount) === "number"
-								? (isPredicted ? tx.predictedAmount : tx.amount)
-								: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })
-						)}
+						{(typeof tx.amount === "number" ? tx.amount : 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 					</span>
 					<span className="uppercase text-[10px] bg-gray-100 text-gray-600 rounded px-1 inline-block min-w-[44px] text-center">
-						{isPredicted ? tx.transactionType : tx.type}
+						{tx.type}
 					</span>
 				</span>
-					{isPredicted && tx.remainingAmount < 0 && (
-						// Negative remaining means the actuals overshot the prediction.
-						// For DEBIT this is a budget overrun (bad). For CREDIT
-						// (e.g. salary, earnings) it means we received more than
-						// expected — that's a good thing, label it differently.
-						tx.transactionType === 'CREDIT' ? (
-							<div className="text-xs text-green-700 font-semibold mt-1">
-								✨ Above prediction by ₹{Math.abs(tx.remainingAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-							</div>
-						) : (
-							<div className="text-xs text-red-600 font-semibold mt-1">
-								⚠️ Over budget by ₹{Math.abs(tx.remainingAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-							</div>
-						)
-					)}
-					{isPredicted && tx.actualSpent > 0 && (
-						<div className="text-xs text-gray-600 mt-1">
-							{tx.transactionType === 'CREDIT' ? 'Received' : 'Spent'}: ₹{(typeof tx.actualSpent === "number"
-								? tx.actualSpent
-								: 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-						</div>
-					)}
-					{!isPredicted && (() => {
-						// Check if this transaction has a linkedTransferId (points to another)
+					{(() => {
 						const linkedId = tx.linkedTransferId;
-						
-						// Also check if another transaction on this page references this one (reverse link)
-						// This handles the case where Transaction B has linkedTransferId pointing to Transaction A
-						const reverseLinkedTx = transactions.find(otherTx => 
+						const reverseLinkedTx = transactions.find(otherTx =>
 							otherTx.id !== tx.id && otherTx.linkedTransferId === tx.id
 						);
-						
-						// Show link if either direction exists
 						const hasLink = linkedId || reverseLinkedTx;
 						const linkTargetId = linkedId || (reverseLinkedTx ? reverseLinkedTx.id : null);
-						
 						if (hasLink && linkTargetId) {
 							return (
 								<button
@@ -1018,32 +781,23 @@ const triggerDataExtraction = async (servicesToRun) => {
 									className="ml-2 text-xs bg-purple-100 text-purple-700 rounded px-2 py-0.5 inline-flex items-center gap-1 hover:bg-purple-200 cursor-pointer transition-colors"
 									title="View transfer (from → to)"
 									type="button"
-						>
-							🔗 Transfer
+								>
+									🔗 Transfer
 								</button>
 							);
 						}
 						return null;
 					})()}
-					{!isPredicted && (
-						<>
-							<br />
-							<span className="text-xs text-gray-500">
-								{tx.account?.name}
-							</span>
-						</>
-					)}
+					<>
+						<br />
+						<span className="text-xs text-gray-500">
+							{tx.account?.name}
+						</span>
+					</>
 				</div>
 
 				<div className="order-3 sm:order-none">
-					{isPredicted ? (() => {
-						const c = getCategoryColor(tx.categoryId || tx.categoryName);
-						return (
-							<span className={`inline-block px-2 py-0.5 ${c.bg} ${c.text} border ${c.border} rounded-full text-xs font-semibold uppercase tracking-wide shadow-sm`}>
-								{tx.categoryName}
-							</span>
-						);
-					})() : (() => {
+					{(() => {
 						const c = getCategoryColor(tx.category?.id || tx.category?.name);
 						return (
 							<div className="flex items-center gap-2">
@@ -1068,40 +822,12 @@ const triggerDataExtraction = async (servicesToRun) => {
 				</div>
 
 				<div className="hidden sm:flex flex-col text-xs sm:text-sm text-gray-500 self-start sm:self-center order-4 sm:order-none leading-tight">
-					{!isPredicted && (
-						<>
-							<span>{dayjs(tx.date).format("DD MMM YYYY")}</span>
-							<span className="text-xs text-gray-400">{dayjs(tx.date).format("ddd, h:mm A")}</span>
-						</>
-					)}
+					<span>{dayjs(tx.date).format("DD MMM YYYY")}</span>
+					<span className="text-xs text-gray-400">{dayjs(tx.date).format("ddd, h:mm A")}</span>
 				</div>
 
 				<div className="hidden sm:flex flex-wrap gap-2 text-xs sm:text-sm justify-start sm:justify-end order-5 sm:order-none">
-					{isPredicted && (
-						<>
-							<button
-								className="text-blue-700 hover:underline"
-								onClick={(e) => {
-									e.stopPropagation();
-									fetchLinkedTransactions(tx.id, 'historical');
-								}}
-								title="View past transactions used to compute this prediction"
-							>
-								Historical
-							</button>
-							<button
-								className="text-green-700 hover:underline"
-								onClick={(e) => {
-									e.stopPropagation();
-									fetchLinkedTransactions(tx.id, 'actual');
-								}}
-								title="View actual transactions applied against this prediction"
-							>
-								Actual
-							</button>
-						</>
-					)}
-					{!isPredicted && !isChild && (
+					{!isChild && (
 						<button
 							className="text-purple-600 hover:underline"
 							onClick={() =>
@@ -1116,7 +842,7 @@ const triggerDataExtraction = async (servicesToRun) => {
 							Split
 						</button>
 					)}
-					{!isPredicted && !isChild && (!tx.children || tx.children.length === 0) && (
+					{!isChild && (!tx.children || tx.children.length === 0) && (
 						<button
 							className="text-teal-600 hover:underline"
 							onClick={() =>
@@ -1132,37 +858,32 @@ const triggerDataExtraction = async (servicesToRun) => {
 							Transfer
 						</button>
 					)}
-					{!isPredicted && (
-						<>
-							<button
-								className="text-red-600 hover:underline"
-								onClick={() => deleteTx(tx.id)}
-								title="Delete this transaction permanently (cannot be undone)"
-							>
-								Delete
-							</button>
-							<button
-								className="text-blue-600 hover:underline"
-								onClick={() =>
-									setEditTx({
-										...tx,
-										accountId: tx.account?.id,
-										categoryId: tx.category?.id,
-										currency: tx.currency || 'INR',
-										labels: tx.labels || [],
-									})
-								}
-								title="Edit transaction details (amount, description, category, etc.)"
-							>
-								Update
-							</button>
-						</>
-					)}
+					<button
+						className="text-red-600 hover:underline"
+						onClick={() => deleteTx(tx.id)}
+						title="Delete this transaction permanently (cannot be undone)"
+					>
+						Delete
+					</button>
+					<button
+						className="text-blue-600 hover:underline"
+						onClick={() =>
+							setEditTx({
+								...tx,
+								accountId: tx.account?.id,
+								categoryId: tx.category?.id,
+								currency: tx.currency || 'INR',
+								labels: tx.labels || [],
+							})
+						}
+						title="Edit transaction details (amount, description, category, etc.)"
+					>
+						Update
+					</button>
 				</div>
 
 				{/* Mobile footer: date + actions */}
-				{!isPredicted && (
-					<div className="sm:hidden flex items-center justify-between mt-2 text-xs">
+				<div className="sm:hidden flex items-center justify-between mt-2 text-xs">
 						<div className="text-gray-500">{dayjs(tx.date).format("ddd, DD MMM YYYY h:mm A")}</div>
 						<div className="flex gap-3">
 							{!isChild && (
@@ -1219,10 +940,9 @@ const triggerDataExtraction = async (servicesToRun) => {
 							</button>
 						</div>
 					</div>
-				)}
-			</div>
-		);
-	};
+				</div>
+			);
+		};
 
 function TransactionPageButtons({
 		filterMonth,
@@ -1547,48 +1267,6 @@ function TransactionPageButtons({
                     triggerDataExtraction={triggerDataExtraction}
                     currentTotal={currentTotal}
                 />
-
-                {/* Predicted Transactions Section (shown above filters so they read first) */}
-                {filterMode === 'month' && (
-                    <div className="w-full my-2">
-                        <div className="flex items-center justify-between mb-2 gap-3">
-                            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2 min-w-0">
-                                <span className="truncate">📊 Predicted Transactions for {filterMonth}</span>
-                                {showPredicted && (
-                                    <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
-                                        ({predictedTransactions.length} prediction{predictedTransactions.length !== 1 ? 's' : ''})
-                                    </span>
-                                )}
-                            </h3>
-                            <label
-                                className="flex items-center gap-2 cursor-pointer select-none flex-shrink-0"
-                                title="Toggle whether predicted transactions appear above the filters"
-                            >
-                                <span className="text-sm text-gray-700 whitespace-nowrap">Show predicted</span>
-                                <button
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={showPredicted}
-                                    onClick={() => setShowPredicted(!showPredicted)}
-                                    className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${showPredicted ? 'bg-blue-600' : 'bg-gray-300'}`}
-                                >
-                                    <span
-                                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${showPredicted ? 'translate-x-5' : 'translate-x-1'}`}
-                                    />
-                                </button>
-                            </label>
-                        </div>
-
-                        {showPredicted && predictedTransactions.length > 0 && (
-                            predictedTransactions.map((pred, idx) => renderRow(pred, false, idx, true))
-                        )}
-                        {showPredicted && predictedTransactions.length === 0 && (
-                            <div className="text-sm text-gray-500 italic px-3 py-2 bg-yellow-50 border border-yellow-200 rounded">
-                                No predicted transactions for {filterMonth}.
-                            </div>
-                        )}
-                    </div>
-                )}
 
                 {/* Section 2: Filters in two rows */}
                 <div className="w-full bg-white border border-blue-200 rounded-md p-2 shadow-sm space-y-2">
@@ -2006,8 +1684,7 @@ function TransactionPageButtons({
                             setSortDir(null);
                             setPage(0);
                             setPageSize(10);
-                            setShowPredicted(true);
-                            // page / size / showPredicted are kept in sync by
+                            // page / size are kept in sync by
                             // the param-sync effect; we only need to clear the
                             // explicit filter params here.
                             updateUrlParams({ 
@@ -2056,13 +1733,6 @@ function TransactionPageButtons({
 				onApplyCategory={applyBulkCategory}
 				onApplyLabels={applyBulkLabels}
 			/>
-
-			{/* Actual Transactions header (only when predictions are visible above) */}
-			{showPredicted && predictedTransactions.length > 0 && (
-				<h3 className="text-lg font-semibold text-gray-800 my-4">
-					Actual Transactions
-				</h3>
-			)}
 
 			{/* Column Headers (desktop only - row layout collapses on mobile) */}
 			<div className="hidden sm:grid w-full grid-cols-[24px_minmax(0,3fr)_minmax(180px,2fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)] gap-2 px-3 py-2 bg-gray-100 border border-gray-300 rounded-t text-xs font-semibold text-gray-700 uppercase tracking-wide">
@@ -2266,13 +1936,12 @@ function TransactionPageButtons({
 					}`}>
 						<h2 className="text-base sm:text-lg font-semibold mb-3">{modalContent.title}</h2>
 						<div className="text-xs sm:text-sm text-gray-700 mb-3 max-h-[70vh] sm:max-h-[75vh] overflow-y-auto overflow-x-hidden">
-							{modalContent.content || (linkedTxns ? createPredictionDetailsModal(linkedTxns) : null)}
+							{modalContent.content}
 						</div>
 						<div className="flex justify-end">
 						<button
 							onClick={() => {
 								setModalContent(null);
-								setLinkedTxns(null);
 							}}
 								className="text-blue-600 hover:underline text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
 						>

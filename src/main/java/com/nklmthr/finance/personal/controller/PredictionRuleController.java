@@ -21,6 +21,7 @@ import com.nklmthr.finance.personal.model.PredictionRule;
 import com.nklmthr.finance.personal.repository.CategoryRepository;
 import com.nklmthr.finance.personal.service.CategoryService;
 import com.nklmthr.finance.personal.service.PredictionService;
+import com.nklmthr.finance.personal.service.RecurringTransactionService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,7 @@ public class PredictionRuleController {
 	private final PredictionRuleMapper predictionRuleMapper;
 	private final CategoryRepository categoryRepository;
 	private final CategoryService categoryService;
+	private final RecurringTransactionService recurringTransactionService;
 
 	private PredictionRuleDTO enrichWithDescendantCount(PredictionRuleDTO dto) {
 		int count = categoryService.getAllDescendantCategoryIds(dto.getCategoryId()).size() - 1;
@@ -181,9 +183,28 @@ public class PredictionRuleController {
 	) {
 		try {
 			predictionService.generatePredictionsByMonth(targetMonth);
-			return ResponseEntity.ok().body("Predictions generated successfully for all enabled rules");
+			recurringTransactionService.generateForMonth(targetMonth);
+			return ResponseEntity.ok().body("Predictions generated successfully for all enabled rules and recurring transactions");
 		} catch (Exception e) {
 			log.error("Failed to generate predictions", e);
+			return ResponseEntity.badRequest().body("Failed to generate predictions: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Generate predictions for every category that has transaction history,
+	 * regardless of whether a prediction rule exists for it.
+	 * Categories already covered by a rule are skipped.
+	 */
+	@PostMapping("/generate-all-categories")
+	public ResponseEntity<?> generateAllCategories(
+		@RequestParam(required = false) String targetMonth
+	) {
+		try {
+			int count = predictionService.generateAllCategoriesByMonth(targetMonth);
+			return ResponseEntity.ok().body("Generated " + count + " new predictions across all categories");
+		} catch (Exception e) {
+			log.error("Failed to generate all-category predictions", e);
 			return ResponseEntity.badRequest().body("Failed to generate predictions: " + e.getMessage());
 		}
 	}

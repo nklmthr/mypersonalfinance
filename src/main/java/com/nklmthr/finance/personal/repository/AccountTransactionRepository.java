@@ -292,5 +292,23 @@ public interface AccountTransactionRepository
 			@Param("account") com.nklmthr.finance.personal.model.Account account,
 			@Param("startDate") LocalDateTime startDate,
 			@Param("endDate") LocalDateTime endDate);
+
+	/**
+	 * Returns the distinct category IDs that have at least one leaf transaction
+	 * (no children) for the given user within the date range.
+	 * Used by generate-all-categories to discover which categories have history.
+	 */
+	@Query("""
+		SELECT DISTINCT t.category.id
+		FROM AccountTransaction t
+		WHERE t.appUser = :appUser
+		  AND t.date >= :startDate
+		  AND t.date <= :endDate
+		  AND NOT EXISTS (SELECT 1 FROM AccountTransaction c WHERE c.parent = t.id)
+	""")
+	List<String> findDistinctCategoryIdsWithTransactions(
+		@Param("appUser") AppUser appUser,
+		@Param("startDate") LocalDateTime startDate,
+		@Param("endDate") LocalDateTime endDate);
 	}
 

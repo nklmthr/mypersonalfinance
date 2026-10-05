@@ -88,5 +88,31 @@ public class LabelService {
 		Label label = findOrCreateLabel(appUser, labelDTO.name());
 		return labelMapper.toDTO(label);
 	}
+
+	public LabelDTO updateLabel(String id, LabelDTO labelDTO) {
+		return updateLabel(appUserService.getCurrentUser(), id, labelDTO);
+	}
+
+	public LabelDTO updateLabel(AppUser appUser, String id, LabelDTO labelDTO) {
+		if (labelDTO.name() == null || labelDTO.name().trim().isEmpty()) {
+			throw new IllegalArgumentException("Label name cannot be empty");
+		}
+		Label label = labelRepository.findById(id)
+			.filter(l -> l.getAppUser().getId().equals(appUser.getId()))
+			.orElseThrow(() -> new IllegalArgumentException("Label not found: " + id));
+		label.setName(labelDTO.name().trim());
+		return labelMapper.toDTO(labelRepository.save(label));
+	}
+
+	public void deleteLabel(String id) {
+		deleteLabel(appUserService.getCurrentUser(), id);
+	}
+
+	public void deleteLabel(AppUser appUser, String id) {
+		Label label = labelRepository.findById(id)
+			.filter(l -> l.getAppUser().getId().equals(appUser.getId()))
+			.orElseThrow(() -> new IllegalArgumentException("Label not found: " + id));
+		labelRepository.delete(label);
+	}
 }
 

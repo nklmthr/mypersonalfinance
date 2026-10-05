@@ -12,6 +12,7 @@ import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.PredictedTransaction;
 import com.nklmthr.finance.personal.model.PredictionRule;
+import com.nklmthr.finance.personal.model.RecurringTransaction;
 
 @Repository
 public interface PredictedTransactionRepository extends JpaRepository<PredictedTransaction, String> {
@@ -30,6 +31,14 @@ public interface PredictedTransactionRepository extends JpaRepository<PredictedT
 	
 	void deleteByPredictionRule(PredictionRule predictionRule);
 	
+	Optional<PredictedTransaction> findByAppUserAndCategoryAndPredictionMonthAndPredictionRuleIsNullAndRecurringTransactionIsNull(
+		AppUser appUser, Category category, String predictionMonth);
+
+	Optional<PredictedTransaction> findByRecurringTransactionAndPredictionMonth(
+		RecurringTransaction recurringTransaction, String predictionMonth);
+
+	List<PredictedTransaction> findByRecurringTransaction(RecurringTransaction recurringTransaction);
+
 	@Query("SELECT pt FROM PredictedTransaction pt WHERE pt.appUser = :appUser " +
 	       "AND pt.predictionMonth >= :startMonth AND pt.predictionMonth <= :endMonth " +
 	       "AND pt.visible = true")

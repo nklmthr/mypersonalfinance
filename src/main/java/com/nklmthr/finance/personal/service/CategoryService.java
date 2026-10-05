@@ -47,7 +47,10 @@ public class CategoryService {
         List<Category> allCategories = categoryRepository.findByAppUser(appUser, Sort.by("name").ascending());
         logger.info("Found {} categories for user: {}", allCategories.size(), appUser.getUsername());
         return categoryMapper.toDTOList(allCategories);
-        
+    }
+
+    public List<Category> getAllCategoryEntities(AppUser appUser) {
+        return categoryRepository.findByAppUser(appUser, Sort.by("name").ascending());
     }
 
     // Overload

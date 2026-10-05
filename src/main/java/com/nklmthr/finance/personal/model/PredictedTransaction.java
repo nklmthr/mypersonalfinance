@@ -47,10 +47,15 @@ public class PredictedTransaction {
 	@ToString.Exclude
 	private AppUser appUser;
 
-	@ManyToOne(optional = false)
-	@JoinColumn(name = "prediction_rule_id", nullable = false)
+	@ManyToOne(optional = true)
+	@JoinColumn(name = "prediction_rule_id", nullable = true)
 	@ToString.Exclude
 	private PredictionRule predictionRule;
+
+	@ManyToOne(optional = true)
+	@JoinColumn(name = "recurring_transaction_id", nullable = true)
+	@ToString.Exclude
+	private RecurringTransaction recurringTransaction;
 
 	@ManyToOne(optional = false)
 	@JoinColumn(name = "category_id", nullable = false)

@@ -16,6 +16,8 @@ import lombok.NoArgsConstructor;
 public class PredictedTransactionDTO {
 	private String id;
 	private String predictionRuleId;
+	private String recurringTransactionId;
+	private String recurringTransactionDescription;
 	private String categoryId;
 	private String categoryName;
 	private String accountId;

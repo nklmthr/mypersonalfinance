@@ -11,6 +11,8 @@ import com.nklmthr.finance.personal.model.PredictedTransaction;
 public interface PredictedTransactionMapper {
 
 	@Mapping(source = "predictionRule.id", target = "predictionRuleId")
+	@Mapping(source = "recurringTransaction.id", target = "recurringTransactionId")
+	@Mapping(source = "recurringTransaction.description", target = "recurringTransactionDescription")
 	@Mapping(source = "category.id", target = "categoryId")
 	@Mapping(source = "category.name", target = "categoryName")
 	@Mapping(source = "account.id", target = "accountId")

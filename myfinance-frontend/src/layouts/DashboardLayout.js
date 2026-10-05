@@ -11,6 +11,8 @@ import {
   UserCircleIcon,
   Bars3Icon,
   XMarkIcon,
+  TagIcon,
+  CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
 
 export default function DashboardLayout({ children }) {
@@ -58,6 +60,10 @@ export default function DashboardLayout({ children }) {
 		    <ChartBarIcon className="h-5 w-5" />
 		    Prediction Rules
 		  </Link>
+		  <Link to="/forecast" onClick={handleNavClick} className="flex items-center gap-2 hover:text-blue-500">
+		    <CalendarDaysIcon className="h-5 w-5" />
+		    Forecast
+		  </Link>
 		  <Link to="/uploaded-statements" onClick={handleNavClick} className="flex items-center gap-2 hover:text-blue-500">
 		    <FolderIcon className="h-5 w-5" />
 		    Uploaded Statements
@@ -77,6 +83,10 @@ export default function DashboardLayout({ children }) {
           <Link to="/account-types" onClick={handleNavClick} className="flex items-center gap-2 hover:text-blue-500">
             <Squares2X2Icon className="h-5 w-5" />
             Account Types
+          </Link>
+          <Link to="/labels" onClick={handleNavClick} className="flex items-center gap-2 hover:text-blue-500">
+            <TagIcon className="h-5 w-5" />
+            Labels
           </Link>
         </nav>
       </aside>

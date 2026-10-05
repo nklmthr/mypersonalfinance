@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -218,6 +219,91 @@ public class PredictedTransactionController {
 		} catch (Exception e) {
 			log.error("Failed to get historical summary for prediction: {}", id, e);
 			return ResponseEntity.badRequest().body("Failed to get historical summary: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Manually map a predicted transaction to an actual transaction.
+	 * Creates a PredictionActualTxnMapping and updates actualSpent / remainingAmount on the prediction.
+	 */
+	@PostMapping("/{id}/map-actual")
+	public ResponseEntity<?> mapActual(
+		@PathVariable String id,
+		@RequestParam String transactionId
+	) {
+		try {
+			var user = appUserService.getCurrentUser();
+			PredictedTransaction prediction = predictedTransactionRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("Prediction not found"));
+			if (!prediction.getAppUser().getId().equals(user.getId())) {
+				return ResponseEntity.status(403).body("Access denied");
+			}
+
+			AccountTransaction actual = accountTransactionRepository.findById(transactionId)
+				.orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+			if (!actual.getAppUser().getId().equals(user.getId())) {
+				return ResponseEntity.status(403).body("Access denied");
+			}
+
+			// Avoid duplicate mapping
+			boolean alreadyMapped = actualMappingRepository.findByPredictedTransaction(prediction)
+				.stream().anyMatch(m -> m.getActualTransaction().getId().equals(transactionId));
+			if (alreadyMapped) {
+				return ResponseEntity.badRequest().body("Transaction is already mapped to this prediction");
+			}
+
+			BigDecimal amount = actual.getAmount();
+			PredictionActualTxnMapping mapping = PredictionActualTxnMapping.builder()
+				.predictedTransaction(prediction)
+				.actualTransaction(actual)
+				.amountApplied(amount)
+				.build();
+			actualMappingRepository.save(mapping);
+
+			prediction.setActualSpent(prediction.getActualSpent().add(amount));
+			prediction.setRemainingAmount(prediction.getPredictedAmount().subtract(prediction.getActualSpent()));
+			predictedTransactionRepository.save(prediction);
+
+			return ResponseEntity.ok(predictedTransactionMapper.toDTO(prediction));
+		} catch (Exception e) {
+			log.error("Failed to map actual transaction {} to prediction {}", transactionId, id, e);
+			return ResponseEntity.badRequest().body("Failed to map transaction: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Remove a manual mapping between a predicted transaction and an actual transaction.
+	 */
+	@PostMapping("/{id}/unmap-actual")
+	public ResponseEntity<?> unmapActual(
+		@PathVariable String id,
+		@RequestParam String transactionId
+	) {
+		try {
+			var user = appUserService.getCurrentUser();
+			PredictedTransaction prediction = predictedTransactionRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("Prediction not found"));
+			if (!prediction.getAppUser().getId().equals(user.getId())) {
+				return ResponseEntity.status(403).body("Access denied");
+			}
+
+			List<PredictionActualTxnMapping> mappings = actualMappingRepository.findByPredictedTransaction(prediction);
+			PredictionActualTxnMapping toRemove = mappings.stream()
+				.filter(m -> m.getActualTransaction().getId().equals(transactionId))
+				.findFirst()
+				.orElseThrow(() -> new IllegalArgumentException("Mapping not found"));
+
+			BigDecimal amount = toRemove.getAmountApplied();
+			actualMappingRepository.delete(toRemove);
+
+			prediction.setActualSpent(prediction.getActualSpent().subtract(amount));
+			prediction.setRemainingAmount(prediction.getPredictedAmount().subtract(prediction.getActualSpent()));
+			predictedTransactionRepository.save(prediction);
+
+			return ResponseEntity.ok(predictedTransactionMapper.toDTO(prediction));
+		} catch (Exception e) {
+			log.error("Failed to unmap transaction {} from prediction {}", transactionId, id, e);
+			return ResponseEntity.badRequest().body("Failed to unmap transaction: " + e.getMessage());
 		}
 	}
 }

@@ -2,8 +2,12 @@ package com.nklmthr.finance.personal.controller;
 
 import java.util.List;
 
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -34,6 +38,17 @@ public class LabelController {
 	@PostMapping
 	public LabelDTO create(@RequestBody LabelDTO label) {
 		return labelService.createLabel(label);
+	}
+
+	@PutMapping("/{id}")
+	public ResponseEntity<LabelDTO> update(@PathVariable String id, @RequestBody LabelDTO label) {
+		return ResponseEntity.ok(labelService.updateLabel(id, label));
+	}
+
+	@DeleteMapping("/{id}")
+	public ResponseEntity<Void> delete(@PathVariable String id) {
+		labelService.deleteLabel(id);
+		return ResponseEntity.noContent().build();
 	}
 }
 
