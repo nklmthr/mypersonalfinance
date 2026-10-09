@@ -11,6 +11,37 @@ const fmt = (num) =>
     ? `₹${parseFloat(num).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
     : "–";
 
+function fmtDateTime(dateStr) {
+  if (!dateStr) return "–";
+  const d = new Date(dateStr);
+  if (isNaN(d)) return dateStr.slice(0, 16).replace("T", " ");
+  return d.toLocaleString("en-IN", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+}
+
+function sortByDateDesc(txns) {
+  return [...txns].sort((a, b) => new Date(b.date ?? 0) - new Date(a.date ?? 0));
+}
+
+// Consistent grid row for both mapped-list and search-list
+function TxRow({ t, onAction, actionLabel, actionClass, hoverClass = "hover:bg-gray-50" }) {
+  return (
+    <div
+      className={`grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-2 py-1.5 text-xs border-b border-gray-100 ${hoverClass} ${onAction && !actionLabel ? "cursor-pointer" : ""}`}
+      onClick={!actionLabel && onAction ? (e) => { e.stopPropagation(); onAction(); } : undefined}
+    >
+      <span className="text-gray-700 truncate">{t.description || t.categoryName}</span>
+      <span className="text-gray-400 shrink-0 whitespace-nowrap">{fmtDateTime(t.date)}</span>
+      <span className="font-medium text-gray-800 shrink-0 text-right">{fmt(t.amount)}</span>
+      {actionLabel
+        ? <button className={`shrink-0 ${actionClass}`} onClick={(e) => { e.stopPropagation(); onAction(); }}>{actionLabel}</button>
+        : <span />}
+    </div>
+  );
+}
+
 function monthLabel(ym) {
   if (!ym) return "";
   const [year, month] = ym.split("-").map(Number);
@@ -279,13 +310,12 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
               <div>
                 <div className="text-xs font-semibold text-blue-700 mb-1">Rule Prediction — Mapped Transactions</div>
                 {linkedRule?.actualTransactions?.length > 0 ? (
-                  linkedRule.actualTransactions.map((t) => (
-                    <div key={t.id} className="flex justify-between items-center text-xs py-1 border-b border-gray-100">
-                      <span className="text-gray-700">{t.description || t.categoryName}</span>
-                      <span className="text-gray-400">{t.date?.slice(0, 10)}</span>
-                      <span className="font-medium">{fmt(t.amount)}</span>
-                      {isPast && <button onClick={() => handleUnmap(rulePred.id, t.id)} className="text-red-500 hover:underline ml-2">Unmap</button>}
-                    </div>
+                  sortByDateDesc(linkedRule.actualTransactions).map((t) => (
+                    <TxRow key={t.id} t={t}
+                      actionLabel={isPast ? "Unmap" : undefined}
+                      actionClass="text-red-500 hover:underline"
+                      onAction={isPast ? () => handleUnmap(rulePred.id, t.id) : undefined}
+                    />
                   ))
                 ) : (
                   <div className="text-xs text-gray-400">No transactions mapped.</div>
@@ -300,13 +330,12 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
                     <span className="ml-1 font-normal text-gray-400">({fmt(recPred.predictedAmount)})</span>
                   </div>
                   {linkedRecurringMap[recPred.id]?.actualTransactions?.length > 0 ? (
-                    linkedRecurringMap[recPred.id].actualTransactions.map((t) => (
-                      <div key={t.id} className="flex justify-between items-center text-xs py-1 border-b border-gray-100">
-                        <span className="text-gray-700">{t.description || t.categoryName}</span>
-                        <span className="text-gray-400">{t.date?.slice(0, 10)}</span>
-                        <span className="font-medium">{fmt(t.amount)}</span>
-                        {isPast && <button onClick={() => handleUnmap(recPred.id, t.id)} className="text-red-500 hover:underline ml-2">Unmap</button>}
-                      </div>
+                    sortByDateDesc(linkedRecurringMap[recPred.id].actualTransactions).map((t) => (
+                      <TxRow key={t.id} t={t}
+                        actionLabel={isPast ? "Unmap" : undefined}
+                        actionClass="text-red-500 hover:underline"
+                        onAction={isPast ? () => handleUnmap(recPred.id, t.id) : undefined}
+                      />
                     ))
                   ) : (
                     <div className="text-xs text-gray-400">No transactions mapped.</div>
@@ -355,16 +384,11 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
                         autoFocus
                       />
                       <div className="max-h-48 overflow-y-auto border rounded">
-                        {filteredTx.slice(0, 50).map((t) => (
-                          <div
-                            key={t.id}
-                            className="flex justify-between items-center px-2 py-1.5 hover:bg-purple-50 cursor-pointer text-xs border-b border-gray-100"
-                            onClick={(e) => { e.stopPropagation(); handleMap(mapTarget, t.id); }}
-                          >
-                            <span className="text-gray-700 truncate flex-1">{t.description || t.categoryName}</span>
-                            <span className="text-gray-500 mx-2 shrink-0">{t.date?.slice(0, 10)}</span>
-                            <span className="font-medium text-gray-800 shrink-0">{fmt(t.amount)}</span>
-                          </div>
+                        {sortByDateDesc(filteredTx).slice(0, 50).map((t) => (
+                          <TxRow key={t.id} t={t}
+                            hoverClass="hover:bg-purple-50"
+                            onAction={() => handleMap(mapTarget, t.id)}
+                          />
                         ))}
                         {filteredTx.length === 0 && (
                           <div className="text-center text-gray-400 py-4 text-xs">No transactions found</div>
@@ -485,13 +509,12 @@ function PredictionRow({ p, onUpdatePrediction, transactions, isIncome, globalMa
               {linkedData.actualTransactions?.length > 0 ? (
                 <div>
                   <div className="text-xs font-semibold text-gray-600 mb-1">Mapped Actual Transactions</div>
-                  {linkedData.actualTransactions.map((t) => (
-                    <div key={t.id} className="flex justify-between items-center text-xs py-1 border-b border-gray-100">
-                      <span className="text-gray-700">{t.description || t.categoryName}</span>
-                      <span className="text-gray-500">{t.date?.slice(0, 10)}</span>
-                      <span className="font-medium">{fmt(t.amount)}</span>
-                      {isPast && <button onClick={() => handleUnmap(t.id)} className="text-red-500 hover:underline text-xs ml-2">Unmap</button>}
-                    </div>
+                  {sortByDateDesc(linkedData.actualTransactions).map((t) => (
+                    <TxRow key={t.id} t={t}
+                      actionLabel={isPast ? "Unmap" : undefined}
+                      actionClass="text-red-500 hover:underline"
+                      onAction={isPast ? () => handleUnmap(t.id) : undefined}
+                    />
                   ))}
                 </div>
               ) : (
@@ -520,16 +543,11 @@ function PredictionRow({ p, onUpdatePrediction, transactions, isIncome, globalMa
                       autoFocus
                     />
                     <div className="max-h-48 overflow-y-auto border rounded">
-                      {filteredTx.slice(0, 50).map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex justify-between items-center px-2 py-1.5 hover:bg-blue-50 cursor-pointer text-xs border-b border-gray-100"
-                          onClick={(e) => { e.stopPropagation(); handleMapActual(t.id); }}
-                        >
-                          <span className="text-gray-700 truncate flex-1">{t.description || t.categoryName}</span>
-                          <span className="text-gray-500 mx-2 shrink-0">{t.date?.slice(0, 10)}</span>
-                          <span className="font-medium text-gray-800 shrink-0">{fmt(t.amount)}</span>
-                        </div>
+                      {sortByDateDesc(filteredTx).slice(0, 50).map((t) => (
+                        <TxRow key={t.id} t={t}
+                          hoverClass="hover:bg-blue-50"
+                          onAction={() => handleMapActual(t.id)}
+                        />
                       ))}
                       {filteredTx.length === 0 && (
                         <div className="text-center text-gray-400 py-4 text-xs">No transactions found</div>
