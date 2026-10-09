@@ -197,7 +197,9 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
     ...Object.values(linkedRecurringMap).flatMap((d) => (d?.actualTransactions || []).map((t) => t.id)),
   ]);
 
-  const filteredTx = transactions.filter((t) => {
+  const categoryTx = transactions.filter((t) => t.categoryId === rulePred.categoryId);
+  const txPool = categoryTx.length > 0 ? categoryTx : transactions;
+  const filteredTx = txPool.filter((t) => {
     if (allMappedIds.has(t.id)) return false;
     if (globalMappedIds?.has(t.id)) return false;
     return !txSearch ||
@@ -377,7 +379,7 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
                       </div>
                       <input
                         className="w-full border px-2 py-1 rounded text-xs mb-2"
-                        placeholder="Search transactions..."
+                        placeholder="Search in this category..."
                         value={txSearch}
                         onChange={(e) => setTxSearch(e.target.value)}
                         onClick={(e) => e.stopPropagation()}
@@ -440,7 +442,9 @@ function PredictionRow({ p, onUpdatePrediction, transactions, isIncome, globalMa
   const isOver = actual > predicted;
 
   const mappedIds = new Set((linkedData?.actualTransactions || []).map((m) => m.id));
-  const filteredTx = transactions.filter((t) => {
+  const categoryTx = transactions.filter((t) => t.categoryId === p.categoryId);
+  const txPool = categoryTx.length > 0 ? categoryTx : transactions;
+  const filteredTx = txPool.filter((t) => {
     if (mappedIds.has(t.id)) return false;
     if (globalMappedIds?.has(t.id)) return false;
     return !txSearch ||
