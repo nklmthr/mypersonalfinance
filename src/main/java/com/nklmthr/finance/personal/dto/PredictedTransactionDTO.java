@@ -33,5 +33,7 @@ public class PredictedTransactionDTO {
 	private String calculationDate;
 	private int basedOnTransactionCount;
 	private boolean visible;
+	private boolean manualOverride;
+	private BigDecimal manualOverrideOriginalAmount;
 }
 

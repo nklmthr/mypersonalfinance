@@ -5,7 +5,6 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -19,13 +18,11 @@ import com.nklmthr.finance.personal.model.AccountTransaction;
 import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.PredictedTransaction;
-import com.nklmthr.finance.personal.model.PredictionActualTxnMapping;
 import com.nklmthr.finance.personal.model.PredictionHistoricalTxnMapping;
 import com.nklmthr.finance.personal.model.PredictionRule;
 import com.nklmthr.finance.personal.model.RecurringTransaction;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
 import com.nklmthr.finance.personal.repository.PredictedTransactionRepository;
-import com.nklmthr.finance.personal.repository.PredictionActualTxnMappingRepository;
 import com.nklmthr.finance.personal.repository.PredictionHistoricalTxnMappingRepository;
 import com.nklmthr.finance.personal.repository.PredictionRuleRepository;
 import com.nklmthr.finance.personal.repository.RecurringTransactionRepository;
@@ -33,52 +30,6 @@ import com.nklmthr.finance.personal.repository.RecurringTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * TODO(prediction-concurrency): The prediction running totals are derived data
- * that we currently denormalize into mutable counters on {@link PredictedTransaction}
- * ({@code actualSpent} / {@code remainingAmount}) and rebuild via delete-then-insert
- * on {@code prediction_actual_txn_mapping}. This is race-prone under any genuine
- * concurrency (e.g. {@link com.nklmthr.finance.personal.scheduler.ConfigurableDataExtractionService}
- * importing a transaction while the user edits another in the same category, or
- * the same user editing from multiple browser tabs). Three known gaps:
- *
- *   1. NO OPTIMISTIC LOCKING. {@link PredictedTransaction} has no {@code @Version}.
- *      Two concurrent flows that both read {@code actualSpent = X} and write
- *      {@code X.add(amountA)} / {@code X.add(amountB)} silently lose one update —
- *      the row ends up with the wrong total, no exception thrown.
- *      Quick fix: add {@code @Version Long version} to PredictedTransaction and
- *      let callers retry on {@link org.springframework.orm.ObjectOptimisticLockingFailureException}.
- *
- *   2. DELETE-THEN-INSERT ON A UNIQUE-KEYED TABLE.
- *      {@link #adjustPredictionForActualTransaction} calls
- *      {@link #removePredictionAdjustmentForTransaction} (which deletes mapping
- *      rows) and then re-inserts new rows. {@code prediction_actual_txn_mapping}
- *      has a unique index on {@code (predicted_transaction_id, actual_transaction_id)},
- *      so under InnoDB this acquires gap locks on the unique index and is the
- *      classic deadlock recipe (SQLState 40001 / Error 1213). The duplicate UI
- *      PUTs that hit production on 2026-06-02 surfaced this; the cron-driven
- *      email/SMS extractor concurrent with a user edit will too.
- *      Fix: replace delete + insert with an upsert (MERGE / INSERT ... ON DUPLICATE
- *      KEY UPDATE), so the operation is a single idempotent statement.
- *
- *   3. {@code @Transactional(noRollbackFor = Exception.class)} BELOW IS MISLEADING.
- *      The intent (per its Javadoc) is "don't let prediction failures roll back
- *      the caller's account_transaction save". But the failing INSERT is queued
- *      in the persistence context and only executes during the OUTER transaction's
- *      commit/flush — after {@code AccountTransactionService.applyPredictionAdjustment}'s
- *      catch block has already returned. The outer transaction is therefore still
- *      marked rollback-only on a deadlock, and the user-facing transaction save
- *      is also lost. The 2026-06-02 incident only "looked fine" because the
- *      duplicate edits were no-ops. Fix: address (1) and (2); the noRollbackFor
- *      guard becomes meaningful once the inner write can no longer fail at flush.
- *
- *   PREFERRED LONG-TERM FIX: stop denormalizing {@code actualSpent} /
- *   {@code remainingAmount} entirely. Compute them on read via
- *   {@code SUM(amount_applied)} over {@code prediction_actual_txn_mapping} (or
- *   {@code SUM} over {@code account_transaction} filtered by category descendants
- *   + month). This removes the shared mutable row, makes the whole flow naturally
- *   idempotent, and obviates the need for both @Version and the upsert.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -89,7 +40,6 @@ public class PredictionService {
 	private final AccountTransactionRepository accountTransactionRepository;
 	private final AppUserService appUserService;
 	private final PredictionHistoricalTxnMappingRepository historicalMappingRepository;
-	private final PredictionActualTxnMappingRepository actualMappingRepository;
 	private final CategoryService categoryService;
 	private final RecurringTransactionRepository recurringTransactionRepository;
 
@@ -147,8 +97,6 @@ public class PredictionService {
 			for (PredictedTransaction prediction : predictions) {
 				// Delete historical mappings
 				historicalMappingRepository.deleteByPredictedTransaction(prediction);
-				// Delete actual mappings
-				actualMappingRepository.deleteByPredictedTransaction(prediction);
 			}
 			
 			// Now delete predicted transactions
@@ -213,13 +161,12 @@ public class PredictionService {
 				PredictedTransaction existingPrediction = existingPredictionOpt.get();
 				// Delete mappings first (cascade should handle this, but being explicit)
 				historicalMappingRepository.deleteByPredictedTransaction(existingPrediction);
-				actualMappingRepository.deleteByPredictedTransaction(existingPrediction);
 				predictedTransactionRepository.delete(existingPrediction);
 				// Force flush to ensure deletion is committed before inserting new prediction
 				predictedTransactionRepository.flush();
 				log.debug("Deleted existing prediction for rule {} and month {}", ruleId, monthString);
 			}
-			
+
 			// Calculate and create new prediction
 			PredictedTransaction prediction = calculatePrediction(rule.getAppUser(), rule, targetMonth);
 			if (prediction == null) {
@@ -231,15 +178,6 @@ public class PredictionService {
 				PredictedTransaction savedPrediction = predictedTransactionRepository.save(prediction);
 				// Then create historical mappings
 				createHistoricalMappings(savedPrediction, rule, targetMonth);
-
-				// Automatically recalculate actual transactions for this month
-				try {
-					recalculatePredictionsForMonth(monthString);
-					log.info("Auto-recalculated actual transactions for prediction month {}", monthString);
-				} catch (Exception e) {
-					log.warn("Failed to auto-recalculate actual transactions for month {}: {}",
-						monthString, e.getMessage());
-				}
 			}
 		}
 	}
@@ -428,115 +366,6 @@ public class PredictionService {
 	}
 
 	/**
-	 * Adjust predicted transaction when an actual transaction is added or updated.
-	 * Reduces remainingAmount and increases actualSpent.
-	 *
-	 * Idempotent: any prior adjustment recorded for this transaction (e.g. from a
-	 * previous save with a different category/amount) is reversed first so we never
-	 * double-count when this method is invoked from create, update, split, or import flows.
-	 *
-	 * {@code noRollbackFor = Exception.class} ensures any failure inside prediction
-	 * bookkeeping cannot mark the caller's transaction as rollback-only. The caller
-	 * ({@code AccountTransactionService.applyPredictionAdjustment}) already swallows
-	 * exceptions so the underlying transaction save stays committed.
-	 *
-	 * TODO(prediction-concurrency): see class-level TODOs (gaps 2 and 3). The
-	 * delete-then-insert pattern via {@link #removePredictionAdjustmentForTransaction}
-	 * + {@code actualMappingRepository.save(...)} below is what deadlocks under
-	 * concurrent edits, and {@code noRollbackFor} cannot rescue a flush-time
-	 * deadlock — by then the outer transaction is already rollback-only.
-	 */
-	@Transactional(noRollbackFor = Exception.class)
-	public void adjustPredictionForActualTransaction(AccountTransaction actualTransaction) {
-		// Reverse any existing adjustment for this transaction first so the method is
-		// safe to call from update flows (e.g. user changed category or amount).
-		removePredictionAdjustmentForTransaction(actualTransaction);
-
-		// Get the transaction's year-month
-		LocalDateTime txDate = actualTransaction.getDate();
-		YearMonth txMonth = YearMonth.from(txDate);
-		String monthString = txMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
-		
-		// Collect ALL applicable predictions: exact category match + any ancestor-rule matches
-		// This ensures a transaction in "Vegetables" also reduces the "Grocery" parent prediction.
-		// Use the transaction's own appUser instead of pulling from the security context so that
-		// scheduled flows (email/SMS extraction, etc.) which run without an HTTP auth context
-		// can still walk the category ancestor chain.
-		AppUser appUser = actualTransaction.getAppUser();
-		List<PredictedTransaction> predictions = new ArrayList<>();
-		predictions.addAll(predictedTransactionRepository
-			.findByAppUserAndCategoryAndPredictionMonth(
-				appUser,
-				actualTransaction.getCategory(),
-				monthString
-			));
-
-		String parentId = actualTransaction.getCategory().getParent();
-		while (parentId != null) {
-			Category parentCategory = categoryService.getCategoryById(appUser, parentId);
-			if (parentCategory == null) break;
-			predictions.addAll(predictedTransactionRepository
-				.findByAppUserAndCategoryAndPredictionMonth(
-					appUser,
-					parentCategory,
-					monthString
-				));
-			parentId = parentCategory.getParent();
-		}
-
-		if (predictions.isEmpty()) {
-			log.debug("No prediction found for category {} or its ancestors in month {}",
-				actualTransaction.getCategory().getName(), monthString);
-			return;
-		}
-
-		for (PredictedTransaction prediction : predictions) {
-			// Only adjust for transactions of the same type (DEBIT/CREDIT)
-			if (!prediction.getTransactionType().equals(actualTransaction.getType())) {
-				continue;
-			}
-
-			BigDecimal txAmount = actualTransaction.getAmount();
-
-			// Update actual spent
-			BigDecimal newActualSpent = prediction.getActualSpent().add(txAmount);
-			prediction.setActualSpent(newActualSpent);
-
-			// Update remaining amount
-			BigDecimal newRemaining = prediction.getPredictedAmount().subtract(newActualSpent);
-			prediction.setRemainingAmount(newRemaining);
-
-			// TODO(prediction-concurrency, gap 1): read-modify-write on a counter
-			// without @Version on PredictedTransaction. Two concurrent flows can
-			// both read actualSpent=X and write X+amountA / X+amountB, silently
-			// losing one update. Add @Version to PredictedTransaction (or compute
-			// these on read; see class-level TODO) before relying on these totals.
-			predictedTransactionRepository.save(prediction);
-
-			// Create mapping to track this actual transaction
-			// TODO(prediction-concurrency, gap 2): this insert, paired with the
-			// preceding deleteByActualTransaction, races against the unique index
-			// on (predicted_transaction_id, actual_transaction_id) under InnoDB
-			// and produces SQLState 40001 / Error 1213 deadlocks. Replace with an
-			// upsert (INSERT ... ON DUPLICATE KEY UPDATE) once we move off the
-			// delete-then-insert pattern.
-			PredictionActualTxnMapping actualMapping = PredictionActualTxnMapping.builder()
-				.predictedTransaction(prediction)
-				.actualTransaction(actualTransaction)
-				.amountApplied(txAmount)
-				.build();
-			actualMappingRepository.save(actualMapping);
-
-			log.info("Adjusted prediction for category {} in {}: predicted={}, actual={}, remaining={}",
-				prediction.getCategory().getName(),
-				monthString,
-				prediction.getPredictedAmount(),
-				newActualSpent,
-				newRemaining);
-		}
-	}
-
-	/**
 	 * Check if a prediction rule exists for a category
 	 */
 	public boolean ruleExistsForCategory(Category category) {
@@ -552,109 +381,6 @@ public class PredictionService {
 		return predictionRuleRepository.findByAppUserAndCategory(user, category);
 	}
 	
-	/**
-	 * Remove transaction from prediction when deleting the transaction
-	 * This reverses the adjustment made when the transaction was created
-	 */
-	@Transactional
-	public void removePredictionAdjustmentForTransaction(AccountTransaction transaction) {
-		// Find if this transaction is mapped to any prediction
-		List<PredictionActualTxnMapping> mappings = actualMappingRepository
-			.findByActualTransaction(transaction);
-		
-		if (mappings.isEmpty()) {
-			log.debug("No prediction mappings found for transaction {}", transaction.getId());
-			return;
-		}
-		
-		for (PredictionActualTxnMapping mapping : mappings) {
-			PredictedTransaction prediction = mapping.getPredictedTransaction();
-			BigDecimal txAmount = mapping.getAmountApplied();
-			
-			// Reverse the adjustment
-			BigDecimal newActualSpent = prediction.getActualSpent().subtract(txAmount);
-			prediction.setActualSpent(newActualSpent);
-			
-			BigDecimal newRemaining = prediction.getPredictedAmount().subtract(newActualSpent);
-			prediction.setRemainingAmount(newRemaining);
-			
-			predictedTransactionRepository.save(prediction);
-			
-			log.info("Reversed prediction adjustment for category {} in {}: removed ₹{}, new remaining: ₹{}", 
-				prediction.getCategory().getName(), 
-				prediction.getPredictionMonth(),
-				txAmount,
-				newRemaining);
-		}
-		
-		// Delete the mappings
-		actualMappingRepository.deleteByActualTransaction(transaction);
-	}
-
-	/**
-	 * Recalculate all predictions for a specific month by reapplying actual transactions
-	 * Useful for fixing predictions after data imports or bulk updates
-	 */
-	@Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-	public void recalculatePredictionsForMonth(String month) {
-		AppUser user = appUserService.getCurrentUser();
-		
-		// Get all predictions for this month
-		List<PredictedTransaction> predictions = predictedTransactionRepository
-			.findByAppUserAndPredictionMonthAndVisibleTrue(user, month);
-		
-		if (predictions.isEmpty()) {
-			log.info("No predictions found for month {}", month);
-			return;
-		}
-		
-		for (PredictedTransaction prediction : predictions) {
-			// Skip recurring-only predictions — they have no rule, handled separately
-			if (prediction.getPredictionRule() == null) continue;
-
-			// Reset actualSpent and remainingAmount
-			prediction.setActualSpent(BigDecimal.ZERO);
-			prediction.setRemainingAmount(prediction.getPredictedAmount());
-
-			// Delete existing actual transaction mappings and flush so re-inserts don't hit duplicate key
-			actualMappingRepository.deleteByPredictedTransaction(prediction);
-			actualMappingRepository.flush();
-
-			// Get all actual transactions across this category and all descendants
-			YearMonth targetMonth = YearMonth.parse(month);
-			LocalDateTime startDate = targetMonth.atDay(1).atStartOfDay();
-			LocalDateTime endDate = targetMonth.atEndOfMonth().atTime(23, 59, 59);
-			String ruleCategoryId = prediction.getPredictionRule().getCategory().getId();
-			Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(user, ruleCategoryId);
-			List<AccountTransaction> actualTxns = accountTransactionRepository
-				.findByAppUserAndCategoryIdsAndDateBetween(user, categoryIds, startDate, endDate);
-			
-			// Filter by transaction type to match prediction
-			List<AccountTransaction> matchingTxns = actualTxns.stream()
-				.filter(txn -> txn.getType() == prediction.getTransactionType())
-				.toList();
-			
-			// Apply each transaction
-			for (AccountTransaction txn : matchingTxns) {
-				BigDecimal txAmount = txn.getAmount();
-				prediction.setActualSpent(prediction.getActualSpent().add(txAmount));
-				prediction.setRemainingAmount(prediction.getPredictedAmount().subtract(prediction.getActualSpent()));
-				
-				// Create mapping
-				PredictionActualTxnMapping mapping = PredictionActualTxnMapping.builder()
-					.predictedTransaction(prediction)
-					.actualTransaction(txn)
-					.amountApplied(txAmount)
-					.build();
-				actualMappingRepository.save(mapping);
-			}
-			
-			predictedTransactionRepository.save(prediction);
-			log.info("Recalculated prediction for category {} in month {}: {} transactions applied, remaining: {}",
-				prediction.getCategory().getName(), month, matchingTxns.size(), prediction.getRemainingAmount());
-		}
-	}
-
 	/**
 	 * Generate predictions for the next N months based on enabled rules
 	 */
@@ -730,29 +456,16 @@ public class PredictionService {
 			PredictedTransaction existingPrediction = existingPredictionOpt.get();
 			// Delete mappings first (cascade should handle this, but being explicit)
 			historicalMappingRepository.deleteByPredictedTransaction(existingPrediction);
-			actualMappingRepository.deleteByPredictedTransaction(existingPrediction);
 			predictedTransactionRepository.delete(existingPrediction);
-			// Force flush to ensure deletion is committed before inserting new prediction
 			predictedTransactionRepository.flush();
 			log.debug("Deleted existing prediction for rule {} and month {}", ruleId, monthString);
 		}
-		
+
 		// Calculate and create new prediction
 		PredictedTransaction prediction = calculatePrediction(rule.getAppUser(), rule, targetMonth);
 		if (prediction != null) {
-			// Save prediction first
 			PredictedTransaction savedPrediction = predictedTransactionRepository.save(prediction);
-			// Then create historical mappings
 			createHistoricalMappings(savedPrediction, rule, targetMonth);
-			
-			// Automatically recalculate actual transactions for this month
-			try {
-				recalculatePredictionsForMonth(monthString);
-				log.info("Auto-recalculated actual transactions for prediction month {}", monthString);
-			} catch (Exception e) {
-				log.warn("Failed to auto-recalculate actual transactions for month {}: {}", 
-					monthString, e.getMessage());
-			}
 		}
 	}
 	

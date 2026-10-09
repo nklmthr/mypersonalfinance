@@ -6,7 +6,6 @@ import "nprogress/nprogress.css";
 import SearchSelect from "./transactions/components/SearchSelect";
 import { buildTree, flattenCategories } from "./transactions/utils/utils";
 import { useErrorModal } from "../auth/ErrorModalContext";
-
 const RECURRENCE_TYPES = [
   { value: "MONTHLY", label: "Monthly" },
   { value: "QUARTERLY", label: "Quarterly (Jan/Apr/Jul/Oct)" },
@@ -209,16 +208,14 @@ function RecurringForm({ form, setForm, flattened, onSave, onCancel }) {
 
 export default function PredictionRules() {
   const navigate = useNavigate();
-  const { showModal } = useErrorModal();
   const [rules, setRules] = useState([]);
   const [categories, setCategories] = useState([]);
   const [recurringList, setRecurringList] = useState([]);
-  const [autoPredictions, setAutoPredictions] = useState([]);
+  const [predByCategory, setPredByCategory] = useState({}); // categoryId → prediction (all types)
   const [loading, setLoading] = useState(false);
-  const [editRule, setEditRule] = useState(null);
-  const [deleteConfirmation, setDeleteConfirmation] = useState(null);
   const [editRecurring, setEditRecurring] = useState(null);
   const [deleteRecurringId, setDeleteRecurringId] = useState(null);
+  const [overrideEdit, setOverrideEdit] = useState({}); // predId → draft amount string
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -230,8 +227,12 @@ export default function PredictionRules() {
     const targetMonth = `${year}-${String(month).padStart(2, "0")}`;
     try {
       const res = await api.get(`/predicted-transactions?month=${targetMonth}`);
-      const auto = res.data.filter(p => !p.predictionRuleId && !p.recurringTransactionId);
-      setAutoPredictions(auto);
+      // Index by categoryId — last writer wins (rule takes priority, recurring ignored here)
+      const map = {};
+      for (const p of res.data) {
+        if (!p.recurringTransactionId) map[p.categoryId] = p;
+      }
+      setPredByCategory(map);
     } catch (err) {
       console.error("Failed to fetch predictions:", err);
     }
@@ -273,77 +274,6 @@ export default function PredictionRules() {
   useEffect(() => {
     fetchPredictions(selectedMonth, selectedYear);
   }, [selectedMonth, selectedYear]);
-
-  const saveRule = async (rule) => {
-    setLoading(true);
-    NProgress.start();
-    try {
-      const payload = {
-        categoryId: rule.categoryId,
-        predictionType: rule.predictionType,
-        enabled: rule.enabled,
-        lookbackMonths: rule.lookbackMonths || 3,
-        specificMonth: rule.specificMonth || null,
-      };
-      if (rule.id) {
-        await api.put(`/prediction-rules/${rule.id}`, payload);
-      } else {
-        await api.post("/prediction-rules", payload);
-      }
-      await fetchData();
-      setEditRule(null);
-    } catch (err) {
-      console.error("Failed to save prediction rule:", err);
-    } finally {
-      NProgress.done();
-      setLoading(false);
-    }
-  };
-
-  const deleteRule = async (id) => {
-    setDeleteConfirmation(null);
-    setLoading(true);
-    NProgress.start();
-    try {
-      await api.delete(`/prediction-rules/${id}`);
-      await fetchData();
-    } catch (err) {
-      console.error("Failed to delete prediction rule:", err);
-    } finally {
-      NProgress.done();
-      setLoading(false);
-    }
-  };
-
-  const regeneratePredictions = async (id) => {
-    setLoading(true);
-    NProgress.start();
-    try {
-      const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
-      await api.post(`/prediction-rules/${id}/regenerate?targetMonth=${targetMonth}`);
-      showModal(`Predictions regenerated for ${getMonthName(selectedMonth)} ${selectedYear}!`);
-    } catch (err) {
-      console.error("Failed to regenerate predictions:", err);
-    } finally {
-      NProgress.done();
-      setLoading(false);
-    }
-  };
-
-  const generateAllPredictions = async () => {
-    setLoading(true);
-    NProgress.start();
-    try {
-      const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
-      await api.post(`/prediction-rules/generate-all?targetMonth=${targetMonth}`);
-      showModal(`Predictions generated for ${getMonthName(selectedMonth)} ${selectedYear}!`);
-    } catch (err) {
-      console.error("Failed to generate predictions:", err);
-    } finally {
-      NProgress.done();
-      setLoading(false);
-    }
-  };
 
   const generateAllCategories = async () => {
     setLoading(true);
@@ -436,34 +366,57 @@ export default function PredictionRules() {
     ruleByCategory[rule.categoryId] = rule;
   }
 
-  // Index auto-predictions (no rule, no recurring) by categoryId
-  const autoPredByCategory = {};
-  for (const p of autoPredictions) {
-    autoPredByCategory[p.categoryId] = p;
-  }
+  const autoPredictions = Object.values(predByCategory).filter(p => !p.predictionRuleId);
 
   const deleteAutoPrediction = async (id) => {
     try {
       await api.delete(`/predicted-transactions/${id}`);
-      setAutoPredictions(prev => prev.filter(p => p.id !== id));
+      setPredByCategory(prev => {
+        const next = { ...prev };
+        for (const k of Object.keys(next)) { if (next[k].id === id) delete next[k]; }
+        return next;
+      });
     } catch (err) {
       console.error("Failed to delete prediction:", err);
     }
   };
 
   const deleteAllAutoPredictions = async () => {
-    if (!window.confirm(`Delete all auto-generated predictions for ${getMonthName(selectedMonth)} ${selectedYear}? Rule-based and recurring predictions will not be affected.`)) return;
+    if (!window.confirm(`Delete all auto-generated predictions for ${getMonthName(selectedMonth)} ${selectedYear}?`)) return;
     const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
     setLoading(true);
     NProgress.start();
     try {
       await api.delete(`/predicted-transactions/auto-generated?month=${targetMonth}`);
-      setAutoPredictions([]);
+      setPredByCategory(prev => {
+        const next = {};
+        for (const [k, v] of Object.entries(prev)) { if (v.predictionRuleId) next[k] = v; }
+        return next;
+      });
     } catch (err) {
       console.error("Failed to delete all auto predictions:", err);
     } finally {
       NProgress.done();
       setLoading(false);
+    }
+  };
+
+  const handleOverride = async (pred, amount) => {
+    try {
+      const res = await api.patch(`/predicted-transactions/${pred.id}/override?amount=${amount}`);
+      setPredByCategory(prev => ({ ...prev, [pred.categoryId]: res.data }));
+      setOverrideEdit(prev => { const n = { ...prev }; delete n[pred.id]; return n; });
+    } catch (err) {
+      console.error("Failed to override prediction:", err);
+    }
+  };
+
+  const handleResetOverride = async (pred) => {
+    try {
+      const res = await api.delete(`/predicted-transactions/${pred.id}/override`);
+      setPredByCategory(prev => ({ ...prev, [pred.categoryId]: res.data }));
+    } catch (err) {
+      console.error("Failed to reset override:", err);
     }
   };
 
@@ -480,14 +433,19 @@ export default function PredictionRules() {
   const renderCategoryRuleTree = (nodes, depth = 0) => {
     return nodes.map((cat) => {
       const rule = ruleByCategory[cat.id];
-      const autoPred = autoPredByCategory[cat.id];
+      const pred = predByCategory[cat.id]; // prediction for this month (rule or auto)
+      const isAuto = pred && !pred.predictionRuleId;
       const hasChildren = cat.children && cat.children.length > 0;
-      const hasAnything = rule || autoPred;
+      const hasAnything = rule || pred;
+
+      const isEditing = pred && overrideEdit[pred.id] !== undefined;
+      const draftAmt = pred ? (overrideEdit[pred.id] ?? "") : "";
+
       return (
         <div key={cat.id} style={{ marginLeft: depth * 16 }}>
-          <div className={`flex items-center justify-between py-1.5 px-3 rounded text-sm border-l-2 ${rule ? "border-blue-400 bg-blue-50" : autoPred ? "border-orange-300 bg-orange-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}>
+          <div className={`flex items-center justify-between py-1.5 px-3 rounded text-sm border-l-2 ${rule ? "border-blue-400 bg-blue-50" : pred ? "border-orange-300 bg-orange-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}>
             {/* Left: name + metadata */}
-            <div className="flex items-center gap-4 min-w-0 flex-1 mr-4">
+            <div className="flex items-center gap-4 min-w-0 flex-1 mr-4 flex-wrap">
               <span className={`font-medium truncate ${hasAnything ? "text-gray-800" : "text-gray-400"}`}>
                 {cat.name}
                 {hasChildren && <span className="ml-1 text-xs text-gray-400">({cat.children.length})</span>}
@@ -504,28 +462,72 @@ export default function PredictionRules() {
                   </span>
                 </>
               )}
-              {!rule && autoPred && (
-                <>
-                  <span className="text-xs text-orange-600 font-medium whitespace-nowrap">Auto-generated</span>
-                  <span className="text-gray-500 text-xs whitespace-nowrap">
-                    ₹{parseFloat(autoPred.predictedAmount).toLocaleString("en-IN")}
-                  </span>
-                  <span className="text-gray-500 text-xs whitespace-nowrap">{autoPred.transactionType}</span>
-                </>
+              {isAuto && (
+                <span className="text-xs text-orange-600 font-medium whitespace-nowrap">Auto-generated</span>
               )}
+
+              {/* Amount + override UI — shown when a prediction exists for this month */}
+              {pred && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {isEditing ? (
+                    <>
+                      <span className="text-gray-400 text-xs">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        className="border rounded px-1.5 py-0.5 w-28 text-xs"
+                        value={draftAmt}
+                        autoFocus
+                        onChange={(e) => setOverrideEdit(prev => ({ ...prev, [pred.id]: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && draftAmt !== "") handleOverride(pred, draftAmt);
+                          if (e.key === "Escape") setOverrideEdit(prev => { const n = { ...prev }; delete n[pred.id]; return n; });
+                        }}
+                      />
+                      <button
+                        onClick={() => draftAmt !== "" && handleOverride(pred, draftAmt)}
+                        disabled={draftAmt === ""}
+                        className="text-xs bg-green-600 text-white px-2 py-0.5 rounded hover:bg-green-700 disabled:opacity-40"
+                      >✓</button>
+                      <button
+                        onClick={() => setOverrideEdit(prev => { const n = { ...prev }; delete n[pred.id]; return n; })}
+                        className="text-xs text-gray-400 hover:text-gray-600"
+                      >✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`text-xs font-medium whitespace-nowrap ${pred.manualOverride ? "text-amber-700" : "text-gray-600"}`}>
+                        ₹{parseFloat(pred.predictedAmount).toLocaleString("en-IN")}
+                      </span>
+                      {pred.manualOverride && (
+                        <>
+                          <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded whitespace-nowrap">Overridden</span>
+                          <span className="text-xs text-gray-400 whitespace-nowrap">
+                            (was ₹{parseFloat(pred.manualOverrideOriginalAmount).toLocaleString("en-IN")})
+                          </span>
+                          <button
+                            onClick={() => handleResetOverride(pred)}
+                            className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                          >Reset</button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => setOverrideEdit(prev => ({ ...prev, [pred.id]: String(parseFloat(pred.predictedAmount).toFixed(0)) }))}
+                        className="text-xs text-gray-400 hover:text-amber-600 whitespace-nowrap"
+                        title="Override predicted amount for this month"
+                      >✎ Override</button>
+                    </>
+                  )}
+                </div>
+              )}
+
               {!hasAnything && <span className="text-gray-300 text-xs italic">no rule</span>}
             </div>
             {/* Right: action buttons */}
             <div className="flex gap-3 shrink-0">
-              {rule && (
-                <>
-                  <button onClick={() => regeneratePredictions(rule.id)} className="text-purple-600 hover:underline text-xs whitespace-nowrap">Regenerate</button>
-                  <button onClick={() => setEditRule({ ...rule })} className="text-blue-600 hover:underline text-xs">Edit</button>
-                  <button onClick={() => setDeleteConfirmation(rule.id)} className="text-red-600 hover:underline text-xs">Delete Rule</button>
-                </>
-              )}
-              {!rule && autoPred && (
-                <button onClick={() => deleteAutoPrediction(autoPred.id)} className="text-red-600 hover:underline text-xs">Delete</button>
+              {isAuto && pred && (
+                <button onClick={() => deleteAutoPrediction(pred.id)} className="text-red-600 hover:underline text-xs">Delete</button>
               )}
             </div>
           </div>
@@ -564,12 +566,6 @@ export default function PredictionRules() {
             </select>
           </div>
           <button
-            onClick={generateAllPredictions}
-            className="bg-purple-600 text-white px-4 py-2 rounded text-sm shadow hover:bg-purple-700"
-          >
-            Generate Predictions
-          </button>
-          <button
             onClick={generateAllCategories}
             className="bg-indigo-600 text-white px-4 py-2 rounded text-sm shadow hover:bg-indigo-700"
           >
@@ -583,21 +579,6 @@ export default function PredictionRules() {
               Delete All Auto ({autoPredictions.length})
             </button>
           )}
-          <button
-            onClick={() =>
-              setEditRule({
-                id: null,
-                categoryId: "",
-                predictionType: "MONTHLY",
-                enabled: true,
-                lookbackMonths: 3,
-                specificMonth: null,
-              })
-            }
-            className="bg-green-500 text-white px-4 py-2 rounded text-sm shadow hover:bg-green-600"
-          >
-            Add Rule
-          </button>
         </div>
       </div>
 
@@ -677,87 +658,6 @@ export default function PredictionRules() {
         </div>
       </div>
 
-      {/* Edit Rule Modal */}
-      {editRule && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              {editRule.id ? "Edit Prediction Rule" : "Create Prediction Rule"}
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <SearchSelect
-                  options={flattened.map((c) => ({ id: c.id, name: c.name }))}
-                  value={editRule.categoryId}
-                  onChange={(val) => setEditRule({ ...editRule, categoryId: val })}
-                  placeholder="Select Category"
-                  disabled={!!editRule.id}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prediction Type</label>
-                <select
-                  value={editRule.predictionType}
-                  onChange={(e) => setEditRule({ ...editRule, predictionType: e.target.value })}
-                  className="w-full border px-3 py-2 rounded"
-                >
-                  <option value="MONTHLY">Monthly</option>
-                  <option value="YEARLY">Yearly</option>
-                </select>
-              </div>
-              {editRule.predictionType === "YEARLY" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Specific Month</label>
-                  <select
-                    value={editRule.specificMonth || ""}
-                    onChange={(e) => setEditRule({ ...editRule, specificMonth: e.target.value ? parseInt(e.target.value) : null })}
-                    className="w-full border px-3 py-2 rounded"
-                  >
-                    <option value="">Select Month</option>
-                    {[...Array(12)].map((_, i) => (
-                      <option key={i + 1} value={i + 1}>{getMonthName(i + 1)}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Lookback Months</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="24"
-                  value={editRule.lookbackMonths}
-                  onChange={(e) => setEditRule({ ...editRule, lookbackMonths: parseInt(e.target.value) })}
-                  className="w-full border px-3 py-2 rounded"
-                />
-              </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={editRule.enabled}
-                  onChange={(e) => setEditRule({ ...editRule, enabled: e.target.checked })}
-                  className="mr-2"
-                />
-                <label className="text-sm text-gray-700">Enabled</label>
-              </div>
-            </div>
-            <div className="flex gap-2 justify-end mt-6">
-              <button onClick={() => setEditRule(null)} className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50">
-                Cancel
-              </button>
-              <button
-                onClick={() => saveRule(editRule)}
-                disabled={!editRule.categoryId}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Recurring Transaction Modal */}
       {editRecurring && (
         <RecurringForm
@@ -767,22 +667,6 @@ export default function PredictionRules() {
           onSave={saveRecurring}
           onCancel={() => setEditRecurring(null)}
         />
-      )}
-
-      {/* Delete Rule Confirmation */}
-      {deleteConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Delete Prediction Rule</h2>
-            <p className="text-gray-600 mb-6">
-              Are you sure? All associated predicted transactions will also be deleted.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setDeleteConfirmation(null)} className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">Cancel</button>
-              <button onClick={() => deleteRule(deleteConfirmation)} className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md">Delete</button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Delete Recurring Confirmation */}

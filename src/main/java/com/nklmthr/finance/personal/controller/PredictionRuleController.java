@@ -209,20 +209,5 @@ public class PredictionRuleController {
 		}
 	}
 
-	/**
-	 * Recalculate predictions for a specific month by reapplying actual transactions
-	 */
-	@PostMapping("/recalculate")
-	public ResponseEntity<?> recalculatePredictions(
-		@RequestParam String month
-	) {
-		try {
-			predictionService.recalculatePredictionsForMonth(month);
-			return ResponseEntity.ok().body("Predictions recalculated successfully for month " + month);
-		} catch (Exception e) {
-			log.error("Failed to recalculate predictions for month {}", month, e);
-			return ResponseEntity.badRequest().body("Failed to recalculate predictions: " + e.getMessage());
-		}
-	}
 }
 

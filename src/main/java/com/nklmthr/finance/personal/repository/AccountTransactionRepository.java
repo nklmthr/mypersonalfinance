@@ -310,5 +310,20 @@ public interface AccountTransactionRepository
 		@Param("appUser") AppUser appUser,
 		@Param("startDate") LocalDateTime startDate,
 		@Param("endDate") LocalDateTime endDate);
-	}
+
+	@Query("""
+		SELECT COALESCE(SUM(t.amount), 0)
+		FROM AccountTransaction t
+		WHERE t.appUser = :appUser
+		  AND t.category.id IN :categoryIds
+		  AND t.date >= :startDate
+		  AND t.date <= :endDate
+		  AND NOT EXISTS (SELECT 1 FROM AccountTransaction c WHERE c.parent = t.id)
+	""")
+	BigDecimal sumActualByCategoryIdsAndDateRange(
+		@Param("appUser") AppUser appUser,
+		@Param("categoryIds") Set<String> categoryIds,
+		@Param("startDate") LocalDateTime startDate,
+		@Param("endDate") LocalDateTime endDate);
+}
 

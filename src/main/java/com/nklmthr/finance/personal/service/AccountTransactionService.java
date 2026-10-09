@@ -86,9 +86,6 @@ public class AccountTransactionService {
 	com.nklmthr.finance.personal.mapper.LabelMapper labelMapper;
 	
 	@Autowired
-	private PredictionService predictionService;
-
-	@Autowired
 	private AttachmentRepository attachmentRepository;
 
 	@PersistenceContext
@@ -241,16 +238,6 @@ public class AccountTransactionService {
 			accountTransactionRepository.delete(child);
 		}
 
-		// Reverse any prediction contribution the parent transaction had before we
-		// re-categorise it to SPLIT, otherwise the prediction running totals will be
-		// stale (parent will no longer match the rule's category).
-		try {
-			predictionService.removePredictionAdjustmentForTransaction(parent);
-		} catch (Exception e) {
-			logger.warn("Failed to remove prediction adjustment for split parent {}: {}",
-				parent.getId(), e.getMessage());
-		}
-
 		// Set parent amount to the validated total and assign split category
 		parent.setAmount(restoredAmount);
 		parent.setCategory(categoryService.getSplitTrnsactionCategory());
@@ -274,12 +261,6 @@ public class AccountTransactionService {
 			parent.setAmount(parent.getAmount().subtract(st.amount()));
 
 			AccountTransaction savedChild = accountTransactionRepository.save(child);
-
-			// Keep prediction running totals in sync. The parent's prior contribution was
-			// already reversed above (its category now becomes SPLIT), so we need each
-			// child to feed back into the prediction of its own category (or any ancestor
-			// like Grocery) the same way a regular leaf transaction would.
-			applyPredictionAdjustment(savedChild);
 		}
 
 		// Parent amount should now be zero
@@ -476,10 +457,6 @@ public class AccountTransactionService {
 
 			AccountTransaction saved = accountTransactionRepository.save(existingTx);
 
-			// Recompute prediction running totals so edits to amount/category/date
-			// flow through to the matching predicted transaction. Idempotent.
-			applyPredictionAdjustment(saved);
-
 			return accountTransactionMapper.toDTO(saved);
 		});
 	}
@@ -524,28 +501,9 @@ public class AccountTransactionService {
 		accountRepository.save(account);
 		AccountTransaction saved = accountTransactionRepository.save(transaction);
 
-		// Keep prediction running totals in sync for any persistence path that lands here
-		// (auto email/SMS imports, uploaded statements, split children, DTO saves, ...).
-		// The call is idempotent so it's safe even when invoked again from outer flows.
-		applyPredictionAdjustment(saved);
-
 		return accountTransactionMapper.toDTO(saved);
 	}
 
-	/**
-	 * Run prediction adjustment for a freshly saved/updated transaction without
-	 * letting prediction failures break the underlying transaction save.
-	 */
-	private void applyPredictionAdjustment(AccountTransaction entity) {
-		if (entity == null || entity.getCategory() == null) {
-			return;
-		}
-		try {
-			predictionService.adjustPredictionForActualTransaction(entity);
-		} catch (Exception e) {
-			logger.warn("Failed to adjust prediction for transaction {}: {}", entity.getId(), e.getMessage());
-		}
-	}
 
 	@Transactional
 	public List<AccountTransactionDTO> save(List<AccountTransactionDTO> transactions) {
@@ -706,16 +664,7 @@ public class AccountTransactionService {
 			accountTransactionRepository.save(parent);
 		}
 	
-	// Remove prediction adjustments if this transaction was applied to any predictions
-	try {
-		predictionService.removePredictionAdjustmentForTransaction(existingTransaction);
-	} catch (Exception e) {
-		// Log but don't fail the delete if prediction adjustment removal fails
-		logger.warn("Failed to remove prediction adjustment for transaction {}: {}", 
-			existingTransaction.getId(), e.getMessage());
-	}
-	
-	accountTransactionRepository.deleteByAppUserAndId(appUser, id);
+		accountTransactionRepository.deleteByAppUserAndId(appUser, id);
 }
 
 	@Transactional
@@ -764,8 +713,7 @@ public class AccountTransactionService {
 			if (tx.getGptAccount() == null) {
 				tx.setGptAccount(tx.getAccount());
 			}
-			AccountTransaction saved = accountTransactionRepository.save(tx);
-			applyPredictionAdjustment(saved);
+			accountTransactionRepository.save(tx);
 			updated++;
 		}
 

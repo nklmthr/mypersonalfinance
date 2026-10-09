@@ -11,37 +11,6 @@ const fmt = (num) =>
     ? `₹${parseFloat(num).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
     : "–";
 
-function fmtDateTime(dateStr) {
-  if (!dateStr) return "–";
-  const d = new Date(dateStr);
-  if (isNaN(d)) return dateStr.slice(0, 16).replace("T", " ");
-  return d.toLocaleString("en-IN", {
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  });
-}
-
-function sortByDateDesc(txns) {
-  return [...txns].sort((a, b) => new Date(b.date ?? 0) - new Date(a.date ?? 0));
-}
-
-// Consistent grid row for both mapped-list and search-list
-function TxRow({ t, onAction, actionLabel, actionClass, hoverClass = "hover:bg-gray-50" }) {
-  return (
-    <div
-      className={`grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-2 py-1.5 text-xs border-b border-gray-100 ${hoverClass} ${onAction && !actionLabel ? "cursor-pointer" : ""}`}
-      onClick={!actionLabel && onAction ? (e) => { e.stopPropagation(); onAction(); } : undefined}
-    >
-      <span className="text-gray-700 truncate">{t.description || t.categoryName}</span>
-      <span className="text-gray-400 shrink-0 whitespace-nowrap">{fmtDateTime(t.date)}</span>
-      <span className="font-medium text-gray-800 shrink-0 text-right">{fmt(t.amount)}</span>
-      {actionLabel
-        ? <button className={`shrink-0 ${actionClass}`} onClick={(e) => { e.stopPropagation(); onAction(); }}>{actionLabel}</button>
-        : <span />}
-    </div>
-  );
-}
-
 function monthLabel(ym) {
   if (!ym) return "";
   const [year, month] = ym.split("-").map(Number);
@@ -100,22 +69,14 @@ function setStoredStrategy(categoryId, strategy, manualAmt) {
 
 // ── Merged row: rule prediction + one or more recurring obligations ───────────
 
-function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onStrategyChange, transactions, isIncome }) {
+function MergedPredictionRow({ rulePred, recurringList, onStrategyChange, isIncome }) {
   const categoryId = rulePred.categoryId;
   const initial = getStoredStrategy(categoryId);
   const [strategy, setStrategy] = useState(initial.strategy);
   const [manualAmt, setManualAmt] = useState(initial.manualAmt);
-  const [expanded, setExpanded] = useState(false);
   const [recurringExpanded, setRecurringExpanded] = useState(false);
-  const [showMapPanel, setShowMapPanel] = useState(false);
-  const [mapTarget, setMapTarget] = useState(null); // rulePred.id or a recurringPred.id
-  const [linkedRule, setLinkedRule] = useState(null);
-  const [linkedRecurringMap, setLinkedRecurringMap] = useState({}); // id → linked data
-  const [loadingRow, setLoadingRow] = useState(false);
-  const [txSearch, setTxSearch] = useState("");
 
   const ruleAmt = parseFloat(rulePred.predictedAmount ?? 0);
-  // Sum all recurring obligations for this category
   const recurringTotal = recurringList.reduce((s, p) => s + parseFloat(p.predictedAmount ?? 0), 0);
   const effectiveAmt = resolveEffectiveAmount(ruleAmt, recurringTotal, strategy, manualAmt);
 
@@ -137,92 +98,24 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
     onStrategyChange?.(categoryId, strategy, v);
   };
 
-  const loadLinked = async () => {
-    setLoadingRow(true);
-    try {
-      const [rRes, ...recResults] = await Promise.all([
-        api.get(`/predicted-transactions/${rulePred.id}/linked-transactions`),
-        ...recurringList.map((p) => api.get(`/predicted-transactions/${p.id}/linked-transactions`)),
-      ]);
-      setLinkedRule(rRes.data);
-      const map = {};
-      recurringList.forEach((p, i) => { map[p.id] = recResults[i].data; });
-      setLinkedRecurringMap(map);
-    } catch (e) {
-      console.error("Failed to load linked transactions", e);
-    } finally {
-      setLoadingRow(false);
-    }
-  };
-
-  const toggleExpand = () => {
-    if (!expanded) loadLinked();
-    setExpanded(!expanded);
-    setShowMapPanel(false);
-  };
-
-  const handleMap = async (predId, txId) => {
-    try {
-      const res = await api.post(`/predicted-transactions/${predId}/map-actual?transactionId=${txId}`);
-      onUpdatePrediction(res.data);
-      // Reload all linked data in-place — keep panel and row open
-      const [ruleRes, ...recurringRes] = await Promise.all([
-        api.get(`/predicted-transactions/${rulePred.id}/linked-transactions`),
-        ...recurringList.map((p) => api.get(`/predicted-transactions/${p.id}/linked-transactions`)),
-      ]);
-      setLinkedRule(ruleRes.data);
-      const newMap = {};
-      recurringList.forEach((p, i) => { newMap[p.id] = recurringRes[i].data; });
-      setLinkedRecurringMap(newMap);
-    } catch (e) { console.error("Map failed", e); }
-  };
-
-  const handleUnmap = async (predId, txId) => {
-    try {
-      const res = await api.post(`/predicted-transactions/${predId}/unmap-actual?transactionId=${txId}`);
-      onUpdatePrediction(res.data);
-      const [ruleRes, ...recurringRes] = await Promise.all([
-        api.get(`/predicted-transactions/${rulePred.id}/linked-transactions`),
-        ...recurringList.map((p) => api.get(`/predicted-transactions/${p.id}/linked-transactions`)),
-      ]);
-      setLinkedRule(ruleRes.data);
-      const newMap = {};
-      recurringList.forEach((p, i) => { newMap[p.id] = recurringRes[i].data; });
-      setLinkedRecurringMap(newMap);
-    } catch (e) { console.error("Unmap failed", e); }
-  };
-
-  const allMappedIds = new Set([
-    ...(linkedRule?.actualTransactions || []).map((t) => t.id),
-    ...Object.values(linkedRecurringMap).flatMap((d) => (d?.actualTransactions || []).map((t) => t.id)),
-  ]);
-
-  const categoryTx = transactions.filter((t) => t.categoryId === rulePred.categoryId);
-  const txPool = categoryTx.length > 0 ? categoryTx : transactions;
-  const filteredTx = txPool.filter((t) => {
-    if (allMappedIds.has(t.id)) return false;
-    return !txSearch ||
-      t.description?.toLowerCase().includes(txSearch.toLowerCase()) ||
-      t.categoryName?.toLowerCase().includes(txSearch.toLowerCase());
-  });
-
   const isPast = isPastOrCurrentMonth(rulePred.predictionMonth);
 
   return (
     <div className="rounded border-2 border-purple-300 mb-2 bg-purple-50">
       {/* Header row */}
-      <div
-        className="grid grid-cols-1 md:grid-cols-7 gap-3 py-3 px-4 items-center text-sm cursor-pointer"
-        onClick={toggleExpand}
-      >
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-3 py-3 px-4 items-center text-sm">
         <div className="font-medium text-gray-800 md:col-span-2">
           {rulePred.categoryName}
           <span className="ml-1 text-xs bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded">Merged</span>
         </div>
 
         {/* Sub-amounts with expandable recurring list */}
-        <div className="text-xs text-gray-500 space-y-0.5" onClick={(e) => e.stopPropagation()}>
-          <div>Rule avg: <span className="font-medium text-blue-700">{fmt(ruleAmt)}</span></div>
+        <div className="text-xs text-gray-500 space-y-0.5">
+          <div>Rule avg: <span className="font-medium text-blue-700">{fmt(ruleAmt)}</span>
+            {rulePred.manualOverride && (
+              <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1 py-0.5 rounded">Overridden</span>
+            )}
+          </div>
           <div
             className="flex items-center gap-1 cursor-pointer hover:text-amber-700"
             onClick={() => setRecurringExpanded(!recurringExpanded)}
@@ -232,7 +125,6 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
               Recurring ({recurringList.length}): <span className="font-medium text-amber-700">{fmt(recurringTotal)}</span>
             </span>
           </div>
-          {/* Expandable recurring obligations list */}
           {recurringExpanded && (
             <div className="mt-1 ml-2 space-y-1 border-l-2 border-amber-200 pl-2">
               {recurringList.map((p) => (
@@ -266,10 +158,7 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
       </div>
 
       {/* Strategy selector */}
-      <div
-        className="px-4 pb-2 flex flex-wrap items-center gap-2 text-xs border-t border-purple-200"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="px-4 pb-2 flex flex-wrap items-center gap-2 text-xs border-t border-purple-200">
         <span className="text-gray-500 font-medium">Effective amount strategy:</span>
         {STRATEGIES.map((s) => (
           <button
@@ -300,174 +189,18 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
           {strategy === "MANUAL" && `manual = ${fmt(effectiveAmt)}`}
         </span>
       </div>
-
-      {/* Expanded linked transactions */}
-      {expanded && (
-        <div className="px-4 pb-3 border-t border-purple-100">
-          {loadingRow && <div className="text-xs text-gray-400 py-2">Loading...</div>}
-          {(linkedRule || Object.keys(linkedRecurringMap).length > 0) && (
-            <div className="mt-2 space-y-3">
-              {/* Rule mapped actuals */}
-              <div>
-                <div className="text-xs font-semibold text-blue-700 mb-1">Rule Prediction — Mapped Transactions</div>
-                {linkedRule?.actualTransactions?.length > 0 ? (
-                  sortByDateDesc(linkedRule.actualTransactions).map((t) => (
-                    <TxRow key={t.id} t={t}
-                      actionLabel={isPast ? "Unmap" : undefined}
-                      actionClass="text-red-500 hover:underline"
-                      onAction={isPast ? () => handleUnmap(rulePred.id, t.id) : undefined}
-                    />
-                  ))
-                ) : (
-                  <div className="text-xs text-gray-400">No transactions mapped.</div>
-                )}
-              </div>
-
-              {/* Per-recurring mapped actuals */}
-              {recurringList.map((recPred) => (
-                <div key={recPred.id}>
-                  <div className="text-xs font-semibold text-amber-700 mb-1">
-                    {recPred.recurringTransactionDescription || "Recurring Obligation"} — Mapped Transactions
-                    <span className="ml-1 font-normal text-gray-400">({fmt(recPred.predictedAmount)})</span>
-                  </div>
-                  {linkedRecurringMap[recPred.id]?.actualTransactions?.length > 0 ? (
-                    sortByDateDesc(linkedRecurringMap[recPred.id].actualTransactions).map((t) => (
-                      <TxRow key={t.id} t={t}
-                        actionLabel={isPast ? "Unmap" : undefined}
-                        actionClass="text-red-500 hover:underline"
-                        onAction={isPast ? () => handleUnmap(recPred.id, t.id) : undefined}
-                      />
-                    ))
-                  ) : (
-                    <div className="text-xs text-gray-400">No transactions mapped.</div>
-                  )}
-                </div>
-              ))}
-
-              {/* Map panel */}
-              <div>
-                  {!showMapPanel ? (
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setMapTarget(rulePred.id); setShowMapPanel(true); }}
-                        className="text-xs text-blue-600 hover:underline"
-                      >
-                        Map to Rule Prediction
-                      </button>
-                      {recurringList.map((p) => (
-                        <button
-                          key={p.id}
-                          onClick={(e) => { e.stopPropagation(); setMapTarget(p.id); setShowMapPanel(true); }}
-                          className="text-xs text-amber-600 hover:underline"
-                        >
-                          Map to {p.recurringTransactionDescription || "Recurring"}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="mt-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-600">
-                          Mapping to: <span className={mapTarget === rulePred.id ? "text-blue-700" : "text-amber-700"}>
-                            {mapTarget === rulePred.id
-                              ? "Rule Prediction"
-                              : recurringList.find((p) => p.id === mapTarget)?.recurringTransactionDescription || "Recurring"}
-                          </span>
-                        </span>
-                        <button onClick={(e) => { e.stopPropagation(); setShowMapPanel(false); setTxSearch(""); }} className="text-xs text-gray-400 hover:text-gray-600">✕ Done</button>
-                      </div>
-                      <input
-                        className="w-full border px-2 py-1 rounded text-xs mb-2"
-                        placeholder="Search in this category..."
-                        value={txSearch}
-                        onChange={(e) => setTxSearch(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        autoFocus
-                      />
-                      <div className="max-h-48 overflow-y-auto border rounded">
-                        {sortByDateDesc(filteredTx).slice(0, 50).map((t) => (
-                          <TxRow key={t.id} t={t}
-                            hoverClass="hover:bg-purple-50"
-                            onAction={() => handleMap(mapTarget, t.id)}
-                          />
-                        ))}
-                        {filteredTx.length === 0 && (
-                          <div className="text-center text-gray-400 py-4 text-xs">No transactions found</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
 // ── Single prediction row (rule-only or recurring-only) ───────────────────────
 
-function PredictionRow({ p, onUpdatePrediction, transactions, isIncome }) {
-  const [expanded, setExpanded] = useState(false);
-  const [linkedData, setLinkedData] = useState(null);
-  const [loadingRow, setLoadingRow] = useState(false);
-  const [showMapPanel, setShowMapPanel] = useState(false);
-  const [txSearch, setTxSearch] = useState("");
-
-  const loadLinked = async () => {
-    if (linkedData) return;
-    setLoadingRow(true);
-    try {
-      const res = await api.get(`/predicted-transactions/${p.id}/linked-transactions`);
-      setLinkedData(res.data);
-    } catch (e) {
-      console.error("Failed to load linked transactions", e);
-    } finally {
-      setLoadingRow(false);
-    }
-  };
-
-  const toggleExpand = () => {
-    if (!expanded) loadLinked();
-    setExpanded(!expanded);
-    setShowMapPanel(false);
-  };
-
+function PredictionRow({ p, isIncome }) {
   const remaining = parseFloat(p.remainingAmount ?? p.predictedAmount);
   const actual = parseFloat(p.actualSpent ?? 0);
   const predicted = parseFloat(p.predictedAmount ?? 0);
   const pct = predicted > 0 ? Math.min(100, (actual / predicted) * 100) : 0;
   const isOver = actual > predicted;
-
-  const mappedIds = new Set((linkedData?.actualTransactions || []).map((m) => m.id));
-  const categoryTx = transactions.filter((t) => t.categoryId === p.categoryId);
-  const txPool = categoryTx.length > 0 ? categoryTx : transactions;
-  const filteredTx = txPool.filter((t) => {
-    if (mappedIds.has(t.id)) return false;
-    return !txSearch ||
-      t.description?.toLowerCase().includes(txSearch.toLowerCase()) ||
-      t.categoryName?.toLowerCase().includes(txSearch.toLowerCase());
-  });
-
-  const handleMapActual = async (txId) => {
-    try {
-      const mapRes = await api.post(`/predicted-transactions/${p.id}/map-actual?transactionId=${txId}`);
-      onUpdatePrediction(mapRes.data);
-      // Reload linked data in-place — keep row expanded and map panel open
-      const res = await api.get(`/predicted-transactions/${p.id}/linked-transactions`);
-      setLinkedData(res.data);
-    } catch (e) { console.error("Failed to map transaction", e); }
-  };
-
-  const handleUnmap = async (txId) => {
-    try {
-      const mapRes = await api.post(`/predicted-transactions/${p.id}/unmap-actual?transactionId=${txId}`);
-      onUpdatePrediction(mapRes.data);
-      const res = await api.get(`/predicted-transactions/${p.id}/linked-transactions`);
-      setLinkedData(res.data);
-    } catch (e) { console.error("Failed to unmap transaction", e); }
-  };
 
   const isRecurring = !!p.recurringTransactionId;
   const rowBg = isRecurring ? "bg-amber-50" : "bg-blue-50";
@@ -479,10 +212,7 @@ function PredictionRow({ p, onUpdatePrediction, transactions, isIncome }) {
 
   return (
     <div className={`rounded border border-gray-200 mb-2 ${rowBg}`}>
-      <div
-        className="grid grid-cols-1 md:grid-cols-6 gap-3 py-3 px-4 items-center text-sm cursor-pointer"
-        onClick={toggleExpand}
-      >
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-3 py-3 px-4 items-center text-sm">
         <div className="font-medium text-gray-800 md:col-span-2">
           {p.categoryName}
           {badge}
@@ -490,11 +220,20 @@ function PredictionRow({ p, onUpdatePrediction, transactions, isIncome }) {
             <div className="text-xs text-gray-500 mt-0.5">{p.recurringTransactionDescription}</div>
           )}
         </div>
-        <div className="text-gray-700">{fmt(p.predictedAmount)}</div>
-        <div className={`font-medium ${isIncome ? (isOver ? "text-green-700" : "text-gray-700") : (isOver ? "text-red-600" : "text-green-700")}`}>
-          {fmt(p.actualSpent)} {isIncome ? "received" : "spent"}
+        <div className="text-gray-700">
+          {fmt(p.predictedAmount)}
+          {p.manualOverride && (
+            <span className="ml-1.5 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Overridden</span>
+          )}
         </div>
-        <div className="text-gray-600">{fmt(remaining)} {isIncome ? "remaining" : "left"}</div>
+        {isPast && (
+          <>
+            <div className={`font-medium ${isIncome ? (isOver ? "text-green-700" : "text-gray-700") : (isOver ? "text-red-600" : "text-green-700")}`}>
+              {fmt(p.actualSpent)} {isIncome ? "received" : "spent"}
+            </div>
+            <div className="text-gray-600">{fmt(remaining)} {isIncome ? "remaining" : "left"}</div>
+          </>
+        )}
         <div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div className={`h-2 rounded-full ${isIncome ? (isOver ? "bg-green-500" : "bg-blue-400") : (isOver ? "bg-red-500" : "bg-green-500")}`} style={{ width: `${pct}%` }} />
@@ -502,66 +241,6 @@ function PredictionRow({ p, onUpdatePrediction, transactions, isIncome }) {
           <div className="text-xs text-gray-500 mt-0.5">{pct.toFixed(0)}% {isIncome ? "received" : "used"}</div>
         </div>
       </div>
-
-      {expanded && (
-        <div className="px-4 pb-3 border-t border-gray-100">
-          {loadingRow && <div className="text-xs text-gray-400 py-2">Loading...</div>}
-          {linkedData && (
-            <div className="space-y-3 mt-2">
-              {linkedData.actualTransactions?.length > 0 ? (
-                <div>
-                  <div className="text-xs font-semibold text-gray-600 mb-1">Mapped Actual Transactions</div>
-                  {sortByDateDesc(linkedData.actualTransactions).map((t) => (
-                    <TxRow key={t.id} t={t}
-                      actionLabel={isPast ? "Unmap" : undefined}
-                      actionClass="text-red-500 hover:underline"
-                      onAction={isPast ? () => handleUnmap(t.id) : undefined}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-gray-400">No transactions mapped yet.</div>
-              )}
-              <div>
-                {!showMapPanel ? (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowMapPanel(true); }}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    Map to Actual Transaction
-                  </button>
-                ) : (
-                  <div className="mt-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-gray-600">Select transaction to map</span>
-                      <button onClick={(e) => { e.stopPropagation(); setShowMapPanel(false); setTxSearch(""); }} className="text-xs text-gray-400 hover:text-gray-600">✕ Done</button>
-                    </div>
-                    <input
-                      className="w-full border px-2 py-1 rounded text-xs mb-2"
-                      placeholder="Search transactions..."
-                      value={txSearch}
-                      onChange={(e) => setTxSearch(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      autoFocus
-                    />
-                    <div className="max-h-48 overflow-y-auto border rounded">
-                      {sortByDateDesc(filteredTx).slice(0, 50).map((t) => (
-                        <TxRow key={t.id} t={t}
-                          hoverClass="hover:bg-blue-50"
-                          onAction={() => handleMapActual(t.id)}
-                        />
-                      ))}
-                      {filteredTx.length === 0 && (
-                        <div className="text-center text-gray-400 py-4 text-xs">No transactions found</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -656,7 +335,7 @@ function subtreeHasPredictions(node, byCategory) {
 
 function CategoryTreeNode({
   node, byCategory, strategies, onStrategyChange,
-  onUpdatePrediction, transactions, depth, allCategories, inheritedIncome,
+  depth, allCategories, inheritedIncome,
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -712,16 +391,12 @@ function CategoryTreeNode({
             <MergedPredictionRow
               rulePred={group.rule}
               recurringList={group.recurringList}
-              onUpdatePrediction={onUpdatePrediction}
               onStrategyChange={onStrategyChange}
-              transactions={transactions}
               isIncome={isIncome}
             />
           ) : (
             <PredictionRow
               p={group.rule || group.recurringList[0]}
-              onUpdatePrediction={onUpdatePrediction}
-              transactions={transactions}
               isIncome={isIncome}
             />
           )}
@@ -746,8 +421,6 @@ function CategoryTreeNode({
           byCategory={byCategory}
           strategies={strategies}
           onStrategyChange={onStrategyChange}
-          onUpdatePrediction={onUpdatePrediction}
-          transactions={transactions}
           depth={depth + 1}
           allCategories={allCategories}
           inheritedIncome={isIncome}
@@ -781,7 +454,6 @@ export default function Forecast() {
   const [notice, setNotice] = useState(() => location.state?.notice || null);
   const [predictions, setPredictions] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [strategies, setStrategies] = useState(() => {
     try { return JSON.parse(localStorage.getItem("forecastStrategies") || "{}"); }
@@ -817,28 +489,9 @@ export default function Forecast() {
     }
   }, [month, navigate]);
 
-  const loadTransactions = useCallback(async () => {
-    if (!isPastOrCurrentMonth(month)) return;
-    try {
-      const [y, m] = month.split("-").map(Number);
-      const lastDay = new Date(y, m, 0).getDate();
-      const start = `${month}-01`;
-      const end = `${month}-${String(lastDay).padStart(2, "0")}`;
-      const res = await api.get(`/transactions?startDate=${start}&endDate=${end}&page=0&size=200`);
-      setTransactions(res.data?.content ?? res.data ?? []);
-    } catch (e) {
-      console.error("Failed to load transactions", e);
-    }
-  }, [month]);
-
   useEffect(() => {
     loadData();
-    loadTransactions();
-  }, [loadData, loadTransactions]);
-
-  const updatePrediction = useCallback((updated) => {
-    setPredictions((prev) => prev.map((p) => p.id === updated.id ? updated : p));
-  }, []);
+  }, [loadData]);
 
   // Build category prediction groups — recurringList is an array (supports multiple per category)
   const byCategory = {};
@@ -852,8 +505,6 @@ export default function Forecast() {
   const categoryTree = buildTree(categories);
   const activeRoots = categoryTree.filter((node) => subtreeHasPredictions(node, byCategory));
 
-  const totalPredicted = activeRoots.reduce((s, node) => s + subtreeTotals(node, byCategory, strategies).predicted, 0);
-  const totalActual = activeRoots.reduce((s, node) => s + subtreeTotals(node, byCategory, strategies).actual, 0);
   const { incomePredicted, incomeActual, expensePredicted, expenseActual } = subtreeTotalsSplit(activeRoots, byCategory, strategies);
   const mergedCount = Object.values(byCategory).filter((g) => g.rule && g.recurringList?.length > 0).length;
   const isPast = isPastOrCurrentMonth(month);
@@ -946,8 +597,6 @@ export default function Forecast() {
               byCategory={byCategory}
               strategies={strategies}
               onStrategyChange={handleStrategyChange}
-              onUpdatePrediction={updatePrediction}
-              transactions={transactions}
               depth={0}
               allCategories={categories}
             />
