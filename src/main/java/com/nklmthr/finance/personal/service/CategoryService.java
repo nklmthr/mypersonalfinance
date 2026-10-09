@@ -71,11 +71,29 @@ public class CategoryService {
     }
 
     // Overload
+    @Caching(evict = {
+        @CacheEvict(value = "allCategories", allEntries = true),
+        @CacheEvict(value = "categoryById", allEntries = true),
+        @CacheEvict(value = "categoryChildrenById", allEntries = true),
+        @CacheEvict(value = "categoryDescendentsById", allEntries = true),
+        @CacheEvict(value = "categoryNonClassified", allEntries = true),
+        @CacheEvict(value = "categoryTransfer", allEntries = true),
+        @CacheEvict(value = "categorySplitTransaction", allEntries = true)
+    })
     public Category saveCategory(Category category) {
         return saveCategory(appUserService.getCurrentUser(), category);
     }
 
     // DTO variants
+    @Caching(evict = {
+        @CacheEvict(value = "allCategories", allEntries = true),
+        @CacheEvict(value = "categoryById", allEntries = true),
+        @CacheEvict(value = "categoryChildrenById", allEntries = true),
+        @CacheEvict(value = "categoryDescendentsById", allEntries = true),
+        @CacheEvict(value = "categoryNonClassified", allEntries = true),
+        @CacheEvict(value = "categoryTransfer", allEntries = true),
+        @CacheEvict(value = "categorySplitTransaction", allEntries = true)
+    })
     public CategoryDTO saveCategory(CategoryDTO categoryDto) {
         return saveCategory(appUserService.getCurrentUser(), categoryDto);
     }
