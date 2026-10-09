@@ -16,10 +16,12 @@ import com.nklmthr.finance.personal.dto.CategoryDTO;
 import com.nklmthr.finance.personal.service.CategoryService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/api/categories")
 @RequiredArgsConstructor
+@Slf4j
 public class CategoryController {
 
 	private final CategoryService categoryService;
@@ -47,12 +49,14 @@ public class CategoryController {
 
 	@PutMapping("/{id}")
 	public ResponseEntity<CategoryDTO> update(@PathVariable String id, @RequestBody CategoryDTO updated) {
-		// Ensure we update the existing entity instead of creating a new one
+		log.info("PUT /categories/{} received: name={} incomeCategory={}", id, updated.getName(), updated.isIncomeCategory());
 		if (categoryService.getCategoryById(id) == null) {
 			return ResponseEntity.notFound().build();
 		}
 		updated.setId(id);
-		return ResponseEntity.ok(categoryService.saveCategory(updated));
+		CategoryDTO result = categoryService.saveCategory(updated);
+		log.info("PUT /categories/{} returning: incomeCategory={}", id, result.isIncomeCategory());
+		return ResponseEntity.ok(result);
 	}
 
 	@DeleteMapping("/{id}")

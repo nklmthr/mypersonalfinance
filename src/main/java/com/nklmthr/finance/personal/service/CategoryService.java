@@ -125,8 +125,10 @@ public class CategoryService {
     public CategoryDTO saveCategory(AppUser appUser, CategoryDTO categoryDto) {
         Category toSave = categoryMapper.toEntity(categoryDto);
         toSave.setAppUser(appUser);
-        logger.info("Saving category (DTO): {} for user: {}", toSave.getName(), appUser.getUsername());
+        logger.info("Saving category (DTO): {} incomeCategory(DTO)={} incomeCategory(entity)={} for user: {}",
+            toSave.getName(), categoryDto.isIncomeCategory(), toSave.isIncomeCategory(), appUser.getUsername());
         Category saved = categoryRepository.save(toSave);
+        logger.info("Saved category: {} incomeCategory(saved)={}", saved.getName(), saved.isIncomeCategory());
         return categoryMapper.toDTO(saved);
     }
 
