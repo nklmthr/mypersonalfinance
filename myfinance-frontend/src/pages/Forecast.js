@@ -69,7 +69,7 @@ function setStoredStrategy(categoryId, strategy, manualAmt) {
 
 // ── Merged row: rule prediction + one or more recurring obligations ───────────
 
-function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onStrategyChange, transactions, isIncome }) {
+function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onStrategyChange, transactions, isIncome, globalMappedIds }) {
   const categoryId = rulePred.categoryId;
   const initial = getStoredStrategy(categoryId);
   const [strategy, setStrategy] = useState(initial.strategy);
@@ -168,6 +168,7 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
 
   const filteredTx = transactions.filter((t) => {
     if (allMappedIds.has(t.id)) return false;
+    if (globalMappedIds?.has(t.id)) return false;
     return !txSearch ||
       t.description?.toLowerCase().includes(txSearch.toLowerCase()) ||
       t.categoryName?.toLowerCase().includes(txSearch.toLowerCase());
@@ -382,7 +383,7 @@ function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onSt
 
 // ── Single prediction row (rule-only or recurring-only) ───────────────────────
 
-function PredictionRow({ p, onUpdatePrediction, transactions, isIncome }) {
+function PredictionRow({ p, onUpdatePrediction, transactions, isIncome, globalMappedIds }) {
   const [expanded, setExpanded] = useState(false);
   const [linkedData, setLinkedData] = useState(null);
   const [loadingRow, setLoadingRow] = useState(false);
@@ -417,6 +418,7 @@ function PredictionRow({ p, onUpdatePrediction, transactions, isIncome }) {
   const mappedIds = new Set((linkedData?.actualTransactions || []).map((m) => m.id));
   const filteredTx = transactions.filter((t) => {
     if (mappedIds.has(t.id)) return false;
+    if (globalMappedIds?.has(t.id)) return false;
     return !txSearch ||
       t.description?.toLowerCase().includes(txSearch.toLowerCase()) ||
       t.categoryName?.toLowerCase().includes(txSearch.toLowerCase());
@@ -634,7 +636,7 @@ function subtreeHasPredictions(node, byCategory) {
 
 function CategoryTreeNode({
   node, byCategory, strategies, onStrategyChange,
-  onUpdatePrediction, transactions, depth, allCategories, inheritedIncome,
+  onUpdatePrediction, transactions, depth, allCategories, inheritedIncome, globalMappedIds,
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -694,6 +696,7 @@ function CategoryTreeNode({
               onStrategyChange={onStrategyChange}
               transactions={transactions}
               isIncome={isIncome}
+              globalMappedIds={globalMappedIds}
             />
           ) : (
             <PredictionRow
@@ -701,6 +704,7 @@ function CategoryTreeNode({
               onUpdatePrediction={onUpdatePrediction}
               transactions={transactions}
               isIncome={isIncome}
+              globalMappedIds={globalMappedIds}
             />
           )}
           {hasChildren && (
@@ -729,6 +733,7 @@ function CategoryTreeNode({
           depth={depth + 1}
           allCategories={allCategories}
           inheritedIncome={isIncome}
+          globalMappedIds={globalMappedIds}
         />
       ))}
 
@@ -760,6 +765,7 @@ export default function Forecast() {
   const [predictions, setPredictions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [globalMappedIds, setGlobalMappedIds] = useState(new Set());
   const [loading, setLoading] = useState(false);
   const [strategies, setStrategies] = useState(() => {
     try { return JSON.parse(localStorage.getItem("forecastStrategies") || "{}"); }
@@ -802,8 +808,12 @@ export default function Forecast() {
       const lastDay = new Date(y, m, 0).getDate();
       const start = `${month}-01`;
       const end = `${month}-${String(lastDay).padStart(2, "0")}`;
-      const res = await api.get(`/transactions?startDate=${start}&endDate=${end}&page=0&size=200`);
-      setTransactions(res.data?.content ?? res.data ?? []);
+      const [txRes, mappedRes] = await Promise.all([
+        api.get(`/transactions?startDate=${start}&endDate=${end}&page=0&size=200`),
+        api.get(`/predicted-transactions/mapped-transaction-ids?month=${month}`),
+      ]);
+      setTransactions(txRes.data?.content ?? txRes.data ?? []);
+      setGlobalMappedIds(new Set(mappedRes.data));
     } catch (e) {
       console.error("Failed to load transactions", e);
     }
@@ -816,7 +826,11 @@ export default function Forecast() {
 
   const updatePrediction = useCallback((updated) => {
     setPredictions((prev) => prev.map((p) => p.id === updated.id ? updated : p));
-  }, []);
+    // Refresh global mapped IDs so other categories' panels reflect the new mapping
+    api.get(`/predicted-transactions/mapped-transaction-ids?month=${month}`)
+      .then((res) => setGlobalMappedIds(new Set(res.data)))
+      .catch(() => {});
+  }, [month]);
 
   // Build category prediction groups — recurringList is an array (supports multiple per category)
   const byCategory = {};
@@ -928,6 +942,7 @@ export default function Forecast() {
               transactions={transactions}
               depth={0}
               allCategories={categories}
+              globalMappedIds={globalMappedIds}
             />
           ))}
         </div>

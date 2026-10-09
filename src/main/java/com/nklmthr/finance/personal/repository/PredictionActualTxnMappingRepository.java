@@ -38,5 +38,8 @@ public interface PredictionActualTxnMappingRepository extends JpaRepository<Pred
 	@Modifying
 	@Query("DELETE FROM PredictionActualTxnMapping m WHERE m.predictedTransaction IN :predictions")
 	void deleteByPredictedTransactionIn(@Param("predictions") List<PredictedTransaction> predictions);
+
+	@Query("SELECT m.actualTransaction.id FROM PredictionActualTxnMapping m WHERE m.predictedTransaction.appUser = :appUser AND m.predictedTransaction.predictionMonth = :month")
+	List<String> findMappedTransactionIdsByAppUserAndMonth(@Param("appUser") com.nklmthr.finance.personal.model.AppUser appUser, @Param("month") String month);
 }
 

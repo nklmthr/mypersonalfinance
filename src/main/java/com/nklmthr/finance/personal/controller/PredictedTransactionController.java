@@ -307,6 +307,13 @@ public class PredictedTransactionController {
 		}
 	}
 
+	@GetMapping("/mapped-transaction-ids")
+	public ResponseEntity<List<String>> getMappedTransactionIds(@RequestParam String month) {
+		AppUser user = appUserService.getCurrentUser();
+		List<String> ids = actualMappingRepository.findMappedTransactionIdsByAppUserAndMonth(user, month);
+		return ResponseEntity.ok(ids);
+	}
+
 	@Transactional
 	@DeleteMapping("/{id}")
 	public ResponseEntity<?> deletePrediction(@PathVariable String id) {
