@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import api from "../auth/api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import NProgress from "nprogress";
 import "nprogress/nprogress.css";
 import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
@@ -69,7 +69,7 @@ function setStoredStrategy(categoryId, strategy, manualAmt) {
 
 // ── Merged row: rule prediction + one or more recurring obligations ───────────
 
-function MergedPredictionRow({ rulePred, recurringList, onMapActual, onStrategyChange, transactions }) {
+function MergedPredictionRow({ rulePred, recurringList, onUpdatePrediction, onStrategyChange, transactions, isIncome }) {
   const categoryId = rulePred.categoryId;
   const initial = getStoredStrategy(categoryId);
   const [strategy, setStrategy] = useState(initial.strategy);
@@ -132,28 +132,46 @@ function MergedPredictionRow({ rulePred, recurringList, onMapActual, onStrategyC
 
   const handleMap = async (predId, txId) => {
     try {
-      await api.post(`/predicted-transactions/${predId}/map-actual?transactionId=${txId}`);
-      setLinkedRule(null);
-      setLinkedRecurringMap({});
-      setShowMapPanel(false);
-      onMapActual();
+      const res = await api.post(`/predicted-transactions/${predId}/map-actual?transactionId=${txId}`);
+      onUpdatePrediction(res.data);
+      // Reload all linked data in-place — keep panel and row open
+      const [ruleRes, ...recurringRes] = await Promise.all([
+        api.get(`/predicted-transactions/${rulePred.id}/linked-transactions`),
+        ...recurringList.map((p) => api.get(`/predicted-transactions/${p.id}/linked-transactions`)),
+      ]);
+      setLinkedRule(ruleRes.data);
+      const newMap = {};
+      recurringList.forEach((p, i) => { newMap[p.id] = recurringRes[i].data; });
+      setLinkedRecurringMap(newMap);
     } catch (e) { console.error("Map failed", e); }
   };
 
   const handleUnmap = async (predId, txId) => {
     try {
-      await api.post(`/predicted-transactions/${predId}/unmap-actual?transactionId=${txId}`);
-      setLinkedRule(null);
-      setLinkedRecurringMap({});
-      onMapActual();
+      const res = await api.post(`/predicted-transactions/${predId}/unmap-actual?transactionId=${txId}`);
+      onUpdatePrediction(res.data);
+      const [ruleRes, ...recurringRes] = await Promise.all([
+        api.get(`/predicted-transactions/${rulePred.id}/linked-transactions`),
+        ...recurringList.map((p) => api.get(`/predicted-transactions/${p.id}/linked-transactions`)),
+      ]);
+      setLinkedRule(ruleRes.data);
+      const newMap = {};
+      recurringList.forEach((p, i) => { newMap[p.id] = recurringRes[i].data; });
+      setLinkedRecurringMap(newMap);
     } catch (e) { console.error("Unmap failed", e); }
   };
 
-  const filteredTx = transactions.filter(
-    (t) => !txSearch ||
+  const allMappedIds = new Set([
+    ...(linkedRule?.actualTransactions || []).map((t) => t.id),
+    ...Object.values(linkedRecurringMap).flatMap((d) => (d?.actualTransactions || []).map((t) => t.id)),
+  ]);
+
+  const filteredTx = transactions.filter((t) => {
+    if (allMappedIds.has(t.id)) return false;
+    return !txSearch ||
       t.description?.toLowerCase().includes(txSearch.toLowerCase()) ||
-      t.categoryName?.toLowerCase().includes(txSearch.toLowerCase())
-  );
+      t.categoryName?.toLowerCase().includes(txSearch.toLowerCase());
+  });
 
   const isPast = isPastOrCurrentMonth(rulePred.predictionMonth);
 
@@ -199,18 +217,18 @@ function MergedPredictionRow({ rulePred, recurringList, onMapActual, onStrategyC
 
         {isPast && (
           <>
-            <div className={`font-medium text-sm ${isOver ? "text-red-600" : "text-green-700"}`}>
-              {fmt(totalActual)} spent
+            <div className={`font-medium text-sm ${isIncome ? (isOver ? "text-green-700" : "text-gray-700") : (isOver ? "text-red-600" : "text-green-700")}`}>
+              {fmt(totalActual)} {isIncome ? "received" : "spent"}
             </div>
-            <div className="text-gray-600 text-sm">{fmt(remaining)} left</div>
+            <div className="text-gray-600 text-sm">{fmt(remaining)} {isIncome ? "remaining" : "left"}</div>
           </>
         )}
 
         <div>
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className={`h-2 rounded-full ${isOver ? "bg-red-500" : "bg-purple-500"}`} style={{ width: `${pct}%` }} />
+            <div className={`h-2 rounded-full ${isIncome ? (isOver ? "bg-green-500" : "bg-blue-400") : (isOver ? "bg-red-500" : "bg-purple-500")}`} style={{ width: `${pct}%` }} />
           </div>
-          <div className="text-xs text-gray-500 mt-0.5">{pct.toFixed(0)}% used</div>
+          <div className="text-xs text-gray-500 mt-0.5">{pct.toFixed(0)}% {isIncome ? "received" : "used"}</div>
         </div>
       </div>
 
@@ -317,13 +335,15 @@ function MergedPredictionRow({ rulePred, recurringList, onMapActual, onStrategyC
                     </div>
                   ) : (
                     <div className="mt-2">
-                      <div className="text-xs font-medium text-gray-600 mb-1">
-                        Mapping to: <span className={mapTarget === rulePred.id ? "text-blue-700" : "text-amber-700"}>
-                          {mapTarget === rulePred.id
-                            ? "Rule Prediction"
-                            : recurringList.find((p) => p.id === mapTarget)?.recurringTransactionDescription || "Recurring"}
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">
+                          Mapping to: <span className={mapTarget === rulePred.id ? "text-blue-700" : "text-amber-700"}>
+                            {mapTarget === rulePred.id
+                              ? "Rule Prediction"
+                              : recurringList.find((p) => p.id === mapTarget)?.recurringTransactionDescription || "Recurring"}
+                          </span>
                         </span>
-                        <button onClick={() => setShowMapPanel(false)} className="ml-3 text-gray-400 hover:text-gray-600">✕ Close</button>
+                        <button onClick={(e) => { e.stopPropagation(); setShowMapPanel(false); setTxSearch(""); }} className="text-xs text-gray-400 hover:text-gray-600">✕ Done</button>
                       </div>
                       <input
                         className="w-full border px-2 py-1 rounded text-xs mb-2"
@@ -331,6 +351,7 @@ function MergedPredictionRow({ rulePred, recurringList, onMapActual, onStrategyC
                         value={txSearch}
                         onChange={(e) => setTxSearch(e.target.value)}
                         onClick={(e) => e.stopPropagation()}
+                        autoFocus
                       />
                       <div className="max-h-48 overflow-y-auto border rounded">
                         {filteredTx.slice(0, 50).map((t) => (
@@ -340,8 +361,8 @@ function MergedPredictionRow({ rulePred, recurringList, onMapActual, onStrategyC
                             onClick={(e) => { e.stopPropagation(); handleMap(mapTarget, t.id); }}
                           >
                             <span className="text-gray-700 truncate flex-1">{t.description || t.categoryName}</span>
-                            <span className="text-gray-400 mx-2">{t.date?.slice(0, 10)}</span>
-                            <span className="font-medium text-gray-800">{fmt(t.amount)}</span>
+                            <span className="text-gray-500 mx-2 shrink-0">{t.date?.slice(0, 10)}</span>
+                            <span className="font-medium text-gray-800 shrink-0">{fmt(t.amount)}</span>
                           </div>
                         ))}
                         {filteredTx.length === 0 && (
@@ -361,7 +382,7 @@ function MergedPredictionRow({ rulePred, recurringList, onMapActual, onStrategyC
 
 // ── Single prediction row (rule-only or recurring-only) ───────────────────────
 
-function PredictionRow({ p, onMapActual, transactions }) {
+function PredictionRow({ p, onUpdatePrediction, transactions, isIncome }) {
   const [expanded, setExpanded] = useState(false);
   const [linkedData, setLinkedData] = useState(null);
   const [loadingRow, setLoadingRow] = useState(false);
@@ -393,27 +414,30 @@ function PredictionRow({ p, onMapActual, transactions }) {
   const pct = predicted > 0 ? Math.min(100, (actual / predicted) * 100) : 0;
   const isOver = actual > predicted;
 
-  const filteredTx = transactions.filter(
-    (t) =>
-      !txSearch ||
+  const mappedIds = new Set((linkedData?.actualTransactions || []).map((m) => m.id));
+  const filteredTx = transactions.filter((t) => {
+    if (mappedIds.has(t.id)) return false;
+    return !txSearch ||
       t.description?.toLowerCase().includes(txSearch.toLowerCase()) ||
-      t.categoryName?.toLowerCase().includes(txSearch.toLowerCase())
-  );
+      t.categoryName?.toLowerCase().includes(txSearch.toLowerCase());
+  });
 
   const handleMapActual = async (txId) => {
     try {
-      await api.post(`/predicted-transactions/${p.id}/map-actual?transactionId=${txId}`);
-      setLinkedData(null);
-      setShowMapPanel(false);
-      onMapActual();
+      const mapRes = await api.post(`/predicted-transactions/${p.id}/map-actual?transactionId=${txId}`);
+      onUpdatePrediction(mapRes.data);
+      // Reload linked data in-place — keep row expanded and map panel open
+      const res = await api.get(`/predicted-transactions/${p.id}/linked-transactions`);
+      setLinkedData(res.data);
     } catch (e) { console.error("Failed to map transaction", e); }
   };
 
   const handleUnmap = async (txId) => {
     try {
-      await api.post(`/predicted-transactions/${p.id}/unmap-actual?transactionId=${txId}`);
-      setLinkedData(null);
-      onMapActual();
+      const mapRes = await api.post(`/predicted-transactions/${p.id}/unmap-actual?transactionId=${txId}`);
+      onUpdatePrediction(mapRes.data);
+      const res = await api.get(`/predicted-transactions/${p.id}/linked-transactions`);
+      setLinkedData(res.data);
     } catch (e) { console.error("Failed to unmap transaction", e); }
   };
 
@@ -439,15 +463,15 @@ function PredictionRow({ p, onMapActual, transactions }) {
           )}
         </div>
         <div className="text-gray-700">{fmt(p.predictedAmount)}</div>
-        <div className={`font-medium ${isOver ? "text-red-600" : "text-green-700"}`}>
-          {fmt(p.actualSpent)} spent
+        <div className={`font-medium ${isIncome ? (isOver ? "text-green-700" : "text-gray-700") : (isOver ? "text-red-600" : "text-green-700")}`}>
+          {fmt(p.actualSpent)} {isIncome ? "received" : "spent"}
         </div>
-        <div className="text-gray-600">{fmt(remaining)} left</div>
+        <div className="text-gray-600">{fmt(remaining)} {isIncome ? "remaining" : "left"}</div>
         <div>
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className={`h-2 rounded-full ${isOver ? "bg-red-500" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
+            <div className={`h-2 rounded-full ${isIncome ? (isOver ? "bg-green-500" : "bg-blue-400") : (isOver ? "bg-red-500" : "bg-green-500")}`} style={{ width: `${pct}%` }} />
           </div>
-          <div className="text-xs text-gray-500 mt-0.5">{pct.toFixed(0)}% used</div>
+          <div className="text-xs text-gray-500 mt-0.5">{pct.toFixed(0)}% {isIncome ? "received" : "used"}</div>
         </div>
       </div>
 
@@ -472,20 +496,26 @@ function PredictionRow({ p, onMapActual, transactions }) {
                 <div className="text-xs text-gray-400">No transactions mapped yet.</div>
               )}
               <div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowMapPanel(!showMapPanel); }}
-                  className="text-xs text-blue-600 hover:underline"
-                >
-                  {showMapPanel ? "Close Map Panel" : "Map to Actual Transaction"}
-                </button>
-                {showMapPanel && (
+                {!showMapPanel ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowMapPanel(true); }}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Map to Actual Transaction
+                  </button>
+                ) : (
                   <div className="mt-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-600">Select transaction to map</span>
+                      <button onClick={(e) => { e.stopPropagation(); setShowMapPanel(false); setTxSearch(""); }} className="text-xs text-gray-400 hover:text-gray-600">✕ Done</button>
+                    </div>
                     <input
                       className="w-full border px-2 py-1 rounded text-xs mb-2"
                       placeholder="Search transactions..."
                       value={txSearch}
                       onChange={(e) => setTxSearch(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
+                      autoFocus
                     />
                     <div className="max-h-48 overflow-y-auto border rounded">
                       {filteredTx.slice(0, 50).map((t) => (
@@ -495,8 +525,8 @@ function PredictionRow({ p, onMapActual, transactions }) {
                           onClick={(e) => { e.stopPropagation(); handleMapActual(t.id); }}
                         >
                           <span className="text-gray-700 truncate flex-1">{t.description || t.categoryName}</span>
-                          <span className="text-gray-400 mx-2">{t.date?.slice(0, 10)}</span>
-                            <span className="font-medium text-gray-800">{fmt(t.amount)}</span>
+                          <span className="text-gray-500 mx-2 shrink-0">{t.date?.slice(0, 10)}</span>
+                          <span className="font-medium text-gray-800 shrink-0">{fmt(t.amount)}</span>
                         </div>
                       ))}
                       {filteredTx.length === 0 && (
@@ -551,6 +581,50 @@ function subtreeTotals(node, byCategory, strategies) {
   return { predicted, actual };
 }
 
+// Returns income and expense totals separately.
+// When a node has incomeCategory=true, its entire subtotal goes to income.
+// Otherwise, recurse into children so that income sub-trees nested under
+// expense parents (e.g. Earning inside Home) are still correctly bucketed.
+function subtreeTotalsSplitNode(node, byCategory, strategies) {
+  let incomePredicted = 0, incomeActual = 0;
+  let expensePredicted = 0, expenseActual = 0;
+
+  if (node.incomeCategory) {
+    const { predicted, actual } = subtreeTotals(node, byCategory, strategies);
+    incomePredicted += predicted;
+    incomeActual += actual;
+  } else {
+    // Own prediction (if any) is an expense
+    const group = byCategory[node.id];
+    if (group) {
+      expensePredicted += effectiveForGroup(group, strategies);
+      expenseActual += actualForGroup(group);
+    }
+    // Recurse into children — each child decides for itself
+    for (const child of (node.children || [])) {
+      const sub = subtreeTotalsSplitNode(child, byCategory, strategies);
+      incomePredicted += sub.incomePredicted;
+      incomeActual += sub.incomeActual;
+      expensePredicted += sub.expensePredicted;
+      expenseActual += sub.expenseActual;
+    }
+  }
+  return { incomePredicted, incomeActual, expensePredicted, expenseActual };
+}
+
+function subtreeTotalsSplit(nodes, byCategory, strategies) {
+  let incomePredicted = 0, incomeActual = 0;
+  let expensePredicted = 0, expenseActual = 0;
+  for (const node of nodes) {
+    const sub = subtreeTotalsSplitNode(node, byCategory, strategies);
+    incomePredicted += sub.incomePredicted;
+    incomeActual += sub.incomeActual;
+    expensePredicted += sub.expensePredicted;
+    expenseActual += sub.expenseActual;
+  }
+  return { incomePredicted, incomeActual, expensePredicted, expenseActual };
+}
+
 function subtreeHasPredictions(node, byCategory) {
   if (byCategory[node.id]) return true;
   return (node.children || []).some((c) => subtreeHasPredictions(c, byCategory));
@@ -560,9 +634,11 @@ function subtreeHasPredictions(node, byCategory) {
 
 function CategoryTreeNode({
   node, byCategory, strategies, onStrategyChange,
-  loadPredictions, transactions, depth, allCategories,
+  onUpdatePrediction, transactions, depth, allCategories, inheritedIncome,
 }) {
   const [expanded, setExpanded] = useState(false);
+
+  const isIncome = node.incomeCategory || inheritedIncome || false;
 
   const group = byCategory[node.id];
   const childrenWithPredictions = (node.children || []).filter((c) => subtreeHasPredictions(c, byCategory));
@@ -595,13 +671,13 @@ function CategoryTreeNode({
           <span className="text-xs text-gray-500 mr-4">{childrenWithPredictions.length} sub-categor{childrenWithPredictions.length === 1 ? "y" : "ies"}</span>
           <span className="text-sm font-medium text-gray-700 w-24 text-right">{fmt(subPredicted)}</span>
           {subActual > 0 && (
-            <span className={`text-sm font-medium w-24 text-right ${isOver ? "text-red-600" : "text-green-700"}`}>
-              {fmt(subActual)} spent
+            <span className={`text-sm font-medium w-24 text-right ${isIncome ? (isOver ? "text-green-700" : "text-gray-700") : (isOver ? "text-red-600" : "text-green-700")}`}>
+              {fmt(subActual)} {isIncome ? "received" : "spent"}
             </span>
           )}
           <div className="w-20 ml-2">
             <div className="w-full bg-gray-200 rounded-full h-1.5">
-              <div className={`h-1.5 rounded-full ${isOver ? "bg-red-400" : "bg-blue-400"}`} style={{ width: `${pct}%` }} />
+              <div className={`h-1.5 rounded-full ${isIncome ? (isOver ? "bg-green-400" : "bg-blue-400") : (isOver ? "bg-red-400" : "bg-blue-400")}`} style={{ width: `${pct}%` }} />
             </div>
           </div>
         </div>
@@ -614,15 +690,17 @@ function CategoryTreeNode({
             <MergedPredictionRow
               rulePred={group.rule}
               recurringList={group.recurringList}
-              onMapActual={loadPredictions}
+              onUpdatePrediction={onUpdatePrediction}
               onStrategyChange={onStrategyChange}
               transactions={transactions}
+              isIncome={isIncome}
             />
           ) : (
             <PredictionRow
               p={group.rule || group.recurringList[0]}
-              onMapActual={loadPredictions}
+              onUpdatePrediction={onUpdatePrediction}
               transactions={transactions}
+              isIncome={isIncome}
             />
           )}
           {hasChildren && (
@@ -646,10 +724,11 @@ function CategoryTreeNode({
           byCategory={byCategory}
           strategies={strategies}
           onStrategyChange={onStrategyChange}
-          loadPredictions={loadPredictions}
+          onUpdatePrediction={onUpdatePrediction}
           transactions={transactions}
           depth={depth + 1}
           allCategories={allCategories}
+          inheritedIncome={isIncome}
         />
       ))}
 
@@ -675,7 +754,9 @@ function CategoryTreeNode({
 
 export default function Forecast() {
   const navigate = useNavigate();
-  const [month, setMonth] = useState(currentYearMonth());
+  const location = useLocation();
+  const [month, setMonth] = useState(() => location.state?.month || currentYearMonth());
+  const [notice, setNotice] = useState(() => location.state?.notice || null);
   const [predictions, setPredictions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -733,6 +814,10 @@ export default function Forecast() {
     loadTransactions();
   }, [loadData, loadTransactions]);
 
+  const updatePrediction = useCallback((updated) => {
+    setPredictions((prev) => prev.map((p) => p.id === updated.id ? updated : p));
+  }, []);
+
   // Build category prediction groups — recurringList is an array (supports multiple per category)
   const byCategory = {};
   for (const p of predictions) {
@@ -747,6 +832,7 @@ export default function Forecast() {
 
   const totalPredicted = activeRoots.reduce((s, node) => s + subtreeTotals(node, byCategory, strategies).predicted, 0);
   const totalActual = activeRoots.reduce((s, node) => s + subtreeTotals(node, byCategory, strategies).actual, 0);
+  const { incomePredicted, incomeActual, expensePredicted, expenseActual } = subtreeTotalsSplit(activeRoots, byCategory, strategies);
   const mergedCount = Object.values(byCategory).filter((g) => g.rule && g.recurringList?.length > 0).length;
   const isPast = isPastOrCurrentMonth(month);
 
@@ -768,21 +854,44 @@ export default function Forecast() {
         </div>
       </div>
 
+      {notice && (
+        <div className="bg-green-50 border border-green-200 rounded-md px-4 py-2 text-sm text-green-800 flex justify-between items-center">
+          <span>{notice}</span>
+          <button onClick={() => setNotice(null)} className="ml-4 text-green-600 hover:text-green-800 font-bold">✕</button>
+        </div>
+      )}
+
       {predictions.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-md px-5 py-3 flex flex-wrap gap-8 text-sm shadow-sm">
           <div>
-            <div className="text-gray-500">Effective Predicted</div>
-            <div className="text-lg font-bold text-gray-800">{fmt(totalPredicted)}</div>
+            <div className="text-gray-500">Predicted Income</div>
+            <div className="text-lg font-bold text-green-700">{fmt(incomePredicted)}</div>
+          </div>
+          <div>
+            <div className="text-gray-500">Predicted Expenses</div>
+            <div className="text-lg font-bold text-red-600">{fmt(expensePredicted)}</div>
+          </div>
+          <div>
+            <div className="text-gray-500">Net Predicted</div>
+            <div className={`text-lg font-bold ${incomePredicted - expensePredicted >= 0 ? "text-green-700" : "text-red-600"}`}>
+              {fmt(incomePredicted - expensePredicted)}
+            </div>
           </div>
           {isPast && (
             <>
               <div>
-                <div className="text-gray-500">Actual Spent</div>
-                <div className={`text-lg font-bold ${totalActual > totalPredicted ? "text-red-600" : "text-green-700"}`}>{fmt(totalActual)}</div>
+                <div className="text-gray-500">Actual Income</div>
+                <div className="text-lg font-bold text-green-700">{fmt(incomeActual)}</div>
               </div>
               <div>
-                <div className="text-gray-500">Remaining</div>
-                <div className="text-lg font-bold text-gray-700">{fmt(totalPredicted - totalActual)}</div>
+                <div className="text-gray-500">Actual Expenses</div>
+                <div className="text-lg font-bold text-red-600">{fmt(expenseActual)}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Net Actual</div>
+                <div className={`text-lg font-bold ${incomeActual - expenseActual >= 0 ? "text-green-700" : "text-red-600"}`}>
+                  {fmt(incomeActual - expenseActual)}
+                </div>
               </div>
             </>
           )}
@@ -815,7 +924,7 @@ export default function Forecast() {
               byCategory={byCategory}
               strategies={strategies}
               onStrategyChange={handleStrategyChange}
-              loadPredictions={loadData}
+              onUpdatePrediction={updatePrediction}
               transactions={transactions}
               depth={0}
               allCategories={categories}

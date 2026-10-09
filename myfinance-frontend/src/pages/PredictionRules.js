@@ -213,6 +213,7 @@ export default function PredictionRules() {
   const [rules, setRules] = useState([]);
   const [categories, setCategories] = useState([]);
   const [recurringList, setRecurringList] = useState([]);
+  const [autoPredictions, setAutoPredictions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editRule, setEditRule] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
@@ -224,6 +225,17 @@ export default function PredictionRules() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
   NProgress.configure({ showSpinner: false });
+
+  const fetchPredictions = async (month, year) => {
+    const targetMonth = `${year}-${String(month).padStart(2, "0")}`;
+    try {
+      const res = await api.get(`/predicted-transactions?month=${targetMonth}`);
+      const auto = res.data.filter(p => !p.predictionRuleId && !p.recurringTransactionId);
+      setAutoPredictions(auto);
+    } catch (err) {
+      console.error("Failed to fetch predictions:", err);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -257,6 +269,10 @@ export default function PredictionRules() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    fetchPredictions(selectedMonth, selectedYear);
+  }, [selectedMonth, selectedYear]);
 
   const saveRule = async (rule) => {
     setLoading(true);
@@ -335,10 +351,12 @@ export default function PredictionRules() {
     try {
       const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
       const res = await api.post(`/prediction-rules/generate-all-categories?targetMonth=${targetMonth}`);
-      showModal(res.data || `All-category predictions generated for ${getMonthName(selectedMonth)} ${selectedYear}!`);
+      const count = res.data || `All-category predictions generated for ${getMonthName(selectedMonth)} ${selectedYear}!`;
+      NProgress.done();
+      setLoading(false);
+      navigate("/forecast", { state: { month: targetMonth, notice: count } });
     } catch (err) {
       console.error("Failed to generate all-category predictions:", err);
-    } finally {
       NProgress.done();
       setLoading(false);
     }
@@ -396,10 +414,12 @@ export default function PredictionRules() {
     try {
       const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
       const res = await api.post(`/recurring-transactions/generate?targetMonth=${targetMonth}`);
-      showModal(res.data || `Recurring predictions generated for ${getMonthName(selectedMonth)} ${selectedYear}!`);
+      const count = res.data || `Recurring predictions generated for ${getMonthName(selectedMonth)} ${selectedYear}!`;
+      NProgress.done();
+      setLoading(false);
+      navigate("/forecast", { state: { month: targetMonth, notice: count } });
     } catch (err) {
       console.error("Failed to generate recurring predictions:", err);
-    } finally {
       NProgress.done();
       setLoading(false);
     }
@@ -410,6 +430,43 @@ export default function PredictionRules() {
   const limitedTree = rootHome.length > 0 ? rootHome : treeCategories;
   const flattened = flattenCategories(limitedTree);
 
+  // Index rules by categoryId for O(1) lookup in tree rendering
+  const ruleByCategory = {};
+  for (const rule of rules) {
+    ruleByCategory[rule.categoryId] = rule;
+  }
+
+  // Index auto-predictions (no rule, no recurring) by categoryId
+  const autoPredByCategory = {};
+  for (const p of autoPredictions) {
+    autoPredByCategory[p.categoryId] = p;
+  }
+
+  const deleteAutoPrediction = async (id) => {
+    try {
+      await api.delete(`/predicted-transactions/${id}`);
+      setAutoPredictions(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error("Failed to delete prediction:", err);
+    }
+  };
+
+  const deleteAllAutoPredictions = async () => {
+    if (!window.confirm(`Delete all auto-generated predictions for ${getMonthName(selectedMonth)} ${selectedYear}? Rule-based and recurring predictions will not be affected.`)) return;
+    const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+    setLoading(true);
+    NProgress.start();
+    try {
+      await api.delete(`/predicted-transactions/auto-generated?month=${targetMonth}`);
+      setAutoPredictions([]);
+    } catch (err) {
+      console.error("Failed to delete all auto predictions:", err);
+    } finally {
+      NProgress.done();
+      setLoading(false);
+    }
+  };
+
   const recurrenceLabel = (rt) => {
     const type = RECURRENCE_TYPES.find((r) => r.value === rt.recurrenceType);
     if (!type) return rt.recurrenceType;
@@ -418,6 +475,64 @@ export default function PredictionRules() {
       return `${type.label} (${months})`;
     }
     return type.label;
+  };
+
+  const renderCategoryRuleTree = (nodes, depth = 0) => {
+    return nodes.map((cat) => {
+      const rule = ruleByCategory[cat.id];
+      const autoPred = autoPredByCategory[cat.id];
+      const hasChildren = cat.children && cat.children.length > 0;
+      const hasAnything = rule || autoPred;
+      return (
+        <div key={cat.id} style={{ marginLeft: depth * 16 }}>
+          <div className={`flex items-center justify-between py-1.5 px-3 rounded text-sm border-l-2 ${rule ? "border-blue-400 bg-blue-50" : autoPred ? "border-orange-300 bg-orange-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}>
+            {/* Left: name + metadata */}
+            <div className="flex items-center gap-4 min-w-0 flex-1 mr-4">
+              <span className={`font-medium truncate ${hasAnything ? "text-gray-800" : "text-gray-400"}`}>
+                {cat.name}
+                {hasChildren && <span className="ml-1 text-xs text-gray-400">({cat.children.length})</span>}
+              </span>
+              {rule && (
+                <>
+                  <span className="text-xs text-blue-600 font-medium whitespace-nowrap">Rule</span>
+                  <span className="text-gray-500 text-xs whitespace-nowrap">
+                    {rule.predictionType === "MONTHLY" ? "Monthly" : `Yearly (${getMonthName(rule.specificMonth)})`}
+                  </span>
+                  <span className="text-gray-500 text-xs whitespace-nowrap">Lookback: {rule.lookbackMonths}m</span>
+                  <span className={`px-2 py-0.5 rounded text-xs whitespace-nowrap ${rule.enabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                    {rule.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                </>
+              )}
+              {!rule && autoPred && (
+                <>
+                  <span className="text-xs text-orange-600 font-medium whitespace-nowrap">Auto-generated</span>
+                  <span className="text-gray-500 text-xs whitespace-nowrap">
+                    ₹{parseFloat(autoPred.predictedAmount).toLocaleString("en-IN")}
+                  </span>
+                  <span className="text-gray-500 text-xs whitespace-nowrap">{autoPred.transactionType}</span>
+                </>
+              )}
+              {!hasAnything && <span className="text-gray-300 text-xs italic">no rule</span>}
+            </div>
+            {/* Right: action buttons */}
+            <div className="flex gap-3 shrink-0">
+              {rule && (
+                <>
+                  <button onClick={() => regeneratePredictions(rule.id)} className="text-purple-600 hover:underline text-xs whitespace-nowrap">Regenerate</button>
+                  <button onClick={() => setEditRule({ ...rule })} className="text-blue-600 hover:underline text-xs">Edit</button>
+                  <button onClick={() => setDeleteConfirmation(rule.id)} className="text-red-600 hover:underline text-xs">Delete Rule</button>
+                </>
+              )}
+              {!rule && autoPred && (
+                <button onClick={() => deleteAutoPrediction(autoPred.id)} className="text-red-600 hover:underline text-xs">Delete</button>
+              )}
+            </div>
+          </div>
+          {hasChildren && renderCategoryRuleTree(cat.children, depth + 1)}
+        </div>
+      );
+    });
   };
 
   return (
@@ -460,6 +575,14 @@ export default function PredictionRules() {
           >
             Generate All Categories
           </button>
+          {autoPredictions.length > 0 && (
+            <button
+              onClick={deleteAllAutoPredictions}
+              className="bg-red-500 text-white px-4 py-2 rounded text-sm shadow hover:bg-red-600"
+            >
+              Delete All Auto ({autoPredictions.length})
+            </button>
+          )}
           <button
             onClick={() =>
               setEditRule({
@@ -480,41 +603,15 @@ export default function PredictionRules() {
 
       {/* Prediction Rules */}
       <div className="bg-white border border-gray-200 rounded-md p-4 shadow-sm">
-        <div className="space-y-2">
-          {rules.map((rule) => (
-            <div
-              key={rule.id}
-              className="grid grid-cols-1 md:grid-cols-6 gap-4 py-3 px-4 rounded border border-gray-200 items-center text-sm bg-blue-50"
-            >
-              <div className="font-medium text-gray-800">
-                {rule.categoryName}
-                {rule.descendantCategoryCount > 0 && (
-                  <span className="ml-1 text-xs text-gray-400">(+{rule.descendantCategoryCount} sub-categories)</span>
-                )}
+        <div className="space-y-0.5">
+          {treeCategories.length > 0
+            ? renderCategoryRuleTree(treeCategories)
+            : (
+              <div className="text-center text-gray-500 py-8">
+                No categories found. Add categories first, then create prediction rules.
               </div>
-              <div className="text-gray-600">
-                {rule.predictionType === "MONTHLY" ? "Monthly" : `Yearly (${getMonthName(rule.specificMonth)})`}
-              </div>
-              <div className="text-gray-600">Lookback: {rule.lookbackMonths} months</div>
-              <div>
-                <span className={`inline-block px-2 py-1 rounded text-xs ${rule.enabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
-                  {rule.enabled ? "Enabled" : "Disabled"}
-                </span>
-              </div>
-              <div className="flex gap-2 md:col-span-2 justify-end">
-                <button onClick={() => regeneratePredictions(rule.id)} className="text-purple-600 hover:underline" title="Regenerate predictions for current month">
-                  Regenerate
-                </button>
-                <button onClick={() => setEditRule({ ...rule })} className="text-blue-600 hover:underline">Edit</button>
-                <button onClick={() => setDeleteConfirmation(rule.id)} className="text-red-600 hover:underline">Delete</button>
-              </div>
-            </div>
-          ))}
-          {rules.length === 0 && (
-            <div className="text-center text-gray-500 py-8">
-              No prediction rules configured. Click "Add Rule" to create one.
-            </div>
-          )}
+            )
+          }
         </div>
       </div>
 

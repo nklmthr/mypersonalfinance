@@ -20,6 +20,7 @@ public class CategoryDTO {
 		this.name = category.getName();
 		this.parentId = category.getParent() != null ? category.getParent() : null;
 		this.systemCategory = category.isSystemCategory();
+		this.incomeCategory = category.isIncomeCategory();
 	}
 
 	private String id;
@@ -28,6 +29,7 @@ public class CategoryDTO {
     @JsonAlias({"parent"})
     private String parentId;
 	private boolean systemCategory;
+	private boolean incomeCategory;
 	private List<CategoryDTO> children = new ArrayList<>();
 
 }

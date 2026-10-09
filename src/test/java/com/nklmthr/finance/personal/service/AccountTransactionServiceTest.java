@@ -467,7 +467,7 @@ class AccountTransactionServiceTest {
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
 
@@ -498,7 +498,7 @@ class AccountTransactionServiceTest {
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
 
@@ -530,7 +530,7 @@ class AccountTransactionServiceTest {
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
 
@@ -566,7 +566,7 @@ class AccountTransactionServiceTest {
             null, 
             TransactionType.DEBIT, 
             new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), 
-            new CategoryDTO("cat", "Food", null, false, List.of()), 
+            new CategoryDTO("cat", "Food", null, false, false, List.of()), 
             null, 
             List.of(), 
             null,
@@ -612,7 +612,7 @@ class AccountTransactionServiceTest {
             new AccountTransactionDTO("p1", LocalDateTime.now(), BigDecimal.ZERO, "Updated description", 
                 null, null, null, TransactionType.DEBIT, 
                 new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), 
-                new CategoryDTO("newcat", "NewCategory", null, false, List.of()), 
+                new CategoryDTO("newcat", "NewCategory", null, false, false, List.of()), 
                 null, List.of(),             null, null, null, null, null, null, null, null, null, null)
         );
 
@@ -626,7 +626,7 @@ class AccountTransactionServiceTest {
             null, 
             TransactionType.DEBIT, 
             new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), 
-            new CategoryDTO("newcat", "NewCategory", null, false, List.of()), 
+            new CategoryDTO("newcat", "NewCategory", null, false, false, List.of()), 
             null, 
             List.of(), 
             null,
@@ -1748,7 +1748,7 @@ class AccountTransactionServiceTest {
             null,
             TransactionType.DEBIT,
             new AccountDTO("a1", "Account 1", BigDecimal.ZERO, null, null, null, null, null, false),
-            new CategoryDTO("cat", "Food", null, false, List.of()),
+            new CategoryDTO("cat", "Food", null, false, false, List.of()),
             null,
             List.of(),
             null,
@@ -1789,7 +1789,7 @@ class AccountTransactionServiceTest {
             null,
             TransactionType.DEBIT,
             new AccountDTO("a1", "Account 1", BigDecimal.ZERO, null, null, null, null, null, false),
-            new CategoryDTO("cat", "Food", null, false, List.of()),
+            new CategoryDTO("cat", "Food", null, false, false, List.of()),
             null,
             List.of(),
             null,
@@ -1866,7 +1866,7 @@ class AccountTransactionServiceTest {
             null,
             TransactionType.DEBIT,
             new AccountDTO("a1", "Account 1", BigDecimal.ZERO, null, null, null, null, null, false),
-            new CategoryDTO("cat", "Food", null, false, List.of()),
+            new CategoryDTO("cat", "Food", null, false, false, List.of()),
             null,
             List.of(),
             null,
@@ -1903,7 +1903,7 @@ class AccountTransactionServiceTest {
             null,
             TransactionType.DEBIT,
             new AccountDTO("a1", "Account 1", BigDecimal.ZERO, null, null, null, null, null, false),
-            new CategoryDTO("cat", "Food", null, false, List.of()),
+            new CategoryDTO("cat", "Food", null, false, false, List.of()),
             null,
             List.of(),
             null,
@@ -1957,7 +1957,7 @@ class AccountTransactionServiceTest {
             null,
             TransactionType.DEBIT,
             new AccountDTO("a1", "Account 1", BigDecimal.ZERO, null, null, null, null, null, false),
-            new CategoryDTO("cat", "Food", null, false, List.of()),
+            new CategoryDTO("cat", "Food", null, false, false, List.of()),
             null,
             List.of(),
             null,
@@ -1998,7 +1998,7 @@ class AccountTransactionServiceTest {
             null,
             TransactionType.DEBIT,
             new AccountDTO("a1", "Account 1", BigDecimal.ZERO, null, null, null, null, null, false),
-            new CategoryDTO("cat", "Food", null, false, List.of()),
+            new CategoryDTO("cat", "Food", null, false, false, List.of()),
             null,
             List.of(),
             null,

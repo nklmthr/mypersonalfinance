@@ -36,6 +36,9 @@ public class Category {
 	@Column(name = "system_category", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
 	private boolean systemCategory = false;
 
+	@Column(name = "income_category", nullable = false, columnDefinition = "TINYINT(1) DEFAULT 0")
+	private boolean incomeCategory = false;
+
 	@ManyToOne(optional = false, fetch = FetchType.LAZY)
 	@JoinColumn(name = "app_user_id", nullable = false)
 	@JsonIgnore

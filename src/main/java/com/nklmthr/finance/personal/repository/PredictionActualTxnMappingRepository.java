@@ -4,6 +4,9 @@ import java.util.List;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.nklmthr.finance.personal.model.PredictedTransaction;
@@ -23,11 +26,17 @@ public interface PredictionActualTxnMappingRepository extends JpaRepository<Pred
 		"actualTransaction.transactionLabels.label"
 	})
 	List<PredictionActualTxnMapping> findByPredictedTransaction(PredictedTransaction predictedTransaction);
-	
+
 	List<PredictionActualTxnMapping> findByActualTransaction(com.nklmthr.finance.personal.model.AccountTransaction actualTransaction);
-	
+
 	void deleteByPredictedTransaction(PredictedTransaction predictedTransaction);
-	
+
+	boolean existsByPredictedTransactionAndActualTransaction(PredictedTransaction predictedTransaction, com.nklmthr.finance.personal.model.AccountTransaction actualTransaction);
+
 	void deleteByActualTransaction(com.nklmthr.finance.personal.model.AccountTransaction actualTransaction);
+
+	@Modifying
+	@Query("DELETE FROM PredictionActualTxnMapping m WHERE m.predictedTransaction IN :predictions")
+	void deleteByPredictedTransactionIn(@Param("predictions") List<PredictedTransaction> predictions);
 }
 

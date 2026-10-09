@@ -63,6 +63,17 @@ function AddCategoryModal({
 							</option>
 						))}
 				</select>
+				<label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+					<input
+						type="checkbox"
+						checked={newCategory.incomeCategory}
+						onChange={(e) =>
+							setNewCategory({ ...newCategory, incomeCategory: e.target.checked })
+						}
+						className="w-4 h-4 accent-blue-600"
+					/>
+					Income Category (earning, not expense)
+				</label>
 				<div className="flex justify-end gap-2">
 					<button
 						onClick={onClose}
@@ -99,11 +110,12 @@ export default function Categories() {
 
 	const [showAddModal, setShowAddModal] = useState(false);
 	const [showEditModal, setShowEditModal] = useState(false);
-	const [newCategory, setNewCategory] = useState({ name: "", parentId: "" });
+	const [newCategory, setNewCategory] = useState({ name: "", parentId: "", incomeCategory: false });
 	const [editCategory, setEditCategory] = useState({
 		id: "",
 		name: "",
 		parentId: "",
+		incomeCategory: false,
 	});
 	const [loading, setLoading] = useState(false);
 
@@ -191,6 +203,7 @@ export default function Categories() {
 			const payload = {
 				name: newCategory.name,
 				parent: newCategory.parentId || null,
+				incomeCategory: newCategory.incomeCategory,
 			};
 			await api.post("/categories", payload);
 			setNewCategory({ name: "", parentId: "" });
@@ -211,6 +224,7 @@ export default function Categories() {
 			const payload = {
 				name: editCategory.name,
 				parent: editCategory.parentId || null,
+				incomeCategory: editCategory.incomeCategory,
 			};
 			await api.put(`/categories/${editCategory.id}`, payload);
 			setShowEditModal(false);
@@ -271,6 +285,9 @@ export default function Categories() {
 							aria-hidden="true"
 						/>
 						<span className="font-medium truncate">{cat.name}</span>
+						{cat.incomeCategory && (
+							<span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-normal">Income</span>
+						)}
 					</div>
 					<div className="space-x-2 text-xs">
 						<button
@@ -280,6 +297,7 @@ export default function Categories() {
 									id: cat.id,
 									name: cat.name,
 									parentId: cat.parentId || "",
+									incomeCategory: cat.incomeCategory || false,
 								});
 								setShowEditModal(true);
 							}}
@@ -365,6 +383,17 @@ export default function Categories() {
 									</option>
 								))}
 						</select>
+						<label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+							<input
+								type="checkbox"
+								checked={editCategory.incomeCategory || false}
+								onChange={(e) =>
+									setEditCategory({ ...editCategory, incomeCategory: e.target.checked })
+								}
+								className="w-4 h-4 accent-blue-600"
+							/>
+							Income Category (earning, not expense)
+						</label>
 						<div className="flex justify-end gap-2">
 							<button
 								onClick={() => setShowEditModal(false)}
