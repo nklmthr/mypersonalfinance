@@ -102,6 +102,16 @@ public class RecurringTransactionService {
 		recurringTransactionRepository.delete(rt);
 	}
 
+	@Transactional
+	public int clearPredictions(String id) {
+		AppUser user = appUserService.getCurrentUser();
+		RecurringTransaction rt = recurringTransactionRepository.findByAppUserAndId(user, id)
+			.orElseThrow(() -> new IllegalArgumentException("Recurring transaction not found: " + id));
+		List<PredictedTransaction> predictions = predictedTransactionRepository.findByRecurringTransaction(rt);
+		predictedTransactionRepository.deleteAll(predictions);
+		return predictions.size();
+	}
+
 	// ── Prediction generation ─────────────────────────────────────────────────
 
 	/**

@@ -530,39 +530,35 @@ public class PredictionService {
 			: YearMonth.now();
 
 		int defaultLookback = 6;
-		YearMonth lookbackStart = targetMonth.minusMonths(defaultLookback);
-		LocalDateTime startDate = lookbackStart.atDay(1).atStartOfDay();
-		LocalDateTime endDate = targetMonth.minusMonths(1).atEndOfMonth().atTime(23, 59, 59);
 		String monthString = targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
 
-		// Find all category IDs that have transaction history in the lookback window
-		List<String> activeCategoryIds =
-			accountTransactionRepository.findDistinctCategoryIdsWithTransactions(user, startDate, endDate);
-
-		if (activeCategoryIds.isEmpty()) {
-			log.info("No categories with transaction history found for generate-all-categories, month {}", monthString);
-			return 0;
-		}
-
-		// Collect category IDs already covered by an existing rule
+		// Collect category IDs already covered by an existing rule or recurring transaction prediction
 		Set<String> ruleCategoryIds = getEnabledRulesForUser(user).stream()
 			.map(r -> r.getCategory().getId())
 			.collect(java.util.stream.Collectors.toSet());
 
-		// Build a map from id → Category for the active categories
+		Set<String> recurringCategoryIds = predictedTransactionRepository
+			.findByAppUserAndPredictionMonthAndRecurringTransactionIsNotNull(user, monthString).stream()
+			.map(p -> p.getCategory().getId())
+			.collect(java.util.stream.Collectors.toSet());
+
 		List<Category> allUserCategories = categoryService.getAllCategoryEntities(user);
-		java.util.Map<String, Category> categoryById = allUserCategories.stream()
-			.collect(java.util.stream.Collectors.toMap(Category::getId, c -> c));
+
+		// Only generate for leaf categories (those that are never a parent of another category)
+		// — parent categories don't have direct transactions so ₹0 predictions there add noise
+		java.util.Set<String> parentIds = allUserCategories.stream()
+			.map(Category::getParent)
+			.filter(p -> p != null)
+			.collect(java.util.stream.Collectors.toSet());
 
 		int generated = 0;
-		for (String catId : activeCategoryIds) {
-			// Skip if already covered by a rule (rule-based prediction handles this)
-			if (ruleCategoryIds.contains(catId)) {
+		for (Category category : allUserCategories) {
+			// Skip parent/container categories
+			if (parentIds.contains(category.getId())) {
 				continue;
 			}
-
-			Category category = categoryById.get(catId);
-			if (category == null) {
+			// Skip if already covered by a rule or a recurring prediction
+			if (ruleCategoryIds.contains(category.getId()) || recurringCategoryIds.contains(category.getId())) {
 				continue;
 			}
 
@@ -585,15 +581,32 @@ public class PredictionService {
 				.build();
 
 			PredictedTransaction prediction = calculatePrediction(user, transientRule, targetMonth);
-			if (prediction != null) {
-				// Null out predictionRule so it's clear this is auto-generated, not rule-based
+			if (prediction == null) {
+				// No history — create a ₹0 placeholder so actual spend is still visible
+				prediction = PredictedTransaction.builder()
+					.appUser(user)
+					.predictionRule(null)
+					.category(category)
+					.predictedAmount(BigDecimal.ZERO)
+					.remainingAmount(BigDecimal.ZERO)
+					.actualSpent(BigDecimal.ZERO)
+					.transactionType(com.nklmthr.finance.personal.enums.TransactionType.DEBIT)
+					.predictionMonth(monthString)
+					.description("No history for " + category.getName())
+					.explanation("No transactions found in the lookback window. Predicted ₹0.")
+					.currency("INR")
+					.calculationDate(java.time.LocalDateTime.now())
+					.basedOnTransactionCount(0)
+					.visible(true)
+					.build();
+			} else {
 				prediction.setPredictionRule(null);
-				PredictedTransaction saved = predictedTransactionRepository.save(prediction);
-				createHistoricalMappingsForCategory(saved, category, defaultLookback, targetMonth);
-				generated++;
-				log.debug("Auto-generated prediction for category {} month {}: {}",
-					category.getName(), monthString, prediction.getPredictedAmount());
+				createHistoricalMappingsForCategory(prediction, category, defaultLookback, targetMonth);
 			}
+			predictedTransactionRepository.save(prediction);
+			generated++;
+			log.debug("Auto-generated prediction for category {} month {}: {}",
+				category.getName(), monthString, prediction.getPredictedAmount());
 		}
 
 		log.info("generate-all-categories for {}: {} new predictions created", monthString, generated);

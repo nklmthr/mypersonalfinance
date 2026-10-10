@@ -40,6 +40,9 @@ public interface PredictedTransactionRepository extends JpaRepository<PredictedT
 
 	List<PredictedTransaction> findByRecurringTransaction(RecurringTransaction recurringTransaction);
 
+	List<PredictedTransaction> findByAppUserAndPredictionMonthAndRecurringTransactionIsNotNull(
+		AppUser appUser, String predictionMonth);
+
 	List<PredictedTransaction> findByAppUserAndPredictionMonthAndPredictionRuleIsNullAndRecurringTransactionIsNull(
 		AppUser appUser, String predictionMonth);
 

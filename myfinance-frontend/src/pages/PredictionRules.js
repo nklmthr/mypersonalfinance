@@ -208,6 +208,7 @@ function RecurringForm({ form, setForm, flattened, onSave, onCancel }) {
 
 export default function PredictionRules() {
   const navigate = useNavigate();
+  const { showModal } = useErrorModal();
   const [rules, setRules] = useState([]);
   const [categories, setCategories] = useState([]);
   const [recurringList, setRecurringList] = useState([]);
@@ -338,6 +339,25 @@ export default function PredictionRules() {
     }
   };
 
+  const clearRecurringPredictions = async (rt) => {
+    showModal(
+      `Clear all generated predictions for "${rt.description}"? The recurring pattern will be kept.`,
+      async () => {
+        setLoading(true);
+        NProgress.start();
+        try {
+          await api.delete(`/recurring-transactions/${rt.id}/predictions`);
+          await fetchPredictions(selectedMonth, selectedYear);
+        } catch (err) {
+          console.error("Failed to clear recurring predictions:", err);
+        } finally {
+          NProgress.done();
+          setLoading(false);
+        }
+      }
+    );
+  };
+
   const generateRecurring = async () => {
     setLoading(true);
     NProgress.start();
@@ -382,23 +402,27 @@ export default function PredictionRules() {
   };
 
   const deleteAllAutoPredictions = async () => {
-    if (!window.confirm(`Delete all auto-generated predictions for ${getMonthName(selectedMonth)} ${selectedYear}?`)) return;
     const targetMonth = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
-    setLoading(true);
-    NProgress.start();
-    try {
-      await api.delete(`/predicted-transactions/auto-generated?month=${targetMonth}`);
-      setPredByCategory(prev => {
-        const next = {};
-        for (const [k, v] of Object.entries(prev)) { if (v.predictionRuleId) next[k] = v; }
-        return next;
-      });
-    } catch (err) {
-      console.error("Failed to delete all auto predictions:", err);
-    } finally {
-      NProgress.done();
-      setLoading(false);
-    }
+    showModal(
+      `Delete all auto-generated predictions for ${getMonthName(selectedMonth)} ${selectedYear}?`,
+      async () => {
+        setLoading(true);
+        NProgress.start();
+        try {
+          await api.delete(`/predicted-transactions/auto-generated?month=${targetMonth}`);
+          setPredByCategory(prev => {
+            const next = {};
+            for (const [k, v] of Object.entries(prev)) { if (v.predictionRuleId) next[k] = v; }
+            return next;
+          });
+        } catch (err) {
+          console.error("Failed to delete all auto predictions:", err);
+        } finally {
+          NProgress.done();
+          setLoading(false);
+        }
+      }
+    );
   };
 
   const handleOverride = async (pred, amount) => {
@@ -639,6 +663,12 @@ export default function PredictionRules() {
                     className="text-blue-600 hover:underline"
                   >
                     Edit
+                  </button>
+                  <button
+                    onClick={() => clearRecurringPredictions(rt)}
+                    className="text-amber-600 hover:underline"
+                  >
+                    Clear
                   </button>
                   <button
                     onClick={() => setDeleteRecurringId(rt.id)}

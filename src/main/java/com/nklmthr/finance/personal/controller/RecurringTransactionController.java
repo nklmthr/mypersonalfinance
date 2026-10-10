@@ -63,6 +63,17 @@ public class RecurringTransactionController {
 		}
 	}
 
+	@DeleteMapping("/{id}/predictions")
+	public ResponseEntity<?> clearPredictions(@PathVariable String id) {
+		try {
+			int count = recurringTransactionService.clearPredictions(id);
+			return ResponseEntity.ok("Cleared " + count + " generated predictions");
+		} catch (Exception e) {
+			log.error("Failed to clear predictions for recurring transaction {}", id, e);
+			return ResponseEntity.badRequest().body(e.getMessage());
+		}
+	}
+
 	@PostMapping("/generate")
 	public ResponseEntity<?> generateForMonth(@RequestParam(required = false) String targetMonth) {
 		try {
