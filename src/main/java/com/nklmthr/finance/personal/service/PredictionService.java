@@ -599,11 +599,12 @@ public class PredictionService {
 					.basedOnTransactionCount(0)
 					.visible(true)
 					.build();
+				predictedTransactionRepository.save(prediction);
 			} else {
 				prediction.setPredictionRule(null);
-				createHistoricalMappingsForCategory(prediction, category, defaultLookback, targetMonth);
+				PredictedTransaction saved = predictedTransactionRepository.save(prediction);
+				createHistoricalMappingsForCategory(saved, category, defaultLookback, targetMonth);
 			}
-			predictedTransactionRepository.save(prediction);
 			generated++;
 			log.debug("Auto-generated prediction for category {} month {}: {}",
 				category.getName(), monthString, prediction.getPredictedAmount());
