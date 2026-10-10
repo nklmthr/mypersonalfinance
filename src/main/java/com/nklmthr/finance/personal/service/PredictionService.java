@@ -544,6 +544,7 @@ public class PredictionService {
 
 		// Only generate for leaf categories (those that are never a parent of another category)
 		// — parent categories don't have direct transactions so ₹0 predictions there add noise
+		List<Category> allUserCategories = categoryService.getAllCategoryEntities(user);
 		java.util.Set<String> parentIds = allUserCategories.stream()
 			.map(Category::getParent)
 			.filter(p -> p != null)
