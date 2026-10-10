@@ -84,7 +84,7 @@ function MergedPredictionRow({ rulePred, recurringList, onStrategyChange, isInco
   const recurringActual = recurringList.reduce((s, p) => s + parseFloat(p.actualSpent ?? 0), 0);
   const totalActual = ruleActual + recurringActual;
   const remaining = effectiveAmt - totalActual;
-  const pct = effectiveAmt > 0 ? Math.min(100, (totalActual / effectiveAmt) * 100) : 0;
+  const pct = effectiveAmt > 0 ? (totalActual / effectiveAmt) * 100 : 0;
   const isOver = totalActual > effectiveAmt;
 
   const handleStrategyChange = (s) => {
@@ -145,13 +145,17 @@ function MergedPredictionRow({ rulePred, recurringList, onStrategyChange, isInco
             <div className={`font-medium text-sm ${isIncome ? (isOver ? "text-green-700" : "text-gray-700") : (isOver ? "text-red-600" : "text-green-700")}`}>
               {fmt(totalActual)} {isIncome ? "received" : "spent"}
             </div>
-            <div className="text-gray-600 text-sm">{fmt(remaining)} {isIncome ? "remaining" : "left"}</div>
+            <div className={`text-sm ${isOver ? (isIncome ? "text-green-700 font-medium" : "text-red-600 font-medium") : "text-gray-600"}`}>
+              {isOver
+                ? `${fmt(totalActual - effectiveAmt)} ${isIncome ? "over received" : "overspent"}`
+                : `${fmt(remaining)} ${isIncome ? "remaining" : "left"}`}
+            </div>
           </>
         )}
 
         <div>
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className={`h-2 rounded-full ${isIncome ? (isOver ? "bg-green-500" : "bg-blue-400") : (isOver ? "bg-red-500" : "bg-purple-500")}`} style={{ width: `${pct}%` }} />
+            <div className={`h-2 rounded-full ${isIncome ? (isOver ? "bg-green-500" : "bg-blue-400") : (isOver ? "bg-red-500" : "bg-purple-500")}`} style={{ width: `${Math.min(100, pct)}%` }} />
           </div>
           <div className="text-xs text-gray-500 mt-0.5">{pct.toFixed(0)}% {isIncome ? "received" : "used"}</div>
         </div>
@@ -199,7 +203,7 @@ function PredictionRow({ p, isIncome }) {
   const remaining = parseFloat(p.remainingAmount ?? p.predictedAmount);
   const actual = parseFloat(p.actualSpent ?? 0);
   const predicted = parseFloat(p.predictedAmount ?? 0);
-  const pct = predicted > 0 ? Math.min(100, (actual / predicted) * 100) : 0;
+  const pct = predicted > 0 ? (actual / predicted) * 100 : 0;
   const isOver = actual > predicted;
 
   const isRecurring = !!p.recurringTransactionId;
@@ -231,12 +235,16 @@ function PredictionRow({ p, isIncome }) {
             <div className={`font-medium ${isIncome ? (isOver ? "text-green-700" : "text-gray-700") : (isOver ? "text-red-600" : "text-green-700")}`}>
               {fmt(p.actualSpent)} {isIncome ? "received" : "spent"}
             </div>
-            <div className="text-gray-600">{fmt(remaining)} {isIncome ? "remaining" : "left"}</div>
+            <div className={`${isOver ? (isIncome ? "text-green-700 font-medium" : "text-red-600 font-medium") : "text-gray-600"}`}>
+              {isOver
+                ? `${fmt(actual - predicted)} ${isIncome ? "over received" : "overspent"}`
+                : `${fmt(remaining)} ${isIncome ? "remaining" : "left"}`}
+            </div>
           </>
         )}
         <div>
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className={`h-2 rounded-full ${isIncome ? (isOver ? "bg-green-500" : "bg-blue-400") : (isOver ? "bg-red-500" : "bg-green-500")}`} style={{ width: `${pct}%` }} />
+            <div className={`h-2 rounded-full ${isIncome ? (isOver ? "bg-green-500" : "bg-blue-400") : (isOver ? "bg-red-500" : "bg-green-500")}`} style={{ width: `${Math.min(100, pct)}%` }} />
           </div>
           <div className="text-xs text-gray-500 mt-0.5">{pct.toFixed(0)}% {isIncome ? "received" : "used"}</div>
         </div>
@@ -351,7 +359,7 @@ function CategoryTreeNode({
   if (!group && !hasChildren) return null;
 
   const indent = depth * 16;
-  const pct = subPredicted > 0 ? Math.min(100, (subActual / subPredicted) * 100) : 0;
+  const pct = subPredicted > 0 ? (subActual / subPredicted) * 100 : 0;
   const isOver = subActual > subPredicted;
 
   const isMerged = group?.rule && group?.recurringList?.length > 0;
@@ -378,7 +386,7 @@ function CategoryTreeNode({
           )}
           <div className="w-20 ml-2">
             <div className="w-full bg-gray-200 rounded-full h-1.5">
-              <div className={`h-1.5 rounded-full ${isIncome ? (isOver ? "bg-green-400" : "bg-blue-400") : (isOver ? "bg-red-400" : "bg-blue-400")}`} style={{ width: `${pct}%` }} />
+              <div className={`h-1.5 rounded-full ${isIncome ? (isOver ? "bg-green-400" : "bg-blue-400") : (isOver ? "bg-red-400" : "bg-blue-400")}`} style={{ width: `${Math.min(100, pct)}%` }} />
             </div>
           </div>
         </div>

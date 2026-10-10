@@ -64,7 +64,9 @@ public class PredictedTransactionController {
 			List<PredictedTransactionDTO> dtos = predictions.stream().map(p -> {
 				PredictedTransactionDTO dto = predictedTransactionMapper.toDTO(p);
 				Set<String> categoryIds = categoryService.getAllDescendantCategoryIds(user, p.getCategory().getId());
-				BigDecimal actual = accountTransactionRepository.sumActualByCategoryIdsAndDateRange(user, categoryIds, start, end);
+				BigDecimal netActual = accountTransactionRepository.sumActualByCategoryIdsAndDateRange(user, categoryIds, start, end);
+				// Query returns net (DEBIT - CREDIT); take abs so frontend always sees a positive magnitude
+				BigDecimal actual = netActual.abs();
 				dto.setActualSpent(actual);
 				dto.setRemainingAmount(dto.getPredictedAmount().subtract(actual));
 				return dto;

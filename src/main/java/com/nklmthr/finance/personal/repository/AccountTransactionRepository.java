@@ -312,7 +312,7 @@ public interface AccountTransactionRepository
 		@Param("endDate") LocalDateTime endDate);
 
 	@Query("""
-		SELECT COALESCE(SUM(t.amount), 0)
+		SELECT COALESCE(SUM(CASE WHEN t.type = 'DEBIT' THEN t.amount ELSE -t.amount END), 0)
 		FROM AccountTransaction t
 		WHERE t.appUser = :appUser
 		  AND t.category.id IN :categoryIds
