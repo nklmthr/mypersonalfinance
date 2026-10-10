@@ -20,6 +20,7 @@ import com.nklmthr.finance.personal.model.PredictedTransaction;
 import com.nklmthr.finance.personal.model.RecurringTransaction;
 import com.nklmthr.finance.personal.repository.CategoryRepository;
 import com.nklmthr.finance.personal.repository.PredictedTransactionRepository;
+import com.nklmthr.finance.personal.repository.PredictionActualTxnMappingRepository;
 import com.nklmthr.finance.personal.repository.RecurringTransactionRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class RecurringTransactionService {
 	private final AppUserService appUserService;
 	private final RecurringTransactionRepository recurringTransactionRepository;
 	private final PredictedTransactionRepository predictedTransactionRepository;
+	private final PredictionActualTxnMappingRepository actualMappingRepository;
 	private final CategoryRepository categoryRepository;
 
 	// ── CRUD ──────────────────────────────────────────────────────────────────
@@ -140,8 +142,11 @@ public class RecurringTransactionService {
 		AppUser user = appUserService.getCurrentUser();
 		RecurringTransaction rt = recurringTransactionRepository.findByAppUserAndId(user, id)
 			.orElseThrow(() -> new IllegalArgumentException("Recurring transaction not found: " + id));
-		predictedTransactionRepository.deleteAll(
-			predictedTransactionRepository.findByRecurringTransaction(rt));
+		List<PredictedTransaction> predictions = predictedTransactionRepository.findByRecurringTransaction(rt);
+		if (!predictions.isEmpty()) {
+			actualMappingRepository.deleteByPredictedTransactionIn(predictions);
+		}
+		predictedTransactionRepository.deleteAll(predictions);
 		recurringTransactionRepository.delete(rt);
 	}
 
@@ -151,6 +156,9 @@ public class RecurringTransactionService {
 		RecurringTransaction rt = recurringTransactionRepository.findByAppUserAndId(user, id)
 			.orElseThrow(() -> new IllegalArgumentException("Recurring transaction not found: " + id));
 		List<PredictedTransaction> predictions = predictedTransactionRepository.findByRecurringTransaction(rt);
+		if (!predictions.isEmpty()) {
+			actualMappingRepository.deleteByPredictedTransactionIn(predictions);
+		}
 		predictedTransactionRepository.deleteAll(predictions);
 		return predictions.size();
 	}

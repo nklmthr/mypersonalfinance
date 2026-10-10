@@ -44,6 +44,12 @@ const EMPTY_RECURRING = {
 function RecurringForm({ form, setForm, flattened, onSave, onCancel }) {
   const needsMonths = form.recurrenceType === "YEARLY" || form.recurrenceType === "CUSTOM";
 
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onCancel(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onCancel]);
+
   const toggleMonth = (num) => {
     const current = form.activeMonths
       ? form.activeMonths.split(",").map(Number).filter(Boolean)

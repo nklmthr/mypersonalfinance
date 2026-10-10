@@ -5,7 +5,9 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -529,7 +531,7 @@ public class PredictionService {
 			? YearMonth.parse(targetMonthStr, DateTimeFormatter.ofPattern("yyyy-MM"))
 			: YearMonth.now();
 
-		int defaultLookback = 6;
+		int defaultLookback = 3;
 		String monthString = targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
 
 		// Collect category IDs already covered by an existing rule or recurring transaction prediction
@@ -543,25 +545,36 @@ public class PredictionService {
 			.collect(java.util.stream.Collectors.toSet());
 
 		// Only generate for leaf categories (those that are never a parent of another category)
-		// — parent categories don't have direct transactions so ₹0 predictions there add noise
 		List<Category> allUserCategories = categoryService.getAllCategoryEntities(user);
 		java.util.Set<String> parentIds = allUserCategories.stream()
 			.map(Category::getParent)
 			.filter(p -> p != null)
 			.collect(java.util.stream.Collectors.toSet());
 
+		// Lookback window always anchored to today, not the target month.
+		// This ensures future-month predictions use the same real data as current-month ones.
+		YearMonth lookbackStart = YearMonth.now().minusMonths(defaultLookback);
+		LocalDateTime startDate = lookbackStart.atDay(1).atStartOfDay();
+		LocalDateTime endDate = YearMonth.now().minusMonths(1).atEndOfMonth().atTime(23, 59, 59);
+
+		List<Object[]> bulkRows = accountTransactionRepository.sumByCategoryAndDateRange(user, startDate, endDate);
+		Map<String, BigDecimal> netSumByCategoryId = new HashMap<>();
+		Map<String, Long> countByCategoryId = new HashMap<>();
+		for (Object[] row : bulkRows) {
+			String catId = (String) row[0];
+			BigDecimal net = row[1] instanceof Double
+				? BigDecimal.valueOf((Double) row[1])
+				: (BigDecimal) row[1];
+			Long cnt = (Long) row[2];
+			netSumByCategoryId.put(catId, net);
+			countByCategoryId.put(catId, cnt);
+		}
+
 		int generated = 0;
 		for (Category category : allUserCategories) {
-			// Skip parent/container categories
-			if (parentIds.contains(category.getId())) {
-				continue;
-			}
-			// Skip if already covered by a rule or a recurring prediction
-			if (ruleCategoryIds.contains(category.getId()) || recurringCategoryIds.contains(category.getId())) {
-				continue;
-			}
+			if (parentIds.contains(category.getId())) continue;
+			if (ruleCategoryIds.contains(category.getId()) || recurringCategoryIds.contains(category.getId())) continue;
 
-			// Skip if an auto-generated prediction already exists for this month
 			if (predictedTransactionRepository
 					.findByAppUserAndCategoryAndPredictionMonthAndPredictionRuleIsNullAndRecurringTransactionIsNull(
 						user, category, monthString)
@@ -570,18 +583,19 @@ public class PredictionService {
 				continue;
 			}
 
-			// Build a transient rule to reuse calculatePrediction (not persisted)
-			PredictionRule transientRule = PredictionRule.builder()
-				.appUser(user)
-				.category(category)
-				.predictionType(PredictionType.MONTHLY)
-				.lookbackMonths(defaultLookback)
-				.enabled(true)
-				.build();
+			// Roll up net sum across this leaf + all its descendants using the pre-fetched bulk data
+			Set<String> descendantIds = categoryService.getAllDescendantCategoryIds(user, category.getId());
+			BigDecimal totalNet = BigDecimal.ZERO;
+			long totalCount = 0;
+			for (String cid : descendantIds) {
+				BigDecimal s = netSumByCategoryId.get(cid);
+				if (s != null) totalNet = totalNet.add(s);
+				Long c = countByCategoryId.get(cid);
+				if (c != null) totalCount += c;
+			}
 
-			PredictedTransaction prediction = calculatePrediction(user, transientRule, targetMonth);
-			if (prediction == null) {
-				// No history — create a ₹0 placeholder so actual spend is still visible
+			PredictedTransaction prediction;
+			if (totalNet.compareTo(BigDecimal.ZERO) == 0) {
 				prediction = PredictedTransaction.builder()
 					.appUser(user)
 					.predictionRule(null)
@@ -589,18 +603,43 @@ public class PredictionService {
 					.predictedAmount(BigDecimal.ZERO)
 					.remainingAmount(BigDecimal.ZERO)
 					.actualSpent(BigDecimal.ZERO)
-					.transactionType(com.nklmthr.finance.personal.enums.TransactionType.DEBIT)
+					.transactionType(TransactionType.DEBIT)
 					.predictionMonth(monthString)
 					.description("No history for " + category.getName())
 					.explanation("No transactions found in the lookback window. Predicted ₹0.")
 					.currency("INR")
-					.calculationDate(java.time.LocalDateTime.now())
+					.calculationDate(LocalDateTime.now())
 					.basedOnTransactionCount(0)
 					.visible(true)
 					.build();
 				predictedTransactionRepository.save(prediction);
 			} else {
-				prediction.setPredictionRule(null);
+				BigDecimal monthlyAverage = totalNet
+					.divide(BigDecimal.valueOf(defaultLookback), 2, RoundingMode.HALF_UP)
+					.abs();
+				TransactionType txType = totalNet.compareTo(BigDecimal.ZERO) >= 0
+					? TransactionType.DEBIT : TransactionType.CREDIT;
+				String description = String.format("Predicted %s for %s",
+					category.getName(), targetMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")));
+				String explanation = String.format(
+					"Based on monthly average of %d transaction(s) from past %d month(s) across %d category(ies)",
+					totalCount, defaultLookback, descendantIds.size());
+				prediction = PredictedTransaction.builder()
+					.appUser(user)
+					.predictionRule(null)
+					.category(category)
+					.predictedAmount(monthlyAverage)
+					.remainingAmount(monthlyAverage)
+					.actualSpent(BigDecimal.ZERO)
+					.transactionType(txType)
+					.predictionMonth(monthString)
+					.description(description)
+					.explanation(explanation)
+					.currency("INR")
+					.calculationDate(LocalDateTime.now())
+					.basedOnTransactionCount((int) totalCount)
+					.visible(true)
+					.build();
 				PredictedTransaction saved = predictedTransactionRepository.save(prediction);
 				createHistoricalMappingsForCategory(saved, category, defaultLookback, targetMonth);
 			}
@@ -613,4 +652,3 @@ public class PredictionService {
 		return generated;
 	}
 }
-

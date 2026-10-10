@@ -325,5 +325,25 @@ public interface AccountTransactionRepository
 		@Param("categoryIds") Set<String> categoryIds,
 		@Param("startDate") LocalDateTime startDate,
 		@Param("endDate") LocalDateTime endDate);
+
+	/**
+	 * Single query returning [categoryId, netSum, count] for every category that has
+	 * transactions in the window. Used by generate-all-categories to avoid N per-category queries.
+	 */
+	@Query("""
+		SELECT t.category.id,
+		       SUM(CASE WHEN t.type = 'DEBIT' THEN t.amount ELSE -t.amount END),
+		       COUNT(t)
+		FROM AccountTransaction t
+		WHERE t.appUser = :appUser
+		  AND t.date >= :startDate
+		  AND t.date <= :endDate
+		  AND NOT EXISTS (SELECT 1 FROM AccountTransaction c WHERE c.parent = t.id)
+		GROUP BY t.category.id
+	""")
+	List<Object[]> sumByCategoryAndDateRange(
+		@Param("appUser") AppUser appUser,
+		@Param("startDate") LocalDateTime startDate,
+		@Param("endDate") LocalDateTime endDate);
 }
 
