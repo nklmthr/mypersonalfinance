@@ -529,7 +529,7 @@ public class PredictionService {
 			? YearMonth.parse(targetMonthStr, DateTimeFormatter.ofPattern("yyyy-MM"))
 			: YearMonth.now();
 
-		int defaultLookback = 3;
+		int defaultLookback = 6;
 		YearMonth lookbackStart = targetMonth.minusMonths(defaultLookback);
 		LocalDateTime startDate = lookbackStart.atDay(1).atStartOfDay();
 		LocalDateTime endDate = targetMonth.minusMonths(1).atEndOfMonth().atTime(23, 59, 59);

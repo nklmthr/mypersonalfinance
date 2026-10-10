@@ -402,6 +402,10 @@ function CategoryTreeNode({
               onStrategyChange={onStrategyChange}
               isIncome={isIncome}
             />
+          ) : group.recurringList?.length > 1 ? (
+            group.recurringList.map((p) => (
+              <PredictionRow key={p.id} p={p} isIncome={isIncome} />
+            ))
           ) : (
             <PredictionRow
               p={group.rule || group.recurringList[0]}
