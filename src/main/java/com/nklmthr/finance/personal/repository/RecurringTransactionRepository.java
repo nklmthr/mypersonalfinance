@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import com.nklmthr.finance.personal.model.AppUser;
+import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.RecurringTransaction;
 
 @Repository
@@ -17,4 +18,6 @@ public interface RecurringTransactionRepository extends JpaRepository<RecurringT
 	List<RecurringTransaction> findByAppUserAndEnabledTrue(AppUser appUser);
 
 	Optional<RecurringTransaction> findByAppUserAndId(AppUser appUser, String id);
+
+	List<RecurringTransaction> findByAppUserAndCategory(AppUser appUser, Category category);
 }

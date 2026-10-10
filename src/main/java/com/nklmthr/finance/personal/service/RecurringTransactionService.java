@@ -52,6 +52,27 @@ public class RecurringTransactionService {
 		Category category = categoryRepository.findById(dto.getCategoryId())
 			.orElseThrow(() -> new IllegalArgumentException("Category not found: " + dto.getCategoryId()));
 
+		List<RecurringTransaction> existing = recurringTransactionRepository.findByAppUserAndCategory(user, category);
+		if (!existing.isEmpty()) {
+			String resolvedMonths = resolveActiveMonths(dto.getRecurrenceType(), dto.getActiveMonths());
+			RecurringTransaction incoming = RecurringTransaction.builder()
+				.recurrenceType(dto.getRecurrenceType())
+				.activeMonths(resolvedMonths)
+				.startYearMonth(dto.getStartYearMonth())
+				.endYearMonth(dto.getEndYearMonth())
+				.enabled(dto.isEnabled())
+				.build();
+			for (RecurringTransaction ex : existing) {
+				Set<Integer> collision = overlappingMonths(incoming, ex);
+				if (!collision.isEmpty()) {
+					throw new IllegalArgumentException(
+						"Collision with existing recurring transaction \"" + ex.getDescription() + "\": " +
+						"both would fire in month(s) " + collision + " for category \"" + category.getName() + "\". " +
+						"Use sub-categories to track multiple obligations under the same category.");
+				}
+			}
+		}
+
 		RecurringTransaction rt = RecurringTransaction.builder()
 			.appUser(user)
 			.description(dto.getDescription().trim())
@@ -77,6 +98,28 @@ public class RecurringTransactionService {
 
 		Category category = categoryRepository.findById(dto.getCategoryId())
 			.orElseThrow(() -> new IllegalArgumentException("Category not found: " + dto.getCategoryId()));
+
+		List<RecurringTransaction> existing = recurringTransactionRepository.findByAppUserAndCategory(user, category);
+		List<RecurringTransaction> others = existing.stream().filter(e -> !e.getId().equals(id)).collect(Collectors.toList());
+		if (!others.isEmpty()) {
+			String resolvedMonths = resolveActiveMonths(dto.getRecurrenceType(), dto.getActiveMonths());
+			RecurringTransaction incoming = RecurringTransaction.builder()
+				.recurrenceType(dto.getRecurrenceType())
+				.activeMonths(resolvedMonths)
+				.startYearMonth(dto.getStartYearMonth())
+				.endYearMonth(dto.getEndYearMonth())
+				.enabled(dto.isEnabled())
+				.build();
+			for (RecurringTransaction ex : others) {
+				Set<Integer> collision = overlappingMonths(incoming, ex);
+				if (!collision.isEmpty()) {
+					throw new IllegalArgumentException(
+						"Collision with existing recurring transaction \"" + ex.getDescription() + "\": " +
+						"both would fire in month(s) " + collision + " for category \"" + category.getName() + "\". " +
+						"Use sub-categories to track multiple obligations under the same category.");
+				}
+			}
+		}
 
 		rt.setDescription(dto.getDescription().trim());
 		rt.setCategory(category);
@@ -147,6 +190,44 @@ public class RecurringTransactionService {
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
+
+	/**
+	 * Returns the set of calendar month numbers (1-12) where both rules would fire,
+	 * after intersecting their date bounds. An empty set means no collision.
+	 * MONTHLY fires every month so its active set is {1..12}.
+	 */
+	Set<Integer> overlappingMonths(RecurringTransaction a, RecurringTransaction b) {
+		Set<Integer> ma = activeMonthSet(a);
+		Set<Integer> mb = activeMonthSet(b);
+		// Intersect month sets
+		Set<Integer> common = new java.util.HashSet<>(ma);
+		common.retainAll(mb);
+		if (common.isEmpty()) return common;
+
+		// Also check if their date ranges overlap — if one ends before the other starts, no collision
+		String aStart = a.getStartYearMonth();
+		String aEnd   = a.getEndYearMonth();
+		String bStart = b.getStartYearMonth();
+		String bEnd   = b.getEndYearMonth();
+		// No date overlap: a ends before b starts, or b ends before a starts
+		if (aEnd != null && bStart != null && aEnd.compareTo(bStart) < 0) return java.util.Collections.emptySet();
+		if (bEnd != null && aStart != null && bEnd.compareTo(aStart) < 0) return java.util.Collections.emptySet();
+
+		return common;
+	}
+
+	private Set<Integer> activeMonthSet(RecurringTransaction rt) {
+		if (rt.getRecurrenceType() == RecurrenceType.MONTHLY) {
+			return new java.util.HashSet<>(Arrays.asList(1,2,3,4,5,6,7,8,9,10,11,12));
+		}
+		String months = rt.getActiveMonths();
+		if (months == null || months.isBlank()) return java.util.Collections.emptySet();
+		Set<Integer> result = new java.util.HashSet<>();
+		for (String m : months.split(",")) {
+			try { result.add(Integer.parseInt(m.trim())); } catch (NumberFormatException ignored) {}
+		}
+		return result;
+	}
 
 	boolean isActiveInMonth(RecurringTransaction rt, YearMonth targetMonth) {
 		String monthString = targetMonth.format(MONTH_FMT);
