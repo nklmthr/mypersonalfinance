@@ -534,14 +534,11 @@ public class PredictionService {
 		int defaultLookback = 3;
 		String monthString = targetMonth.format(DateTimeFormatter.ofPattern("yyyy-MM"));
 
-		// Collect category IDs already covered by an existing rule or recurring transaction prediction
+		// Collect category IDs already covered by an existing rule-based prediction — those take precedence.
+		// Recurring predictions do NOT block auto-generation; both coexist and the Forecast page
+		// lets the user choose between them (merged row with strategy selector).
 		Set<String> ruleCategoryIds = getEnabledRulesForUser(user).stream()
 			.map(r -> r.getCategory().getId())
-			.collect(java.util.stream.Collectors.toSet());
-
-		Set<String> recurringCategoryIds = predictedTransactionRepository
-			.findByAppUserAndPredictionMonthAndRecurringTransactionIsNotNull(user, monthString).stream()
-			.map(p -> p.getCategory().getId())
 			.collect(java.util.stream.Collectors.toSet());
 
 		// Only generate for leaf categories (those that are never a parent of another category)
@@ -573,7 +570,7 @@ public class PredictionService {
 		int generated = 0;
 		for (Category category : allUserCategories) {
 			if (parentIds.contains(category.getId())) continue;
-			if (ruleCategoryIds.contains(category.getId()) || recurringCategoryIds.contains(category.getId())) continue;
+			if (ruleCategoryIds.contains(category.getId())) continue;
 
 			if (predictedTransactionRepository
 					.findByAppUserAndCategoryAndPredictionMonthAndPredictionRuleIsNullAndRecurringTransactionIsNull(
