@@ -266,8 +266,8 @@ export default function OverviewPage() {
 		if (allBalanceSheetData.length === 0) return;
 
 		const now = new Date();
-		// Create a cutoff date for the start of the current month to exclude it
-		const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+		// Cutoff for excluding future months (keep current month if a snapshot exists)
+		const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 		let filteredData = [];
 
 		switch (balanceTimePeriod) {
@@ -290,9 +290,8 @@ export default function OverviewPage() {
 				filteredData = allBalanceSheetData.slice(-6);
 		}
 
-		
-		// Filter out any data from the current month or future
-		filteredData = filteredData.filter(item => item.date < currentMonthStart);
+		// Only drop future months; include the current month when a snapshot exists for it
+		filteredData = filteredData.filter(item => item.date < nextMonthStart);
 
 		setBalanceSheetData(filteredData);
 	}, [balanceTimePeriod, allBalanceSheetData]);
