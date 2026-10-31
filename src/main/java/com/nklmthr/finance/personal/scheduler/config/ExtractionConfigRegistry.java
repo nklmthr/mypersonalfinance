@@ -24,8 +24,8 @@ public class ExtractionConfigRegistry {
 		configs.add(new ExtractionConfig(
 			"AxisCC",
 			List.of(
-				"Transaction alert on Axis Bank Credit Card no. XX0434",
-				"spent on credit card no. XX0434",
+				"Transaction alert on Axis Bank Credit Card no. XX5743",
+				"spent on credit card no. XX5743",
 				"Transaction alert on Axis Bank Credit Card no. XX7002",
 				"spent on credit card no. XX7002",
 				"Axis Bank Credit Card Transaction Alert"
