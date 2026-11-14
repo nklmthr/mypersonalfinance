@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
 import com.nklmthr.finance.personal.dto.BulkCategoryRequest;
+import com.nklmthr.finance.personal.dto.BulkDeleteRequest;
 import com.nklmthr.finance.personal.dto.BulkLabelsRequest;
 import com.nklmthr.finance.personal.dto.BulkUpdateResponse;
 import com.nklmthr.finance.personal.dto.TransactionPageDTO;
@@ -179,4 +180,15 @@ public class AccountTransactionController {
 //    public AttachmentDTO addAttachment(@PathVariable String id, @RequestBody AttachmentDTO attachment) {
 //        return transactionService.addTransactionAttachment(id, attachment);
 //    }
+
+	@PostMapping("/bulk/delete")
+	public ResponseEntity<?> bulkDelete(@Valid @RequestBody BulkDeleteRequest request) {
+		try {
+			BulkUpdateResponse response = transactionService.bulkDelete(request.getTransactionIds());
+			return ResponseEntity.ok(response);
+		} catch (IllegalArgumentException e) {
+			logger.warn("Bulk delete rejected: {}", e.getMessage());
+			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		}
+	}
 }

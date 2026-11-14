@@ -14,6 +14,7 @@ import LabelInput from "./LabelInput";
  * - onApplyCategory({ ids, categoryId, categoryName }) → Promise<{updated, requested, skipped}>
  * - onApplyLabels({ ids, labels, mode }) → Promise<{updated, requested, skipped}>
  *   where labels is an array of label objects ({id?, name}) and mode is 'ADD' | 'REPLACE'
+ * - onBulkDelete({ ids }) → Promise<{updated, requested, skipped}>
  */
 export default function BulkActionBar({
 	selectedCount,
@@ -22,8 +23,9 @@ export default function BulkActionBar({
 	onClear,
 	onApplyCategory,
 	onApplyLabels,
+	onBulkDelete,
 }) {
-	const [activePanel, setActivePanel] = useState(null); // 'category' | 'labels' | null
+	const [activePanel, setActivePanel] = useState(null); // 'category' | 'labels' | 'delete' | null
 	const [pendingCategoryId, setPendingCategoryId] = useState("");
 	const [pendingLabels, setPendingLabels] = useState([]);
 	const [labelMode, setLabelMode] = useState("ADD");
@@ -68,6 +70,14 @@ export default function BulkActionBar({
 		});
 	};
 
+	const requestBulkDelete = () => {
+		setConfirm({
+			kind: "delete",
+			summary: `Permanently delete ${selectedCount} selected transaction${selectedCount === 1 ? "" : "s"}? This cannot be undone.`,
+			payload: { ids },
+		});
+	};
+
 	const runConfirmed = async () => {
 		if (!confirm) return;
 		setBusy(true);
@@ -77,6 +87,8 @@ export default function BulkActionBar({
 				res = await onApplyCategory(confirm.payload);
 			} else if (confirm.kind === "labels") {
 				res = await onApplyLabels(confirm.payload);
+			} else if (confirm.kind === "delete") {
+				res = await onBulkDelete(confirm.payload);
 			}
 			setResult({ kind: confirm.kind, ...res });
 		} catch (err) {
@@ -218,6 +230,14 @@ export default function BulkActionBar({
 						</button>
 						<button
 							type="button"
+							onClick={requestBulkDelete}
+							disabled={busy}
+							className="text-sm px-3 py-1 rounded bg-red-700 hover:bg-red-600 disabled:opacity-50"
+						>
+							Delete…
+						</button>
+						<button
+							type="button"
 							onClick={() => {
 								closePanels();
 								onClear();
@@ -234,7 +254,9 @@ export default function BulkActionBar({
 			{confirm && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
 					<div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-						<h2 className="text-lg font-semibold text-gray-900 mb-2">Confirm bulk update</h2>
+						<h2 className="text-lg font-semibold text-gray-900 mb-2">
+							{confirm.kind === "delete" ? "Confirm bulk delete" : "Confirm bulk update"}
+						</h2>
 						<p className="text-sm text-gray-700 mb-6">{confirm.summary}</p>
 						<div className="flex gap-2 justify-end">
 							<button
@@ -249,9 +271,11 @@ export default function BulkActionBar({
 								type="button"
 								onClick={runConfirmed}
 								disabled={busy}
-								className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+								className={`px-4 py-2 text-sm text-white rounded disabled:opacity-50 ${confirm.kind === "delete" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}
 							>
-								{busy ? "Applying…" : "Apply"}
+								{busy
+									? (confirm.kind === "delete" ? "Deleting…" : "Applying…")
+									: (confirm.kind === "delete" ? "Delete" : "Apply")}
 							</button>
 						</div>
 					</div>
@@ -261,14 +285,16 @@ export default function BulkActionBar({
 			{result && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
 					<div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-						<h2 className="text-lg font-semibold text-gray-900 mb-2">Bulk update result</h2>
+						<h2 className="text-lg font-semibold text-gray-900 mb-2">
+							{result.kind === "delete" ? "Bulk delete result" : "Bulk update result"}
+						</h2>
 						{result.error ? (
 							<p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 mb-4">
 								{result.error}
 							</p>
 						) : (
 							<p className="text-sm text-gray-700 mb-4">
-								Updated <strong>{result.updated}</strong> of{" "}
+								{result.kind === "delete" ? "Deleted" : "Updated"} <strong>{result.updated}</strong> of{" "}
 								<strong>{result.requested}</strong> transactions
 								{result.skipped && result.skipped.length > 0 && (
 									<>. Skipped <strong>{result.skipped.length}</strong>.</>

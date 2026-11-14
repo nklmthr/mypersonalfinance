@@ -543,6 +543,13 @@ const triggerDataExtraction = async (servicesToRun) => {
 		return res.data;
 	};
 
+	const bulkDeleteTransactions = async ({ ids }) => {
+		const res = await api.post("/transactions/bulk/delete", { transactionIds: ids });
+		await fetchData();
+		clearSelection();
+		return res.data;
+	};
+
 	const currentPageSum = useMemo(() => {
 		return (transactions || []).reduce((sum, tx) => {
 			const amount = typeof tx.amount === "number" ? tx.amount : 0;
@@ -1732,6 +1739,7 @@ function TransactionPageButtons({
 				onClear={clearSelection}
 				onApplyCategory={applyBulkCategory}
 				onApplyLabels={applyBulkLabels}
+				onBulkDelete={bulkDeleteTransactions}
 			/>
 
 			{/* Column Headers (desktop only - row layout collapses on mobile) */}

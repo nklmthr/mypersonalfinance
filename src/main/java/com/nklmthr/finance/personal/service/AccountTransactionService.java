@@ -668,6 +668,25 @@ public class AccountTransactionService {
 }
 
 	@Transactional
+	public BulkUpdateResponse bulkDelete(List<String> transactionIds) {
+		if (transactionIds == null || transactionIds.isEmpty()) {
+			return new BulkUpdateResponse(0, 0, List.of());
+		}
+		int requested = transactionIds.size();
+		int deleted = 0;
+		List<BulkUpdateResponse.SkippedItem> skipped = new ArrayList<>();
+		for (String id : transactionIds) {
+			try {
+				delete(id);
+				deleted++;
+			} catch (Exception e) {
+				skipped.add(new BulkUpdateResponse.SkippedItem(id, e.getMessage()));
+			}
+		}
+		return new BulkUpdateResponse(requested, deleted, skipped);
+	}
+
+	@Transactional
 	public BulkUpdateResponse bulkAssignCategory(List<String> transactionIds, String categoryId) {
 		AppUser appUser = appUserService.getCurrentUser();
 		if (transactionIds == null || transactionIds.isEmpty()) {
