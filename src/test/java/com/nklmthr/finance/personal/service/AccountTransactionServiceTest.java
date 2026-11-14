@@ -43,8 +43,10 @@ import com.nklmthr.finance.personal.model.AppUser;
 import com.nklmthr.finance.personal.model.Category;
 import com.nklmthr.finance.personal.model.Institution;
 import com.nklmthr.finance.personal.model.Label;
+import com.nklmthr.finance.personal.model.TransferSplit;
 import com.nklmthr.finance.personal.repository.AccountRepository;
 import com.nklmthr.finance.personal.repository.AccountTransactionRepository;
+import com.nklmthr.finance.personal.repository.TransferSplitRepository;
 
 @ExtendWith(MockitoExtension.class)
 class AccountTransactionServiceTest {
@@ -73,6 +75,9 @@ class AccountTransactionServiceTest {
     @Mock
     private CategoryMapper categoryMapper;
 
+    @Mock
+    private TransferSplitRepository transferSplitRepository;
+
     @InjectMocks
     private AccountTransactionService service;
 
@@ -98,6 +103,7 @@ class AccountTransactionServiceTest {
         ReflectionTestUtils.setField(service, "accountTransactionMapper", accountTransactionMapper);
         ReflectionTestUtils.setField(service, "accountMapper", accountMapper);
         ReflectionTestUtils.setField(service, "categoryMapper", categoryMapper);
+        ReflectionTestUtils.setField(service, "transferSplitRepository", transferSplitRepository);
     }
 
     private Account createAccount(String id, BigDecimal balance) {
@@ -115,7 +121,8 @@ class AccountTransactionServiceTest {
         Account to = createAccount("a2", new BigDecimal("500"));
         AccountTransaction debit = AccountTransaction.builder()
             .id("tx1").amount(new BigDecimal("100")).type(TransactionType.DEBIT)
-            .account(from).appUser(currentUser).description("Transfer out").build();
+            .account(from).appUser(currentUser).description("Transfer out")
+            .date(LocalDateTime.of(2026, 1, 1, 12, 0)).build();
         Category transferCat = new Category();
         transferCat.setId("ct");
         transferCat.setName("TRANSFERS");
@@ -145,11 +152,9 @@ class AccountTransactionServiceTest {
         assertThat(to.getBalance()).isEqualByComparingTo("600");
         verify(accountRepository, times(1)).save(to);
 
-        // Verify transaction repository saves occurred (credit + debit + credit again for linking)
+        // Verify transaction repository saves occurred (debit + credit)
         verify(accountTransactionRepository, atLeast(2)).save(any(AccountTransaction.class));
-        
-        // Verify the debit transaction now has linkedTransferId set
-        assertThat(debit.getLinkedTransferId()).isNotNull();
+
         assertThat(debit.getCategory()).isEqualTo(transferCat);
     }
 
@@ -182,159 +187,139 @@ class AccountTransactionServiceTest {
     }
 
     @Test
-    void createTransfer_preventsTransferOfDebitTransaction_alreadyHasLinkedTransferId() {
-        // Test: Attempting to transfer a DEBIT transaction that already has linkedTransferId
+    void createTransfer_allowsChainingFromAlreadyLinkedDebit() throws Exception {
+        // Chaining is supported: A→B then B→C. A debit with a linkedTransferId can still be transferred.
         Account from = createAccount("a1", new BigDecimal("1000"));
+        Account to = createAccount("a3", new BigDecimal("200"));
         AccountTransaction debitAlreadyTransferred = AccountTransaction.builder()
-            .id("debit1")
-            .linkedTransferId("credit1") // Already part of a transfer (debit side)
-            .amount(new BigDecimal("100"))
-            .type(TransactionType.DEBIT)
-            .account(from)
-            .appUser(currentUser)
-            .description("Debit side of transfer")
-            .build();
+            .id("debit1").linkedTransferId("credit1")
+            .amount(new BigDecimal("100")).type(TransactionType.DEBIT)
+            .account(from).appUser(currentUser)
+            .date(LocalDateTime.of(2026, 1, 1, 12, 0)).description("Debit side of transfer").build();
+        Category transferCat = new Category();
+        transferCat.setId("ct");
+        transferCat.setName("TRANSFERS");
 
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "debit1")).thenReturn(Optional.of(debitAlreadyTransferred));
         when(accountTransactionRepository.findByAppUserAndParent(currentUser, "debit1")).thenReturn(List.of());
+        when(categoryService.getTransferCategory()).thenReturn(transferCat);
+        when(accountRepository.findByAppUserAndId(currentUser, "a3")).thenReturn(Optional.of(to));
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(inv -> {
+            AccountTransaction tx = inv.getArgument(0);
+            if (tx.getId() == null) tx.setId("credit-new");
+            return tx;
+        });
 
-        TransferRequest request = TransferRequest.builder()
+        service.createTransfer(TransferRequest.builder()
             .sourceTransactionId("debit1")
             .destinations(List.of(TransferDestination.builder()
-                .accountId("a3").amount(new BigDecimal("100")).explanation("Attempting second transfer from debit").build()))
-            .build();
+                .accountId("a3").amount(new BigDecimal("100")).explanation("chained transfer").build()))
+            .build());
 
-        assertThatThrownBy(() -> service.createTransfer(request))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("already part of a transfer");
-
-        // Verify no changes were made
-        verify(accountTransactionRepository, never()).save(any(AccountTransaction.class));
-        verify(accountRepository, never()).save(any(Account.class));
+        assertThat(to.getBalance()).isEqualByComparingTo("300");
+        verify(transferSplitRepository).save(any());
     }
 
     @Test
-    void createTransfer_preventsTransferOfCreditTransaction_alreadyHasLinkedTransferId() {
-        // Test: Attempting to transfer a CREDIT transaction that already has linkedTransferId
-        Account to = createAccount("a2", new BigDecimal("500"));
+    void createTransfer_allowsChainingFromAlreadyLinkedCredit() throws Exception {
+        // A CREDIT with a linkedTransferId can be used as a chaining source (auto-creates a debit).
+        Account creditAccount = createAccount("a2", new BigDecimal("500"));
+        Account to = createAccount("a3", new BigDecimal("200"));
         AccountTransaction creditAlreadyTransferred = AccountTransaction.builder()
-            .id("credit1")
-            .linkedTransferId("debit1") // Already part of a transfer (credit side)
-            .amount(new BigDecimal("100"))
-            .type(TransactionType.CREDIT)
-            .account(to)
-            .appUser(currentUser)
-            .description("Credit side of transfer")
-            .build();
+            .id("credit1").linkedTransferId("debit1")
+            .amount(new BigDecimal("100")).type(TransactionType.CREDIT)
+            .account(creditAccount).appUser(currentUser)
+            .date(LocalDateTime.of(2026, 1, 1, 12, 0)).description("Credit side of transfer").build();
+        Category transferCat = new Category();
+        transferCat.setId("ct");
+        transferCat.setName("TRANSFERS");
 
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "credit1")).thenReturn(Optional.of(creditAlreadyTransferred));
         when(accountTransactionRepository.findByAppUserAndParent(currentUser, "credit1")).thenReturn(List.of());
+        when(categoryService.getTransferCategory()).thenReturn(transferCat);
+        when(accountRepository.findByAppUserAndId(currentUser, "a3")).thenReturn(Optional.of(to));
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(inv -> {
+            AccountTransaction tx = inv.getArgument(0);
+            if (tx.getId() == null) tx.setId("auto-id");
+            return tx;
+        });
 
-        TransferRequest request = TransferRequest.builder()
+        service.createTransfer(TransferRequest.builder()
             .sourceTransactionId("credit1")
             .destinations(List.of(TransferDestination.builder()
-                .accountId("a3").amount(new BigDecimal("100")).explanation("Attempting second transfer from credit").build()))
-            .build();
+                .accountId("a3").amount(new BigDecimal("100")).explanation("chained transfer").build()))
+            .build());
 
-        assertThatThrownBy(() -> service.createTransfer(request))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("already part of a transfer");
-
-        // Verify no changes were made
-        verify(accountTransactionRepository, never()).save(any(AccountTransaction.class));
-        verify(accountRepository, never()).save(any(Account.class));
+        assertThat(to.getBalance()).isEqualByComparingTo("300");
+        verify(transferSplitRepository).save(any());
     }
 
     @Test
-    void createTransfer_preventsTransferOfDebitTransaction_referencedByCredit() {
-        // Test: Attempting to transfer a DEBIT that is referenced by a credit's linkedTransferId
-        // (Edge case: if debit somehow doesn't have linkedTransferId but credit points to it)
+    void createTransfer_allowsChainingWhenReferencedByCredit() throws Exception {
+        // A DEBIT referenced by another credit's linkedTransferId can still be a chaining source.
         Account from = createAccount("a1", new BigDecimal("1000"));
-        Account to = createAccount("a2", new BigDecimal("500"));
-        
+        Account to = createAccount("a3", new BigDecimal("200"));
         AccountTransaction debitReferenced = AccountTransaction.builder()
-            .id("debit1")
-            .linkedTransferId(null) // Edge case: doesn't point to credit yet
-            .amount(new BigDecimal("100"))
-            .type(TransactionType.DEBIT)
-            .account(from)
-            .appUser(currentUser)
-            .description("Debit side")
-            .build();
-
-        AccountTransaction creditSide = AccountTransaction.builder()
-            .id("credit1")
-            .linkedTransferId("debit1") // Credit points to this debit
-            .amount(new BigDecimal("100"))
-            .type(TransactionType.CREDIT)
-            .account(to)
-            .appUser(currentUser)
-            .description("Credit side")
-            .build();
+            .id("debit1").linkedTransferId(null)
+            .amount(new BigDecimal("100")).type(TransactionType.DEBIT)
+            .account(from).appUser(currentUser)
+            .date(LocalDateTime.of(2026, 1, 1, 12, 0)).description("Debit side").build();
+        Category transferCat = new Category();
+        transferCat.setId("ct");
+        transferCat.setName("TRANSFERS");
 
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "debit1")).thenReturn(Optional.of(debitReferenced));
         when(accountTransactionRepository.findByAppUserAndParent(currentUser, "debit1")).thenReturn(List.of());
-        when(accountTransactionRepository.findByAppUserAndLinkedTransferId(currentUser, "debit1")).thenReturn(Optional.of(creditSide));
+        when(categoryService.getTransferCategory()).thenReturn(transferCat);
+        when(accountRepository.findByAppUserAndId(currentUser, "a3")).thenReturn(Optional.of(to));
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(inv -> {
+            AccountTransaction tx = inv.getArgument(0);
+            if (tx.getId() == null) tx.setId("credit-new");
+            return tx;
+        });
 
-        TransferRequest request = TransferRequest.builder()
+        service.createTransfer(TransferRequest.builder()
             .sourceTransactionId("debit1")
             .destinations(List.of(TransferDestination.builder()
-                .accountId("a3").amount(new BigDecimal("100")).explanation("Attempting second transfer").build()))
-            .build();
+                .accountId("a3").amount(new BigDecimal("100")).explanation("chained transfer").build()))
+            .build());
 
-        assertThatThrownBy(() -> service.createTransfer(request))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("already part of a transfer");
-
-        // Verify no changes were made
-        verify(accountTransactionRepository, never()).save(any(AccountTransaction.class));
-        verify(accountRepository, never()).save(any(Account.class));
+        assertThat(to.getBalance()).isEqualByComparingTo("300");
+        verify(transferSplitRepository).save(any());
     }
 
     @Test
-    void createTransfer_preventsTransferOfCreditTransaction_referencedByDebit() {
-        // Test: Attempting to transfer a CREDIT that is referenced by a debit's linkedTransferId
-        // (Edge case: if credit somehow doesn't have linkedTransferId but debit points to it)
-        Account from = createAccount("a1", new BigDecimal("1000"));
-        Account to = createAccount("a2", new BigDecimal("500"));
-        
+    void createTransfer_allowsChainingWhenReferencedByDebit() throws Exception {
+        // A CREDIT referenced by another debit's linkedTransferId can still be a chaining source.
+        Account creditAccount = createAccount("a2", new BigDecimal("500"));
+        Account to = createAccount("a3", new BigDecimal("200"));
         AccountTransaction creditReferenced = AccountTransaction.builder()
-            .id("credit1")
-            .linkedTransferId(null) // Edge case: doesn't point to debit yet
-            .amount(new BigDecimal("100"))
-            .type(TransactionType.CREDIT)
-            .account(to)
-            .appUser(currentUser)
-            .description("Credit side")
-            .build();
-
-        AccountTransaction debitSide = AccountTransaction.builder()
-            .id("debit1")
-            .linkedTransferId("credit1") // Debit points to this credit
-            .amount(new BigDecimal("100"))
-            .type(TransactionType.DEBIT)
-            .account(from)
-            .appUser(currentUser)
-            .description("Debit side")
-            .build();
+            .id("credit1").linkedTransferId(null)
+            .amount(new BigDecimal("100")).type(TransactionType.CREDIT)
+            .account(creditAccount).appUser(currentUser)
+            .date(LocalDateTime.of(2026, 1, 1, 12, 0)).description("Credit side").build();
+        Category transferCat = new Category();
+        transferCat.setId("ct");
+        transferCat.setName("TRANSFERS");
 
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "credit1")).thenReturn(Optional.of(creditReferenced));
         when(accountTransactionRepository.findByAppUserAndParent(currentUser, "credit1")).thenReturn(List.of());
-        when(accountTransactionRepository.findByAppUserAndLinkedTransferId(currentUser, "credit1")).thenReturn(Optional.of(debitSide));
+        when(categoryService.getTransferCategory()).thenReturn(transferCat);
+        when(accountRepository.findByAppUserAndId(currentUser, "a3")).thenReturn(Optional.of(to));
+        when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(inv -> {
+            AccountTransaction tx = inv.getArgument(0);
+            if (tx.getId() == null) tx.setId("auto-id");
+            return tx;
+        });
 
-        TransferRequest request = TransferRequest.builder()
+        service.createTransfer(TransferRequest.builder()
             .sourceTransactionId("credit1")
             .destinations(List.of(TransferDestination.builder()
-                .accountId("a3").amount(new BigDecimal("100")).explanation("Attempting second transfer").build()))
-            .build();
+                .accountId("a3").amount(new BigDecimal("100")).explanation("chained transfer").build()))
+            .build());
 
-        assertThatThrownBy(() -> service.createTransfer(request))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("already part of a transfer");
-
-        // Verify no changes were made
-        verify(accountTransactionRepository, never()).save(any(AccountTransaction.class));
-        verify(accountRepository, never()).save(any(Account.class));
+        assertThat(to.getBalance()).isEqualByComparingTo("300");
+        verify(transferSplitRepository).save(any());
     }
 
     @Test
@@ -695,9 +680,14 @@ class AccountTransactionServiceTest {
         AccountTransactionDTO dto = new AccountTransactionDTO("t1", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "t1")).thenReturn(Optional.of(entity));
         when(accountTransactionMapper.toDTO(entity)).thenReturn(dto);
+        when(transferSplitRepository.findBySourceTransactionId("t1")).thenReturn(List.of());
+        when(transferSplitRepository.existsByDestTransactionId("t1")).thenReturn(false);
 
         Optional<AccountTransactionDTO> result = service.getById("t1");
-        assertThat(result).contains(dto);
+        assertThat(result).isPresent();
+        assertThat(result.get().id()).isEqualTo("t1");
+        assertThat(result.get().transferSplitCount()).isEqualTo(0);
+        assertThat(result.get().isTransferDest()).isFalse();
     }
 
     @Test
@@ -787,28 +777,14 @@ class AccountTransactionServiceTest {
 
     @Test
     void createTransfer_setsBidirectionalLinks() throws Exception {
-        // Setup source and destination accounts
-        AccountType savingsType = new AccountType();
-        savingsType.setId("savings");
-        savingsType.setName("Savings");
-        
-        Institution bank = new Institution();
-        bank.setId("bank1");
-        bank.setName("Test Bank");
-        
         Account from = new Account();
         from.setId("a1");
         from.setBalance(new BigDecimal("1000"));
-        from.setAccountType(savingsType);
-        from.setInstitution(bank);
-        
+
         Account to = new Account();
         to.setId("a2");
         to.setBalance(new BigDecimal("500"));
-        to.setAccountType(savingsType);
-        to.setInstitution(bank);
 
-        // Setup debit transaction
         AccountTransaction debit = AccountTransaction.builder()
             .id("debit1")
             .amount(new BigDecimal("200"))
@@ -820,44 +796,32 @@ class AccountTransactionServiceTest {
             .currency("INR")
             .build();
 
-        // Mock category service for transfer category
         Category transferCat = new Category();
         transferCat.setId("transfer");
         transferCat.setName("Transfer");
         when(categoryService.getTransferCategory()).thenReturn(transferCat);
 
-        // Mock repository behavior
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "debit1")).thenReturn(Optional.of(debit));
         when(accountTransactionRepository.findByAppUserAndParent(currentUser, "debit1")).thenReturn(List.of());
         when(accountRepository.findByAppUserAndId(currentUser, "a2")).thenReturn(Optional.of(to));
-
-        // Capture the saved credit transaction
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenAnswer(invocation -> {
             AccountTransaction tx = invocation.getArgument(0);
-            if (tx.getId() == null) {
-                tx.setId("credit1"); // Simulate ID generation
-            }
+            if (tx.getId() == null) tx.setId("credit1");
             return tx;
         });
 
-        // Execute transfer
-        TransferRequest request = TransferRequest.builder()
+        service.createTransfer(TransferRequest.builder()
             .sourceTransactionId("debit1")
             .destinations(List.of(TransferDestination.builder()
                 .accountId("a2").amount(new BigDecimal("200")).explanation("Monthly savings").build()))
-            .build();
+            .build());
 
-        service.createTransfer(request);
-
-        // Verify both transactions were saved with linked IDs
-        verify(accountTransactionRepository, atLeast(2)).save(argThat(tx -> 
-            tx.getLinkedTransferId() != null
+        // Verify a TransferSplit linking debit1 → credit1 was saved
+        verify(transferSplitRepository).save(argThat(split ->
+            "debit1".equals(split.getSourceTransactionId()) && "credit1".equals(split.getDestTransactionId())
         ));
-        
-        // Verify accounts were updated
-        assertThat(from.getBalance()).isEqualByComparingTo("1000");
         assertThat(to.getBalance()).isEqualByComparingTo("700");
-        verify(accountRepository, times(1)).save(any(Account.class));
+        verify(accountRepository, times(1)).save(to);
     }
 
     @Test
