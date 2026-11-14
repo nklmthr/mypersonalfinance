@@ -32,7 +32,13 @@ public record AccountTransactionDTO(
 	// Number of receipt attachments associated with this transaction.
 	// Nullable: only the list endpoint batch-populates this; flows that don't
 	// need it leave it null so the UI can treat null/0 identically (no badge).
-	Integer attachmentCount
+	Integer attachmentCount,
+	// Transfer splits for this transaction (populated only in detail view, null in list view).
+	List<TransferSplitDTO> transferSplits,
+	// Count of transfer splits (populated in list view for badge detection; 0 means no new-model splits).
+	Integer transferSplitCount,
+	// True if this transaction is a destination in any transfer split (for badge on the credit side).
+	Boolean isTransferDest
 ) {
 	public String getShortDescription() {
 		// Use only description field - GPT fields are only for comparison, not display

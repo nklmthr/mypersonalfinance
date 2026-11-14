@@ -30,6 +30,7 @@ import com.nklmthr.finance.personal.dto.AccountDTO;
 import com.nklmthr.finance.personal.dto.AccountTransactionDTO;
 import com.nklmthr.finance.personal.dto.CategoryDTO;
 import com.nklmthr.finance.personal.dto.LabelDTO;
+import com.nklmthr.finance.personal.dto.TransferDestination;
 import com.nklmthr.finance.personal.dto.TransferRequest;
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.mapper.AccountMapper;
@@ -135,7 +136,10 @@ class AccountTransactionServiceTest {
         });
 
         service.createTransfer(TransferRequest.builder()
-            .sourceTransactionId("tx1").destinationAccountId("a2").explanation("x").build());
+            .sourceTransactionId("tx1")
+            .destinations(List.of(TransferDestination.builder()
+                .accountId("a2").amount(new BigDecimal("100")).explanation("x").build()))
+            .build());
 
         assertThat(from.getBalance()).isEqualByComparingTo("1000");
         assertThat(to.getBalance()).isEqualByComparingTo("600");
@@ -164,8 +168,8 @@ class AccountTransactionServiceTest {
 
         TransferRequest request = TransferRequest.builder()
             .sourceTransactionId("p1")
-            .destinationAccountId("a2")
-            .explanation("Transfer attempt")
+            .destinations(List.of(TransferDestination.builder()
+                .accountId("a2").amount(new BigDecimal("100")).explanation("Transfer attempt").build()))
             .build();
 
         assertThatThrownBy(() -> service.createTransfer(request))
@@ -196,8 +200,8 @@ class AccountTransactionServiceTest {
 
         TransferRequest request = TransferRequest.builder()
             .sourceTransactionId("debit1")
-            .destinationAccountId("a3")
-            .explanation("Attempting second transfer from debit")
+            .destinations(List.of(TransferDestination.builder()
+                .accountId("a3").amount(new BigDecimal("100")).explanation("Attempting second transfer from debit").build()))
             .build();
 
         assertThatThrownBy(() -> service.createTransfer(request))
@@ -228,8 +232,8 @@ class AccountTransactionServiceTest {
 
         TransferRequest request = TransferRequest.builder()
             .sourceTransactionId("credit1")
-            .destinationAccountId("a3")
-            .explanation("Attempting second transfer from credit")
+            .destinations(List.of(TransferDestination.builder()
+                .accountId("a3").amount(new BigDecimal("100")).explanation("Attempting second transfer from credit").build()))
             .build();
 
         assertThatThrownBy(() -> service.createTransfer(request))
@@ -274,8 +278,8 @@ class AccountTransactionServiceTest {
 
         TransferRequest request = TransferRequest.builder()
             .sourceTransactionId("debit1")
-            .destinationAccountId("a3")
-            .explanation("Attempting second transfer")
+            .destinations(List.of(TransferDestination.builder()
+                .accountId("a3").amount(new BigDecimal("100")).explanation("Attempting second transfer").build()))
             .build();
 
         assertThatThrownBy(() -> service.createTransfer(request))
@@ -320,8 +324,8 @@ class AccountTransactionServiceTest {
 
         TransferRequest request = TransferRequest.builder()
             .sourceTransactionId("credit1")
-            .destinationAccountId("a3")
-            .explanation("Attempting second transfer")
+            .destinations(List.of(TransferDestination.builder()
+                .accountId("a3").amount(new BigDecimal("100")).explanation("Attempting second transfer").build()))
             .build();
 
         assertThatThrownBy(() -> service.createTransfer(request))
@@ -377,8 +381,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             null,
+            null,
+            null,
             null
-        );
+        , null);
 
         AccountTransactionDTO st2 = new AccountTransactionDTO(
             null,
@@ -402,8 +408,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             null,
+            null,
+            null,
             null
-        );
+        , null);
 
         ResponseEntity<String> resp = service.splitTransaction(List.of(st1, st2));
         assertThat(resp.getStatusCode().is2xxSuccessful()).isTrue();
@@ -442,8 +450,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             null,
+            null,
+            null,
             null
-        );
+        , null);
         ResponseEntity<String> resp = service.splitTransaction(List.of(st));
         assertThat(resp.getStatusCode().is4xxClientError()).isTrue();
     }
@@ -465,9 +475,9 @@ class AccountTransactionServiceTest {
         when(categoryService.getCategoryById("cat")).thenReturn(foodCat2);
 
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
-        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("20"), "d", null, null, null, TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
 
@@ -496,9 +506,9 @@ class AccountTransactionServiceTest {
         when(categoryService.getCategoryById("cat")).thenReturn(foodCat3);
 
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
-        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("40"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
 
@@ -528,9 +538,9 @@ class AccountTransactionServiceTest {
         when(categoryService.getCategoryById("cat")).thenReturn(foodCat4);
 
         when(accountTransactionRepository.save(any(AccountTransaction.class))).thenReturn(new AccountTransaction());
-        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
+        when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO update = new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("120"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a2","A-2", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO("cat", "Food", null, false, false, List.of()), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("tx1", update);
 
@@ -578,8 +588,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             null,
+            null,
+            null,
             null
-        );
+        , null);
 
         assertThatThrownBy(() -> service.updateTransaction("p1", update))
             .isInstanceOf(IllegalArgumentException.class)
@@ -613,7 +625,7 @@ class AccountTransactionServiceTest {
                 null, null, null, TransactionType.DEBIT, 
                 new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), 
                 new CategoryDTO("newcat", "NewCategory", null, false, false, List.of()), 
-                null, List.of(),             null, null, null, null, null, null, null, null, null, null)
+                null, List.of(),             null, null, null, null, null, null, null, null, null, null, null, null, null)
         );
 
         AccountTransactionDTO update = new AccountTransactionDTO(
@@ -638,8 +650,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             null,
+            null,
+            null,
             null
-        );
+        , null);
 
         Optional<AccountTransactionDTO> result = service.updateTransaction("p1", update);
 
@@ -665,9 +679,9 @@ class AccountTransactionServiceTest {
             return mapped;
         });
         when(accountTransactionRepository.save(mapped)).thenReturn(mapped);
-        when(accountTransactionMapper.toDTO(mapped)).thenReturn(new AccountTransactionDTO("txN", LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
+        when(accountTransactionMapper.toDTO(mapped)).thenReturn(new AccountTransactionDTO("txN", LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null));
 
-        AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("10"), "d", null, null, null, TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         AccountTransactionDTO result = service.save(input);
         assertThat(result.id()).isEqualTo("txN");
@@ -678,7 +692,7 @@ class AccountTransactionServiceTest {
     @Test
     void getById_mapsToDto() {
         AccountTransaction entity = AccountTransaction.builder().id("t1").appUser(currentUser).build();
-        AccountTransactionDTO dto = new AccountTransactionDTO("t1", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO dto = new AccountTransactionDTO("t1", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
         when(accountTransactionRepository.findByAppUserAndId(currentUser, "t1")).thenReturn(Optional.of(entity));
         when(accountTransactionMapper.toDTO(entity)).thenReturn(dto);
 
@@ -691,8 +705,8 @@ class AccountTransactionServiceTest {
         AccountTransaction e1 = AccountTransaction.builder().id("c1").appUser(currentUser).build();
         AccountTransaction e2 = AccountTransaction.builder().id("c2").appUser(currentUser).build();
         when(accountTransactionRepository.findByAppUserAndParent(currentUser, "p1")).thenReturn(List.of(e1, e2));
-        AccountTransactionDTO d1 = new AccountTransactionDTO("c1", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null);
-        AccountTransactionDTO d2 = new AccountTransactionDTO("c2", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO d1 = new AccountTransactionDTO("c1", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
+        AccountTransactionDTO d2 = new AccountTransactionDTO("c2", LocalDateTime.now(), BigDecimal.ZERO, null, null, null, null, TransactionType.DEBIT, null, null, null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
         when(accountTransactionMapper.toDTOList(List.of(e1, e2))).thenReturn(List.of(d1, d2));
 
         List<AccountTransactionDTO> result = service.getChildren("p1");
@@ -829,8 +843,8 @@ class AccountTransactionServiceTest {
         // Execute transfer
         TransferRequest request = TransferRequest.builder()
             .sourceTransactionId("debit1")
-            .destinationAccountId("a2")
-            .explanation("Monthly savings")
+            .destinations(List.of(TransferDestination.builder()
+                .accountId("a2").amount(new BigDecimal("200")).explanation("Monthly savings").build()))
             .build();
 
         service.createTransfer(request);
@@ -927,8 +941,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             null,
+            null,
+            null,
             null
-        );
+        , null);
 
         // Mock repository calls - Case 1: debit has linkedTransferId pointing to credit
         when(accountTransactionRepository.findById("debit1")).thenReturn(Optional.of(debit));
@@ -1033,8 +1049,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             null,
+            null,
+            null,
             null
-        );
+        , null);
 
         // Mock repository calls - Case 1: debit has linkedTransferId pointing to credit
         when(accountTransactionRepository.findById("debit1")).thenReturn(Optional.of(debit));
@@ -1138,8 +1156,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             null,
+            null,
+            null,
             null
-        );
+        , null);
 
         // Mock repository calls - Case 2: credit is referenced by debit's linkedTransferId
         when(accountTransactionRepository.findById("credit1")).thenReturn(Optional.of(credit));
@@ -1251,8 +1271,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             null,
+            null,
+            null,
             null
-        );
+        , null);
 
         // Mock repository calls
         when(accountTransactionRepository.findById("debit1")).thenReturn(Optional.of(debit));
@@ -1464,11 +1486,11 @@ class AccountTransactionServiceTest {
         when(accountTransactionMapper.toDTO(transaction)).thenReturn(
             new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("150"), "d", null, null, null, 
                 TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), 
-                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
+                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null));
 
         AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("150"), "d", null, null, null, 
             TransactionType.DEBIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), 
-            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null);
+            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         AccountTransactionDTO result = service.save(input);
         
@@ -1501,11 +1523,11 @@ class AccountTransactionServiceTest {
         when(accountTransactionMapper.toDTO(transaction)).thenReturn(
             new AccountTransactionDTO("tx1", LocalDateTime.now(), new BigDecimal("250"), "d", null, null, null, 
                 TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), 
-                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null));
+                new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null));
 
         AccountTransactionDTO input = new AccountTransactionDTO(null, LocalDateTime.now(), new BigDecimal("250"), "d", null, null, null, 
             TransactionType.CREDIT, new AccountDTO("a1","A-1", BigDecimal.ZERO, null, null, null, null, null, false), 
-            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null);
+            new CategoryDTO(), null, List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         AccountTransactionDTO result = service.save(input);
         
@@ -1572,8 +1594,10 @@ class AccountTransactionServiceTest {
             null,                           // gptAccount
             null,                           // gptCurrency
             null,                           // labels
-            null                            // attachmentCount
-        );
+            null,                           // attachmentCount
+            null,                           // transferSplits
+            null                            // transferSplitCount
+        , null);
 
         // Execute and verify exception is thrown using assertThatThrownBy
         assertThatThrownBy(() -> service.updateTransaction("child1", updateDTO))
@@ -1639,8 +1663,10 @@ class AccountTransactionServiceTest {
             null,                           // gptAccount
             null,                           // gptCurrency
             null,                           // labels
-            null                            // attachmentCount
-        );
+            null,                           // attachmentCount
+            null,                           // transferSplits
+            null                            // transferSplitCount
+        , null);
 
         // Execute and verify exception is thrown
         assertThatThrownBy(() -> service.updateTransaction("child1", updateDTO))
@@ -1705,8 +1731,10 @@ class AccountTransactionServiceTest {
             null,                           // gptAccount
             null,                           // gptCurrency
             null,                           // labels
-            null                            // attachmentCount
-        );
+            null,                           // attachmentCount
+            null,                           // transferSplits
+            null                            // transferSplitCount
+        , null);
 
         // Execute and verify exception is thrown
         assertThatThrownBy(() -> service.updateTransaction("child1", updateDTO))
@@ -1760,8 +1788,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             List.of(new LabelDTO("l1", "Food"), new LabelDTO("l2", "Personal")),
+            null,
+            null,
             null
-        );
+        , null);
 
         AccountTransaction entity = new AccountTransaction();
         entity.setId("tx1");
@@ -1801,8 +1831,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             List.of(new LabelDTO("l1", "Food"), new LabelDTO("l2", "Personal")),
+            null,
+            null,
             null
-        );
+        , null);
 
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(outputDTO);
 
@@ -1878,8 +1910,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             List.of(new LabelDTO("l2", "NewLabel1"), new LabelDTO("l3", "NewLabel2")),
+            null,
+            null,
             null
-        );
+        , null);
 
         AccountTransaction mappedEntity = new AccountTransaction();
         mappedEntity.setId("tx1");
@@ -1915,8 +1949,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             List.of(new LabelDTO("l2", "NewLabel1"), new LabelDTO("l3", "NewLabel2")),
+            null,
+            null,
             null
-        );
+        , null);
 
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(outputDTO);
 
@@ -1969,8 +2005,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             List.of(new LabelDTO(null, "BrandNewLabel")),
+            null,
+            null,
             null
-        );
+        , null);
 
         AccountTransaction entity = new AccountTransaction();
         entity.setId("tx1");
@@ -2010,8 +2048,10 @@ class AccountTransactionServiceTest {
             null,
             null,
             List.of(new LabelDTO("l1", "BrandNewLabel")),
+            null,
+            null,
             null
-        );
+        , null);
 
         when(accountTransactionMapper.toDTO(any(AccountTransaction.class))).thenReturn(outputDTO);
 

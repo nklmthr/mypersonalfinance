@@ -107,11 +107,34 @@ export default function TransactionDetailsModal({ tx }) {
 					</div>
 				)}
 
+				{/* Transfer Splits (new model) */}
+				{tx.transferSplits && tx.transferSplits.length > 0 && (
+					<div className="mb-3 pt-2 border-t border-gray-300">
+						<div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">🔗 Transfer Destinations</div>
+						<div className="space-y-1">
+							{tx.transferSplits.map((split, i) => (
+								<div key={split.id ?? i} className="flex items-center justify-between bg-white rounded border border-gray-200 px-2 py-1 text-xs">
+									<div className="flex items-center gap-2 min-w-0">
+										<span className="text-gray-500">{i + 1}.</span>
+										<span className="font-medium text-gray-800 truncate">{split.destTransaction?.account?.name || "Unknown"}</span>
+										{split.explanation && (
+											<span className="text-gray-500 truncate hidden sm:inline">{split.explanation}</span>
+										)}
+									</div>
+									<span className="text-green-700 font-semibold tabular-nums ml-2 shrink-0">
+										₹{Number(split.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+									</span>
+								</div>
+							))}
+						</div>
+					</div>
+				)}
+
 				{/* Additional Info Grid */}
 				{(tx.linkedTransferId || tx.parentId || (tx.children && tx.children.length > 0)) && (
 					<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-300">
-						{/* Linked Transfer */}
-						{tx.linkedTransferId && (
+						{/* Legacy linked transfer (only show if no new-model splits) */}
+						{tx.linkedTransferId && !(tx.transferSplits?.length > 0) && (
 							<div>
 								<div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">🔗 Linked Transfer</div>
 								<div className="text-xs text-gray-700 break-all">

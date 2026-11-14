@@ -30,7 +30,11 @@ import com.nklmthr.finance.personal.dto.BulkLabelsRequest;
 import com.nklmthr.finance.personal.dto.BulkUpdateResponse;
 import com.nklmthr.finance.personal.dto.LabelDTO;
 import com.nklmthr.finance.personal.dto.TransactionPageDTO;
+import com.nklmthr.finance.personal.dto.TransferDestination;
 import com.nklmthr.finance.personal.dto.TransferRequest;
+import com.nklmthr.finance.personal.dto.TransferSplitDTO;
+import com.nklmthr.finance.personal.model.TransferSplit;
+import com.nklmthr.finance.personal.repository.TransferSplitRepository;
 import com.nklmthr.finance.personal.enums.TransactionType;
 import com.nklmthr.finance.personal.mapper.AccountMapper;
 import com.nklmthr.finance.personal.mapper.AccountTransactionMapper;
@@ -53,6 +57,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import com.nklmthr.finance.personal.exception.TransferDestinationDeleteException;
 
 @Service
 @RequiredArgsConstructor
@@ -88,6 +93,9 @@ public class AccountTransactionService {
 	@Autowired
 	private AttachmentRepository attachmentRepository;
 
+	@Autowired
+	private TransferSplitRepository transferSplitRepository;
+
 	@PersistenceContext
 	private EntityManager entityManager;
 
@@ -121,81 +129,104 @@ public class AccountTransactionService {
 	@Transactional
 	public void createTransfer(TransferRequest request) throws Exception {
 		AppUser appUser = appUserService.getCurrentUser();
-		logger.info("Creating transfer from transaction ID: {} to account ID: {}", request.getSourceTransactionId(),
-				request.getDestinationAccountId());
-		AccountTransaction debit = accountTransactionRepository.findByAppUserAndId(appUser, request.getSourceTransactionId())
+		logger.info("Creating transfer from transaction ID: {}", request.getSourceTransactionId());
+		AccountTransaction source = accountTransactionRepository.findByAppUserAndId(appUser, request.getSourceTransactionId())
 				.orElseThrow(() -> new IllegalArgumentException(
 						"Source transaction not found for user: " + appUser.getUsername()));
-		
-		// Check if transaction has children (is a split transaction parent)
-		List<AccountTransaction> children = accountTransactionRepository.findByAppUserAndParent(appUser, debit.getId());
+
+		// Block transfer from a split parent
+		List<AccountTransaction> children = accountTransactionRepository.findByAppUserAndParent(appUser, source.getId());
 		if (!children.isEmpty()) {
-			logger.warn("Attempted to transfer split transaction parent ID: {}. Transfers not allowed for split transactions.", debit.getId());
 			throw new IllegalArgumentException(
 				"Cannot transfer a split transaction. Please delete the split first or transfer the individual child transactions.");
 		}
-		
-		// Check if transaction is already part of a transfer (bidirectional check)
-		// Case 1: Transaction has linkedTransferId (points to another transaction)
-		if (debit.getLinkedTransferId() != null) {
-			logger.warn("Attempted to transfer transaction ID: {} that is already part of a transfer (linkedTransferId: {}).", 
-				debit.getId(), debit.getLinkedTransferId());
-			throw new IllegalArgumentException(
-				"Cannot transfer a transaction that is already part of a transfer. Please delete the existing transfer first.");
+
+		List<TransferDestination> destinations = request.getDestinations();
+		if (destinations == null || destinations.isEmpty()) {
+			throw new IllegalArgumentException("At least one destination is required.");
 		}
-		
-		// Case 2: Another transaction points to this one
-		Optional<AccountTransaction> existingLinkedTx = accountTransactionRepository
-			.findByAppUserAndLinkedTransferId(appUser, debit.getId());
-		if (existingLinkedTx.isPresent()) {
-			logger.warn("Attempted to transfer transaction ID: {} that is already referenced by another transfer transaction (ID: {}).", 
-				debit.getId(), existingLinkedTx.get().getId());
-			throw new IllegalArgumentException(
-				"Cannot transfer a transaction that is already part of a transfer. Please delete the existing transfer first.");
+
+		BigDecimal totalRequested = destinations.stream()
+			.map(TransferDestination::getAmount)
+			.reduce(BigDecimal.ZERO, BigDecimal::add);
+
+		// Chaining: if the source is a CREDIT transaction, auto-create a DEBIT on the same account
+		AccountTransaction debit;
+		if (source.getType() == TransactionType.CREDIT) {
+			if (totalRequested.compareTo(source.getAmount()) > 0) {
+				throw new IllegalArgumentException(
+					"Sum of destination amounts (" + totalRequested + ") exceeds source credit amount (" + source.getAmount() + ").");
+			}
+			debit = new AccountTransaction();
+			debit.setAccount(source.getAccount());
+			debit.setGptAccount(source.getAccount());
+			debit.setAmount(totalRequested);
+			debit.setDate(source.getDate().plusSeconds(1));
+			debit.setDescription(source.getDescription());
+			debit.setExplanation("Chained transfer (auto-created debit)");
+			debit.setType(TransactionType.DEBIT);
+			debit.setCategory(categoryService.getTransferCategory());
+			debit.setAppUser(appUser);
+			debit.setCurrency(source.getCurrency());
+			// Subtract from source account balance
+			Account sourceAccount = debit.getAccount();
+			sourceAccount.setBalance(sourceAccount.getBalance().subtract(totalRequested));
+			accountRepository.save(sourceAccount);
+			debit = accountTransactionRepository.save(debit);
+			logger.info("Chaining: auto-created debit ID: {} on account: {} for amount: {}",
+				debit.getId(), sourceAccount.getId(), totalRequested);
+		} else {
+			// Normal DEBIT source: validate sum == source amount
+			if (totalRequested.compareTo(source.getAmount()) != 0) {
+				throw new IllegalArgumentException(
+					"Sum of destination amounts (" + totalRequested + ") must equal source transaction amount (" + source.getAmount() + ").");
+			}
+			debit = source;
 		}
-		
-		Account toAccount = accountRepository.findByAppUserAndId(appUser, request.getDestinationAccountId()).get();
-		toAccount.setBalance(toAccount.getBalance().add(debit.getAmount()));
-		
-		accountRepository.save(toAccount);
-		
-		// Create the credit transaction (destination)
-		AccountTransaction credit = new AccountTransaction();
-		credit.setAccount(toAccount);
-		credit.setCurrency(debit.getCurrency());
-		credit.setGptAccount(toAccount);
-		credit.setAmount(debit.getAmount());
-		credit.setDate(debit.getDate());
-		credit.setDescription(debit.getDescription());
-		credit.setExplanation(request.getExplanation());
-		credit.setType(TransactionType.CREDIT);
-		credit.setCategory(categoryService.getTransferCategory());
-		credit.setAppUser(appUser);
-		credit.setGptAccount(toAccount);
-		// Clear GPT fields for transfer credit transaction to avoid showing incorrect enriched data
-		credit.setGptDescription(null);
-		credit.setGptExplanation(null);
-		credit.setGptAmount(null);
-		credit.setGptType(null);
-		
-		// Save credit first to get its ID
-		credit = accountTransactionRepository.save(credit);
-		
-		// Now set bidirectional links
-		debit.setLinkedTransferId(credit.getId());
+
+		// Set debit category to TRANSFERS
 		debit.setCategory(categoryService.getTransferCategory());
-		// Default gptAccount to account if null (for old records)
 		if (debit.getGptAccount() == null) {
 			debit.setGptAccount(debit.getAccount());
 		}
-		credit.setLinkedTransferId(debit.getId());
-		
-		// Save both with the links
 		accountTransactionRepository.save(debit);
-		accountTransactionRepository.save(credit);
-		
-		logger.info("Transfer created. Debit ID: {}, Credit ID: {}, Amount: {}", 
-			debit.getId(), credit.getId(), debit.getAmount());
+
+		// Create a credit transaction + TransferSplit row for each destination
+		for (TransferDestination dest : destinations) {
+			Account toAccount = accountRepository.findByAppUserAndId(appUser, dest.getAccountId())
+				.orElseThrow(() -> new IllegalArgumentException("Destination account not found: " + dest.getAccountId()));
+
+			toAccount.setBalance(toAccount.getBalance().add(dest.getAmount()));
+			accountRepository.save(toAccount);
+
+			AccountTransaction credit = new AccountTransaction();
+			credit.setAccount(toAccount);
+			credit.setGptAccount(toAccount);
+			credit.setAmount(dest.getAmount());
+			credit.setDate(debit.getDate().plusSeconds(1));
+			credit.setDescription(debit.getDescription());
+			credit.setExplanation(dest.getExplanation());
+			credit.setType(TransactionType.CREDIT);
+			credit.setCategory(categoryService.getTransferCategory());
+			credit.setAppUser(appUser);
+			credit.setCurrency(debit.getCurrency());
+			credit.setGptDescription(null);
+			credit.setGptExplanation(null);
+			credit.setGptAmount(null);
+			credit.setGptType(null);
+			credit = accountTransactionRepository.save(credit);
+
+			TransferSplit split = TransferSplit.builder()
+				.sourceTransactionId(debit.getId())
+				.destTransactionId(credit.getId())
+				.amount(dest.getAmount())
+				.explanation(dest.getExplanation())
+				.build();
+			transferSplitRepository.save(split);
+
+			logger.info("Transfer split created. Debit ID: {}, Credit ID: {}, Amount: {}",
+				debit.getId(), credit.getId(), dest.getAmount());
+		}
 	}
 
 	@Transactional
@@ -303,6 +334,12 @@ public class AccountTransactionService {
 				throw new IllegalArgumentException(
 					"Cannot change amount of a split transaction. Please delete the split first or edit the child transactions.");
 			}
+
+			// Prevent amount change if new-model transfer splits exist on this transaction
+			if (newAmount.compareTo(oldAmount) != 0 && transferSplitRepository.existsBySourceTransactionId(id)) {
+				throw new IllegalArgumentException(
+					"Cannot change amount of a transaction with active transfer splits. Delete the transfer first.");
+			}
 			
 			// Prevent amount, account, or type change for child transactions
 			if (isChild) {
@@ -325,30 +362,28 @@ public class AccountTransactionService {
 				}
 			}
 			
-			// Handle linked transfer transactions - handle both directions (bidirectional)
-			// Case 1: This transaction points to another (has linkedTransferId)
-			// Case 2: Another transaction points to this one
+			// Handle linked transfer transactions - legacy 1-to-1 linkedTransferId sync.
+			// Skipped for new-model transfers (those use transfer_splits and don't need sync here).
 			AccountTransaction linkedTx = null;
-			
-			if (existingTx.getLinkedTransferId() != null) {
-				// Case 1: This transaction has a linkedTransferId pointing to another transaction
-				Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
-					.findByAppUserAndId(appUser, existingTx.getLinkedTransferId());
-				
-				if (linkedTxOpt.isPresent()) {
-					linkedTx = linkedTxOpt.get();
-					logger.info("Found linked transaction (case 1): {}", linkedTx.getId());
+			boolean hasNewModelSplits = transferSplitRepository.existsBySourceTransactionId(id)
+				|| !transferSplitRepository.findByDestTransactionId(id).isEmpty();
+
+			if (!hasNewModelSplits) {
+				if (existingTx.getLinkedTransferId() != null) {
+					Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
+						.findByAppUserAndId(appUser, existingTx.getLinkedTransferId());
+					if (linkedTxOpt.isPresent()) {
+						linkedTx = linkedTxOpt.get();
+						logger.info("Found linked transaction (case 1): {}", linkedTx.getId());
+					}
 				}
-			}
-			
-			// Case 2: Another transaction points to this one (bidirectional check)
-			if (linkedTx == null) {
-				Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
-					.findByAppUserAndLinkedTransferId(appUser, existingTx.getId());
-				
-				if (linkedTxOpt.isPresent()) {
-					linkedTx = linkedTxOpt.get();
-					logger.info("Found linked transaction (case 2): {}", linkedTx.getId());
+				if (linkedTx == null) {
+					Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
+						.findByAppUserAndLinkedTransferId(appUser, existingTx.getId());
+					if (linkedTxOpt.isPresent()) {
+						linkedTx = linkedTxOpt.get();
+						logger.info("Found linked transaction (case 2): {}", linkedTx.getId());
+					}
 				}
 			}
 			
@@ -463,7 +498,79 @@ public class AccountTransactionService {
 
 	public Optional<AccountTransactionDTO> getById(String id) {
 		AppUser appUser = appUserService.getCurrentUser();
-		return accountTransactionRepository.findByAppUserAndId(appUser, id).map(accountTransactionMapper::toDTO);
+		return accountTransactionRepository.findByAppUserAndId(appUser, id).map(tx -> {
+			AccountTransactionDTO dto = accountTransactionMapper.toDTO(tx);
+			List<TransferSplitDTO> splits = getTransferSplits(id);
+			return new AccountTransactionDTO(
+				dto.id(), dto.date(), dto.amount(), dto.description(), dto.shortDescription(),
+				dto.explanation(), dto.shortExplanation(), dto.type(), dto.account(), dto.category(),
+				dto.parentId(), dto.children(), dto.linkedTransferId(),
+				dto.gptAmount(), dto.gptDescription(), dto.gptExplanation(), dto.gptType(),
+				dto.currency(), dto.gptAccount(), dto.gptCurrency(), dto.labels(),
+				dto.attachmentCount(), splits.isEmpty() ? null : splits, splits.size(),
+				transferSplitRepository.existsByDestTransactionId(id)
+			);
+		});
+	}
+
+	public List<TransferSplitDTO> getTransferSplits(String transactionId) {
+		AppUser appUser = appUserService.getCurrentUser();
+		return transferSplitRepository.findBySourceTransactionId(transactionId).stream()
+			.map(split -> {
+				AccountTransactionDTO destDto = accountTransactionRepository
+					.findByAppUserAndId(appUser, split.getDestTransactionId())
+					.map(accountTransactionMapper::toDTO)
+					.orElse(null);
+				return new TransferSplitDTO(
+					split.getId(), split.getSourceTransactionId(), destDto,
+					split.getAmount(), split.getExplanation()
+				);
+			})
+			.collect(Collectors.toList());
+	}
+
+	@Transactional
+	public void removeTransferSplits(String sourceId, boolean deleteDestinations) {
+		AppUser appUser = appUserService.getCurrentUser();
+		AccountTransaction source = accountTransactionRepository.findByAppUserAndId(appUser, sourceId)
+			.orElseThrow(() -> new IllegalArgumentException("Source transaction not found"));
+
+		List<TransferSplit> splits = transferSplitRepository.findBySourceTransactionId(sourceId);
+		if (splits.isEmpty()) {
+			// Maybe the caller passed a dest ID — look up its source and redirect
+			List<TransferSplit> asDest = transferSplitRepository.findByDestTransactionId(sourceId);
+			if (!asDest.isEmpty()) {
+				removeTransferSplits(asDest.get(0).getSourceTransactionId(), deleteDestinations);
+				return;
+			}
+			throw new IllegalArgumentException("No transfer splits found for transaction: " + sourceId);
+		}
+
+		if (deleteDestinations) {
+			for (TransferSplit split : splits) {
+				accountTransactionRepository.findByAppUserAndId(appUser, split.getDestTransactionId())
+					.ifPresent(credit -> {
+						Account creditAccount = credit.getAccount();
+						if (creditAccount != null) {
+							creditAccount.setBalance(creditAccount.getBalance().subtract(credit.getAmount()));
+							accountRepository.save(creditAccount);
+						}
+						accountTransactionRepository.deleteByAppUserAndId(appUser, credit.getId());
+					});
+			}
+			// Add back to source account (undo the debit effect)
+			Account sourceAccount = source.getAccount();
+			BigDecimal totalAmount = splits.stream().map(TransferSplit::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+			sourceAccount.setBalance(sourceAccount.getBalance().add(totalAmount));
+			accountRepository.save(sourceAccount);
+		}
+		// In unlink-only mode: credit transactions become standalone, no balance changes
+
+		transferSplitRepository.deleteAllBySourceTransactionId(sourceId);
+		source.setCategory(null);
+		if (source.getGptAccount() == null) source.setGptAccount(source.getAccount());
+		accountTransactionRepository.save(source);
+		logger.info("Removed transfer splits for source ID: {}, deleteDestinations={}", sourceId, deleteDestinations);
 	}
 
 	public List<AccountTransactionDTO> getChildren(String parentId) {
@@ -588,50 +695,70 @@ public class AccountTransactionService {
 					"Cannot delete transaction with children. Please delete children first.");
 		}
 		
-		// Handle linked transfer - reverse balances and delete both sides
-		// Case 1: This transaction points to another (has linkedTransferId)
-		// Case 2: Another transaction points to this one (we need to find it)
-		AccountTransaction linkedTx = null;
-		
-		if (existingTransaction.getLinkedTransferId() != null) {
-			// Case 1: This transaction has a linkedTransferId pointing to another transaction
-			Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
-				.findByAppUserAndId(appUser, existingTransaction.getLinkedTransferId());
-			
-			if (linkedTxOpt.isPresent()) {
-				linkedTx = linkedTxOpt.get();
-				logger.info("Found linked transaction (case 1): {}", linkedTx.getId());
+		// Handle linked transfer - reverse balances and delete both sides.
+		// Check new-model transfer_splits first, fall back to legacy linkedTransferId.
+		List<TransferSplit> splitsAsSource = transferSplitRepository
+			.findBySourceTransactionId(existingTransaction.getId());
+		List<TransferSplit> splitsAsDest = transferSplitRepository
+			.findByDestTransactionId(existingTransaction.getId());
+
+		if (!splitsAsSource.isEmpty()) {
+			// Deleting the debit (source) leg: delete all credit destinations + reverse their balances
+			for (TransferSplit split : splitsAsSource) {
+				accountTransactionRepository.findByAppUserAndId(appUser, split.getDestTransactionId())
+					.ifPresent(credit -> {
+						Account creditAccount = credit.getAccount();
+						if (creditAccount != null) {
+							creditAccount.setBalance(creditAccount.getBalance().subtract(credit.getAmount()));
+							accountRepository.save(creditAccount);
+						}
+						accountTransactionRepository.deleteByAppUserAndId(appUser, credit.getId());
+						logger.info("Deleted transfer destination ID: {}", credit.getId());
+					});
 			}
-		}
-		
-		// Case 2: Another transaction points to this one (bidirectional check)
-		if (linkedTx == null) {
-			Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
-				.findByAppUserAndLinkedTransferId(appUser, existingTransaction.getId());
-			
-			if (linkedTxOpt.isPresent()) {
-				linkedTx = linkedTxOpt.get();
-				logger.info("Found linked transaction (case 2): {}", linkedTx.getId());
-			}
-		}
-		
-		// Delete the linked transaction if found
-		if (linkedTx != null) {
-			logger.info("Deleting linked transfer transaction ID: {}", linkedTx.getId());
-			
-			// Reverse balance for linked transaction's account
-			Account linkedAccount = linkedTx.getAccount();
-			if (linkedAccount != null) {
-				if (linkedTx.getType() == TransactionType.DEBIT) {
-					linkedAccount.setBalance(linkedAccount.getBalance().add(linkedTx.getAmount()));
-				} else if (linkedTx.getType() == TransactionType.CREDIT) {
-					linkedAccount.setBalance(linkedAccount.getBalance().subtract(linkedTx.getAmount()));
+			transferSplitRepository.deleteAllBySourceTransactionId(existingTransaction.getId());
+		} else if (!splitsAsDest.isEmpty()) {
+			// This credit is a transfer destination. Block direct delete and tell the caller
+			// to use the undo-transfer flow on the source transaction so the user is asked
+			// whether to delete both legs or just unlink.
+			String sourceId = splitsAsDest.get(0).getSourceTransactionId();
+			throw new TransferDestinationDeleteException(
+				"This transaction is a transfer destination. Use the undo-transfer action to remove it.",
+				sourceId
+			);
+		} else {
+			// Legacy fallback: use linkedTransferId bidirectional lookup for unconverted records
+			AccountTransaction linkedTx = null;
+
+			if (existingTransaction.getLinkedTransferId() != null) {
+				Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
+					.findByAppUserAndId(appUser, existingTransaction.getLinkedTransferId());
+				if (linkedTxOpt.isPresent()) {
+					linkedTx = linkedTxOpt.get();
+					logger.info("Found linked transaction (legacy case 1): {}", linkedTx.getId());
 				}
-				linkedAccount.setAppUser(appUser);
-				accountRepository.save(linkedAccount);
 			}
-			
-			accountTransactionRepository.deleteByAppUserAndId(appUser, linkedTx.getId());
+			if (linkedTx == null) {
+				Optional<AccountTransaction> linkedTxOpt = accountTransactionRepository
+					.findByAppUserAndLinkedTransferId(appUser, existingTransaction.getId());
+				if (linkedTxOpt.isPresent()) {
+					linkedTx = linkedTxOpt.get();
+					logger.info("Found linked transaction (legacy case 2): {}", linkedTx.getId());
+				}
+			}
+			if (linkedTx != null) {
+				Account linkedAccount = linkedTx.getAccount();
+				if (linkedAccount != null) {
+					if (linkedTx.getType() == TransactionType.DEBIT) {
+						linkedAccount.setBalance(linkedAccount.getBalance().add(linkedTx.getAmount()));
+					} else if (linkedTx.getType() == TransactionType.CREDIT) {
+						linkedAccount.setBalance(linkedAccount.getBalance().subtract(linkedTx.getAmount()));
+					}
+					linkedAccount.setAppUser(appUser);
+					accountRepository.save(linkedAccount);
+				}
+				accountTransactionRepository.deleteByAppUserAndId(appUser, linkedTx.getId());
+			}
 		}
 		
 		// Account balance was applied once when the root (non-child) transaction
@@ -711,7 +838,9 @@ public class AccountTransactionService {
 
 			// Skip transfer transactions (either side) — their category is locked to TRANSFER.
 			boolean isTransfer = tx.getLinkedTransferId() != null
-					|| accountTransactionRepository.findByAppUserAndLinkedTransferId(appUser, tx.getId()).isPresent();
+					|| accountTransactionRepository.findByAppUserAndLinkedTransferId(appUser, tx.getId()).isPresent()
+					|| transferSplitRepository.existsBySourceTransactionId(tx.getId())
+					|| !transferSplitRepository.findByDestTransactionId(tx.getId()).isEmpty();
 			if (isTransfer) {
 				skipped.add(new BulkUpdateResponse.SkippedItem(id,
 						"Cannot change category of a transfer transaction"));
@@ -1117,6 +1246,19 @@ public TransactionPageDTO getFilteredTransactions(Pageable pageable, String mont
 			}
 		}
 
+		// Batch-fetch transfer split counts — single grouped query for the page
+		Map<String, Integer> splitCountByTxId = new HashMap<>();
+		Set<String> destTxIds = new java.util.HashSet<>();
+		if (!pageIds.isEmpty()) {
+			List<Object[]> splitRows = transferSplitRepository.countBySourceTransactionIdIn(pageIds);
+			for (Object[] row : splitRows) {
+				String txId = (String) row[0];
+				Long cnt = (Long) row[1];
+				splitCountByTxId.put(txId, cnt != null ? cnt.intValue() : 0);
+			}
+			destTxIds.addAll(transferSplitRepository.findDestTransactionIdIn(pageIds));
+		}
+
 		List<AccountTransactionDTO> formatted = page.getContent().stream()
 			    .map(tx -> {
 			        List<AccountTransactionDTO> children = childrenByParent.getOrDefault(tx.getId(), List.of());
@@ -1125,6 +1267,8 @@ public TransactionPageDTO getFilteredTransactions(Pageable pageable, String mont
 						? labelMapper.toDTOList(labelSource.get(0).getLabels())
 						: List.of();
 					Integer attachmentCount = attachmentCountByTxId.getOrDefault(tx.getId(), 0);
+					Integer splitCount = splitCountByTxId.getOrDefault(tx.getId(), 0);
+					boolean isTransferDest = destTxIds.contains(tx.getId());
 
 		        return new AccountTransactionDTO(
 		            tx.getId(),
@@ -1148,10 +1292,13 @@ public TransactionPageDTO getFilteredTransactions(Pageable pageable, String mont
 		            accountMapper.toDTO(tx.getGptAccount()),
 		            tx.getGptCurrency(),
 		            labels,
-		            attachmentCount
+		            attachmentCount,
+		            null,
+		            splitCount,
+		            isTransferDest
 		        );
 			    })
-			    .toList();
+			    .collect(java.util.stream.Collectors.toList());
 
 		BigDecimal currentTotal = calculateTotalWithSpec(spec).setScale(2, RoundingMode.HALF_UP);
 		return new TransactionPageDTO(formatted, page.getTotalPages(), page.getTotalElements(),

@@ -16,6 +16,7 @@ import SearchSelect from "./transactions/components/SearchSelect";
 import TransactionForm from "./transactions/components/TransactionForm";
 import TransferForm from "./transactions/components/TransferForm";
 import TransferPairModal from "./transactions/components/TransferPairModal";
+import TransferChainModal from "./transactions/components/TransferChainModal";
 import TransactionSplit from "./transactions/components/TransactionSplit";
 import TransactionComparisonModal from "./transactions/components/TransactionComparisonModal";
 import TransactionDetailsModal from "./transactions/components/TransactionDetailsModal";
@@ -398,8 +399,23 @@ useEffect(() => {
 			console.log("Transaction deleted successfully");
 			await fetchData();
 		} catch (err) {
-			console.error("Failed to delete transaction:", err);
-			// Error is already handled by api.js interceptor (shows modal)
+			// 409 means this is a transfer destination — redirect to the undo-transfer flow
+			if (err.response?.status === 409 && err.response?.data?.code === "TRANSFER_DESTINATION") {
+				const sourceId = err.response.data.sourceTransactionId;
+				// Find the source tx in current list; if not present, fetch it
+				let sourceTx = transactions.find(t => t.id === sourceId);
+				if (!sourceTx) {
+					try {
+						const res = await api.get(`/transactions/${sourceId}`);
+						sourceTx = res.data;
+					} catch (_) {
+						sourceTx = { id: sourceId, description: "Source transaction" };
+					}
+				}
+				setUndoTransferTx(sourceTx);
+			} else {
+				console.error("Failed to delete transaction:", err);
+			}
 		} finally {
 			NProgress.done();
 			setLoading(false);
@@ -571,6 +587,8 @@ const triggerDataExtraction = async (servicesToRun) => {
 	const createDetailsModal = (tx) => {
 		return <TransactionDetailsModal tx={tx} />;
 	};
+
+	const [undoTransferTx, setUndoTransferTx] = useState(null);
 
 	const handleTransferLinkClick = async (currentTx, linkedTransferId, e) => {
 		e.stopPropagation();
@@ -772,28 +790,50 @@ const triggerDataExtraction = async (servicesToRun) => {
 					</span>
 				</span>
 					{(() => {
+						// transferSplitCount is populated in list view (new-model transfers).
+						// isTransferDest covers the credit side of new-model transfers.
+						// linkedTransferId covers legacy 1-to-1 transfers.
+						const splitCount = tx.transferSplitCount ?? 0;
 						const linkedId = tx.linkedTransferId;
 						const reverseLinkedTx = transactions.find(otherTx =>
 							otherTx.id !== tx.id && otherTx.linkedTransferId === tx.id
 						);
-						const hasLink = linkedId || reverseLinkedTx;
+						const hasLink = splitCount > 0 || tx.isTransferDest || linkedId || reverseLinkedTx;
 						const linkTargetId = linkedId || (reverseLinkedTx ? reverseLinkedTx.id : null);
-						if (hasLink && linkTargetId) {
-							return (
+
+						if (!hasLink) return null;
+
+						const badgeLabel = splitCount > 1 ? `🔗 Transfer (${splitCount})` : "🔗 Transfer";
+
+						return (
+							<div className="flex items-center gap-1 mt-0.5">
 								<button
 									onClick={(e) => {
 										e.stopPropagation();
-										handleTransferLinkClick(tx, linkTargetId, e);
+										setModalContent({
+											title: "Transfer chain",
+											content: <TransferChainModal startTx={tx} />,
+										});
 									}}
-									className="ml-2 text-xs bg-purple-100 text-purple-700 rounded px-2 py-0.5 inline-flex items-center gap-1 hover:bg-purple-200 cursor-pointer transition-colors"
+									className="text-xs bg-purple-100 text-purple-700 rounded px-2 py-0.5 inline-flex items-center gap-1 hover:bg-purple-200 cursor-pointer transition-colors"
 									title="View transfer (from → to)"
 									type="button"
 								>
-									🔗 Transfer
+									{badgeLabel}
 								</button>
-							);
-						}
-						return null;
+								<button
+									onClick={(e) => {
+										e.stopPropagation();
+										setUndoTransferTx(tx);
+									}}
+									className="text-xs bg-red-50 text-red-600 rounded px-1.5 py-0.5 hover:bg-red-100 cursor-pointer transition-colors"
+									title="Undo / remove transfer link"
+									type="button"
+								>
+									✕
+								</button>
+							</div>
+						);
 					})()}
 					<>
 						<br />
@@ -856,11 +896,11 @@ const triggerDataExtraction = async (servicesToRun) => {
 								setTransferTx({
 									...tx,
 									accountId: tx.account?.id,
-									destinationAccountId: "",
-									explanation: tx.explanation || "",
 								})
 							}
-							title="Mark this as a transfer between accounts (creates linked transactions)"
+							title={tx.type === "CREDIT"
+								? "Chain transfer from this credit (auto-creates a debit on the same account)"
+								: "Mark this as a transfer between accounts (creates linked transactions)"}
 						>
 							Transfer
 						</button>
@@ -915,11 +955,11 @@ const triggerDataExtraction = async (servicesToRun) => {
 										setTransferTx({
 											...tx,
 											accountId: tx.account?.id,
-											destinationAccountId: "",
-											explanation: tx.explanation || "",
 										})
 									}
-									title="Mark this as a transfer between accounts (creates linked transactions)"
+									title={tx.type === "CREDIT"
+										? "Chain transfer from this credit"
+										: "Mark this as a transfer between accounts"}
 								>
 									Transfer
 								</button>
@@ -1827,21 +1867,16 @@ function TransactionPageButtons({
 					setTransaction={setTransferTx}
 					onCancel={() => setTransferTx(null)}
 					loading={loading}
-					onSubmit={async () => {
+					onSubmit={async (payload) => {
 						setLoading(true);
 						NProgress.start();
 						try {
-							await api.post("/transactions/transfer", {
-								sourceTransactionId: transferTx.id,
-								destinationAccountId: transferTx.destinationAccountId,
-								explanation: transferTx.explanation,
-							});
+							await api.post("/transactions/transfer", payload);
 							console.log("Transaction transfer successful");
 							setTransferTx(null);
 							await fetchData();
 						} catch (err) {
 							console.error("Failed to transfer transaction:", err);
-							// Error is already handled by api.js interceptor (shows modal)
 						} finally {
 							NProgress.done();
 							setLoading(false);
@@ -1933,6 +1968,76 @@ function TransactionPageButtons({
 				</div>
 			)}
 
+			{undoTransferTx && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+					<div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+						<h2 className="text-lg font-semibold text-gray-800 mb-3">Undo Transfer</h2>
+						<p className="text-sm text-gray-600 mb-4">
+							How would you like to remove the transfer link for{" "}
+							<strong>{undoTransferTx.description}</strong>?
+						</p>
+						<div className="space-y-3 mb-5">
+							<div className="border rounded p-3 bg-red-50 border-red-200">
+								<div className="font-medium text-red-800 text-sm mb-1">Delete destination transactions</div>
+								<div className="text-xs text-gray-600">Removes the transfer and deletes all destination credit transactions. Account balances are reversed.</div>
+							</div>
+							<div className="border rounded p-3 bg-yellow-50 border-yellow-200">
+								<div className="font-medium text-yellow-800 text-sm mb-1">Unlink only</div>
+								<div className="text-xs text-gray-600">Removes the transfer link but keeps destination transactions as standalone credits. No balance changes.</div>
+							</div>
+						</div>
+						<div className="flex gap-2 justify-end">
+							<button
+								onClick={() => setUndoTransferTx(null)}
+								className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
+							>
+								Cancel
+							</button>
+							<button
+								onClick={async () => {
+									const id = undoTransferTx.id;
+									setUndoTransferTx(null);
+									setLoading(true);
+									NProgress.start();
+									try {
+										await api.delete(`/transactions/${id}/transfer?deleteDestinations=false`);
+										await fetchData();
+									} catch (err) {
+										showModal(`Failed to unlink transfer: ${err.response?.data?.error || err.message}`);
+									} finally {
+										NProgress.done();
+										setLoading(false);
+									}
+								}}
+								className="px-4 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
+							>
+								Unlink only
+							</button>
+							<button
+								onClick={async () => {
+									const id = undoTransferTx.id;
+									setUndoTransferTx(null);
+									setLoading(true);
+									NProgress.start();
+									try {
+										await api.delete(`/transactions/${id}/transfer?deleteDestinations=true`);
+										await fetchData();
+									} catch (err) {
+										showModal(`Failed to delete transfer: ${err.response?.data?.error || err.message}`);
+									} finally {
+										NProgress.done();
+										setLoading(false);
+									}
+								}}
+								className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+							>
+								Delete destinations
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{modalContent && (
 				<div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
 					<div className={`bg-white rounded-lg shadow-lg w-full p-4 my-2 sm:my-4 ${
@@ -1963,18 +2068,21 @@ function TransactionPageButtons({
 			{deleteConfirmation && (() => {
 				// Find the transaction being deleted
 				const txToDelete = transactions.find(tx => tx.id === deleteConfirmation);
-				
+
+				// New model: check transfer_splits length (populated in detail, not list — use fallback)
+				const splitCount = txToDelete?.transferSplits?.length ?? 0;
+
 				// Check if this transaction has a linked transfer (points to another)
 				const hasLinkedTransfer = txToDelete?.linkedTransferId;
-				
+
 				// Check if another transaction points to this one (reverse link)
-				const isReferencedByTransfer = transactions.some(tx => 
+				const isReferencedByTransfer = transactions.some(tx =>
 					tx.linkedTransferId === deleteConfirmation && tx.id !== deleteConfirmation
 				);
-				
+
 				// Determine if this is part of a transfer (either direction)
-				const isPartOfTransfer = hasLinkedTransfer || isReferencedByTransfer;
-				
+				const isPartOfTransfer = splitCount > 0 || hasLinkedTransfer || isReferencedByTransfer;
+
 				return (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
 					<div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
@@ -1983,7 +2091,10 @@ function TransactionPageButtons({
 								{isPartOfTransfer ? (
 									<div className="mb-6">
 										<p className="text-gray-600 mb-3">
-											This transaction is part of a transfer. Deleting it will delete <strong className="text-red-600">both transactions</strong> (debit and credit sides of the transfer).
+											{splitCount > 0
+												? `This transaction is the source of ${splitCount} transfer destination${splitCount !== 1 ? "s" : ""}. Deleting it will delete `
+												: "This transaction is part of a transfer. Deleting it will delete "}
+											<strong className="text-red-600">both transactions</strong> (debit and credit sides of the transfer).
 										</p>
 										<p className="text-sm text-gray-500 italic">
 											This action cannot be undone.

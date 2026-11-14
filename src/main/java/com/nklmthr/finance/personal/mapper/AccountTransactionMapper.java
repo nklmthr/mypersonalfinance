@@ -28,6 +28,7 @@ public interface AccountTransactionMapper extends GenericMapper<AccountTransacti
 	@Mapping(target="shortExplanation", ignore = true)
 	@Mapping(target="children", ignore = true)
 	@Mapping(target="attachmentCount", ignore = true)
+	@Mapping(target="transferSplits", ignore = true)
 	AccountTransactionDTO toDTO(AccountTransaction entity);
 
 	@Mapping(target="href", ignore = true)
@@ -54,6 +55,7 @@ public interface AccountTransactionMapper extends GenericMapper<AccountTransacti
 	@Mapping(target="shortDescription", ignore = true)
 	@Mapping(target="shortExplanation", ignore = true)
 	@Mapping(target="attachmentCount", ignore = true)
+	@Mapping(target="transferSplits", ignore = true)
 	List<AccountTransactionDTO> toDTOList(List<AccountTransaction> entities);
 
 	List<AccountTransaction> toEntityList(List<AccountTransactionDTO> dtos);

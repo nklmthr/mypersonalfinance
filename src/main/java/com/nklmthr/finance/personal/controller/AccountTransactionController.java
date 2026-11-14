@@ -26,6 +26,8 @@ import com.nklmthr.finance.personal.dto.BulkLabelsRequest;
 import com.nklmthr.finance.personal.dto.BulkUpdateResponse;
 import com.nklmthr.finance.personal.dto.TransactionPageDTO;
 import com.nklmthr.finance.personal.dto.TransferRequest;
+import com.nklmthr.finance.personal.dto.TransferSplitDTO;
+import com.nklmthr.finance.personal.exception.TransferDestinationDeleteException;
 import com.nklmthr.finance.personal.service.AccountTransactionService;
 
 import jakarta.validation.Valid;
@@ -165,6 +167,13 @@ public class AccountTransactionController {
 		try {
 			transactionService.delete(id);
 			return ResponseEntity.noContent().build();
+		} catch (TransferDestinationDeleteException e) {
+			logger.warn("Delete blocked for transfer destination ID {}: {}", id, e.getMessage());
+			return ResponseEntity.status(409).body(Map.of(
+				"error", e.getMessage(),
+				"code", "TRANSFER_DESTINATION",
+				"sourceTransactionId", e.getSourceTransactionId()
+			));
 		} catch (IllegalArgumentException e) {
 			logger.warn("Delete transaction failed for ID {}: {}", id, e.getMessage());
 			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -188,6 +197,29 @@ public class AccountTransactionController {
 			return ResponseEntity.ok(response);
 		} catch (IllegalArgumentException e) {
 			logger.warn("Bulk delete rejected: {}", e.getMessage());
+			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		}
+	}
+
+	@GetMapping("/{id}/transfer-splits")
+	public ResponseEntity<?> getTransferSplits(@PathVariable String id) {
+		try {
+			List<TransferSplitDTO> splits = transactionService.getTransferSplits(id);
+			return ResponseEntity.ok(splits);
+		} catch (Exception e) {
+			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+		}
+	}
+
+	@DeleteMapping("/{id}/transfer")
+	public ResponseEntity<?> removeTransfer(
+			@PathVariable String id,
+			@RequestParam(defaultValue = "false") boolean deleteDestinations) {
+		try {
+			transactionService.removeTransferSplits(id, deleteDestinations);
+			return ResponseEntity.noContent().build();
+		} catch (IllegalArgumentException e) {
+			logger.warn("Remove transfer failed for ID {}: {}", id, e.getMessage());
 			return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
 		}
 	}

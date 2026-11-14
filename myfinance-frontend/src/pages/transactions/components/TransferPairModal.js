@@ -77,37 +77,58 @@ function TransferLeg({ tx, label, accent }) {
 }
 
 /**
- * Side-by-side view of both legs of a transfer (From = DEBIT, To = CREDIT).
+ * View of a transfer: one source leg + one or more destination legs.
+ * Accepts either:
+ *   - Legacy: { fromTx, toTx }  (single destination, backward compat)
+ *   - New model: { fromTx, toTxList }  (multiple destinations as TransferSplitDTO[])
  */
-export default function TransferPairModal({ fromTx, toTx }) {
-	const amount = fromTx?.amount ?? toTx?.amount;
-	const currency = fromTx?.currency || toTx?.currency;
+export default function TransferPairModal({ fromTx, toTx, toTxList }) {
+	// Normalize: toTxList takes priority; fall back to legacy toTx wrapped in array
+	const destinations = toTxList?.length
+		? toTxList
+		: toTx
+		? [{ destTransaction: toTx, amount: toTx?.amount }]
+		: [];
+
+	const currency = fromTx?.currency;
+	const totalAmount = destinations.reduce((s, d) => {
+		const amt = d.destTransaction ? d.amount : (d.amount ?? 0);
+		return s + (typeof amt === "number" ? amt : Number(amt) || 0);
+	}, 0);
+
+	const destNames = destinations.map((d) => d.destTransaction?.account?.name).filter(Boolean);
 
 	return (
 		<div className="w-full space-y-3">
 			<div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2">
 				<div className="text-sm text-gray-800">
 					<span className="font-semibold">Transfer</span>
-					{fromTx?.account?.name && toTx?.account?.name && (
+					{fromTx?.account?.name && destNames.length > 0 && (
 						<span className="text-gray-600">
-							{" "}
-							· {fromTx.account.name}
+							{" "}· {fromTx.account.name}
 							<span className="mx-1 text-purple-500">→</span>
-							{toTx.account.name}
+							{destNames.join(", ")}
 						</span>
 					)}
 				</div>
-				{typeof amount === "number" && (
+				{totalAmount > 0 && (
 					<div className="text-sm font-bold tabular-nums text-gray-900">
 						{getCurrencySymbol(currency)}
-						{amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+						{totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
 					</div>
 				)}
 			</div>
 
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+			<div className={`grid gap-3 ${destinations.length > 1 ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"}`}>
 				<TransferLeg tx={fromTx} label="From" accent="from" />
-				<TransferLeg tx={toTx} label="To" accent="to" />
+				{destinations.map((d, i) => (
+					<TransferLeg
+						key={i}
+						tx={d.destTransaction ?? d}
+						label={destinations.length > 1 ? `To (${i + 1})` : "To"}
+						accent="to"
+					/>
+				))}
 			</div>
 		</div>
 	);
